@@ -678,7 +678,26 @@ def _plot_depth_histogram(contig_rows, mean_depth, plot_prefix, plot_format):
 # ---------------------------------------------------------------------------
 
 
-def run(parser, args):
+def run(
+    input,
+    out="coverage_stats.txt",
+    left=None,
+    right=None,
+    longreads=None,
+    illumina_preset="sr",
+    longread_preset="map-ont",
+    aligner="minimap2",
+    cpus=1,
+    workdir=None,
+    debug=False,
+    pipe=False,
+    min_contig_len=500,
+    no_plot=False,
+    plot_format="pdf",
+    quantize=_DEFAULT_QUANTIZE,
+    quantize_labels=None,
+    **kwargs,
+):
     """Execute depth-of-coverage analysis for a genome assembly.
 
     Maps Illumina and/or long reads to the assembly, computes per-contig
@@ -688,26 +707,22 @@ def run(parser, args):
 
     When plotting is not disabled (--no-plot), mosdepth is run in quantized
     mode and three coverage plots are produced alongside the text report.
-
-    Args:
-        parser: ArgumentParser instance (kept for CLI signature compatibility).
-        args: Namespace of parsed CLI arguments.
     """
     # ------------------------------------------------------------------
     # Validate inputs
     # ------------------------------------------------------------------
-    if not args.left and not args.longreads:
+    if not left and not longreads:
         status("ERROR: provide at least --left (Illumina) or --longreads")
         sys.exit(1)
 
-    if not checkfile(args.input):
-        status(f"ERROR: assembly file not found or empty: {args.input}")
+    if not checkfile(input):
+        status(f"ERROR: assembly file not found or empty: {input}")
         sys.exit(1)
 
-    genome = os.path.abspath(args.input)
-    reads_left = os.path.abspath(args.left) if args.left else None
-    reads_right = os.path.abspath(args.right) if args.right else None
-    longreads = os.path.abspath(args.longreads) if args.longreads else None
+    genome = os.path.abspath(input)
+    reads_left = os.path.abspath(left) if left else None
+    reads_right = os.path.abspath(right) if right else None
+    longreads = os.path.abspath(longreads) if longreads else None
 
     for label, fpath in [("--left", reads_left), ("--right", reads_right), ("--longreads", longreads)]:
         if fpath and not checkfile(fpath):
@@ -719,7 +734,7 @@ def run(parser, args):
     # ------------------------------------------------------------------
     required = {"samtools", "mosdepth"}
     if reads_left:
-        required.add(args.aligner)
+        required.add(aligner)
     if longreads:
         required.add("minimap2")
     for tool in sorted(required):
@@ -727,10 +742,8 @@ def run(parser, args):
             status(f"ERROR: required tool '{tool}' not found in PATH. " f"Install via conda: conda install -c bioconda {tool}")
             sys.exit(1)
 
-    no_plot = getattr(args, "no_plot", False)
-    plot_format = getattr(args, "plot_format", "pdf")
-    quantize_str = getattr(args, "quantize", _DEFAULT_QUANTIZE)
-    quantize_labels_str = getattr(args, "quantize_labels", None)
+    quantize_str = quantize
+    quantize_labels_str = quantize_labels
 
     if not no_plot and not HAS_MATPLOTLIB:
         status("WARNING: matplotlib not available — coverage plots will be skipped.")
@@ -740,14 +753,14 @@ def run(parser, args):
     # ------------------------------------------------------------------
     # Working directory
     # ------------------------------------------------------------------
-    custom_workdir = bool(args.workdir)
-    if not args.workdir:
-        args.workdir = f"aaftf-depth_{str(uuid.uuid4())[:8]}"
-    workdir = os.path.abspath(args.workdir)
+    custom_workdir = bool(workdir)
+    if not workdir:
+        workdir = f"aaftf-depth_{str(uuid.uuid4())[:8]}"
+    workdir = os.path.abspath(workdir)
     if not os.path.exists(workdir):
         os.mkdir(workdir)
 
-    report_file = args.out
+    report_file = out
 
     # ------------------------------------------------------------------
     # Count input reads
@@ -775,11 +788,11 @@ def run(parser, args):
         reads_right,
         longreads,
         workdir,
-        args.cpus,
-        args.illumina_preset,
-        args.longread_preset,
-        args.aligner,
-        args.debug,
+        cpus,
+        illumina_preset,
+        longread_preset,
+        aligner,
+        debug,
     )
 
     if not bam_combined or not os.path.exists(bam_combined):
@@ -806,17 +819,17 @@ def run(parser, args):
         summary_file, quantized_bed = run_mosdepth_quantized(
             bam_combined,
             workdir,
-            args.cpus,
+            cpus,
             quantize_str,
             env_dict,
-            debug=args.debug,
+            debug=debug,
         )
     else:
         summary_file = run_mosdepth(
             bam_combined,
             workdir,
-            args.cpus,
-            debug=args.debug,
+            cpus,
+            debug=debug,
         )
 
     if not os.path.exists(summary_file):
@@ -831,7 +844,6 @@ def run(parser, args):
     # ------------------------------------------------------------------
     # Statistics for outlier detection
     # ------------------------------------------------------------------
-    min_contig_len = getattr(args, "min_contig_len", 500)
     analysis_rows = [c for c in contig_rows if c.get("length", 0) >= min_contig_len]
     # mosdepth global mean: bases covered / assembly length (length-weighted)
     mosdepth_mean_depth = total_row["mean"] if total_row else None
@@ -936,7 +948,7 @@ def run(parser, args):
     if quantized_bed and os.path.exists(quantized_bed):
         status("Reading quantized coverage BED...")
         contig_data = _read_quantized_bed(quantized_bed)
-        plot_prefix = _get_plot_prefix(args.input, args.out)
+        plot_prefix = _get_plot_prefix(input, out)
         status("Generating coverage plots...")
         _plot_coverage_heatmap(contig_data, contig_rows_sorted, labels, colours, plot_prefix, plot_format)
         _plot_coverage_barplot(contig_data, contig_rows_sorted, labels, colours, plot_prefix, plot_format)
@@ -945,8 +957,8 @@ def run(parser, args):
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
-    if not args.debug and not custom_workdir:
+    if not debug and not custom_workdir:
         SafeRemove(workdir)
 
-    if not args.pipe:
-        status(f"Your next command might be:\n" f"\tAAFTF assess -i {args.input}\n")
+    if not pipe:
+        status(f"Your next command might be:\n" f"\tAAFTF assess -i {input}\n")

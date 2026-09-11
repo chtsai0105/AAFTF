@@ -32,11 +32,11 @@ pytestmark = pytest.mark.unit
 def _parse_assemble(argv):
     captured = {}
 
-    def _capture(parser, args):
-        captured["args"] = args
+    def _capture(**kwargs):
+        captured["args"] = Namespace(**kwargs)
 
     with patch.object(sys, "argv", argv):
-        with patch("AAFTF.AAFTF_main.run_subtool", side_effect=_capture):
+        with patch("AAFTF.assemble.run", side_effect=_capture):
             main()
     return captured.get("args")
 
@@ -177,21 +177,21 @@ class TestAssembleRunGuards:
         from AAFTF.assemble import run
 
         with pytest.raises(SystemExit):
-            run(None, args)
+            run(**vars(args))
 
     def test_megahit_no_left_exits(self, tmp_path):
         args = _make_asm_args(tmp_path, method="megahit", left=None)
         from AAFTF.assemble import run
 
         with pytest.raises(SystemExit):
-            run(None, args)
+            run(**vars(args))
 
     def test_unicycler_no_left_exits(self, tmp_path):
         args = _make_asm_args(tmp_path, method="unicycler", left=None)
         from AAFTF.assemble import run
 
         with pytest.raises(SystemExit):
-            run(None, args)
+            run(**vars(args))
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ def _run_spades(tmp_path, left, right=None, create_output=True, **extra):
     from AAFTF.assemble import run_spades
 
     with patch("AAFTF.assemble.subprocess.run", side_effect=_fake_run):
-        run_spades(None, args)
+        run_spades(**vars(args))
     return cmds, args
 
 
@@ -311,7 +311,7 @@ def _run_megahit(tmp_path, left, right=None, create_output=True, **extra):
     from AAFTF.assemble import run_megahit
 
     with patch("AAFTF.assemble.subprocess.run", side_effect=_fake_run):
-        run_megahit(None, args)
+        run_megahit(**vars(args))
     return cmds, args
 
 
@@ -367,7 +367,7 @@ class TestAssembleRunUnicycler:
         from AAFTF.assemble import run_unicycler
 
         with patch("AAFTF.assemble.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-            run_unicycler(None, args)
+            run_unicycler(**vars(args))
 
         assert "--short1" in cmds[0]
         assert "--short2" in cmds[0]
@@ -380,7 +380,7 @@ class TestAssembleRunUnicycler:
         from AAFTF.assemble import run_unicycler
 
         with patch("AAFTF.assemble.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-            run_unicycler(None, args)
+            run_unicycler(**vars(args))
 
         assert "--unpaired" in cmds[0]
 
@@ -392,7 +392,7 @@ class TestAssembleRunUnicycler:
         from AAFTF.assemble import run_unicycler
 
         with patch("AAFTF.assemble.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-            run_unicycler(None, args)
+            run_unicycler(**vars(args))
 
         assert cmds[0][0] == "unicycler"
 
@@ -408,18 +408,18 @@ class TestAssembleUnimplementedMethods:
         from AAFTF.assemble import run
 
         with patch("AAFTF.assemble.subprocess.run"):
-            run(None, args)  # should not raise
+            run(**vars(args))  # should not raise
 
     def test_nextdenovo_no_crash(self, tmp_path):
         args = _make_asm_args(tmp_path, method="nextdenovo")
         from AAFTF.assemble import run
 
         with patch("AAFTF.assemble.subprocess.run"):
-            run(None, args)
+            run(**vars(args))
 
     def test_unknown_method_no_crash(self, tmp_path):
         args = _make_asm_args(tmp_path, method="unknownasm")
         from AAFTF.assemble import run
 
         with patch("AAFTF.assemble.subprocess.run"):
-            run(None, args)
+            run(**vars(args))

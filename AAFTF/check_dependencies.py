@@ -76,7 +76,7 @@ def _print_tool_table(title, results):
     return missing
 
 
-def run(parser, args):
+def run(**kwargs):
     """Check whether AAFTF's external tool and Python package dependencies are installed."""
     missing_required = _print_tool_table("Checking required external tools...", _check_tools(REQUIRED_TOOLS))
     print()

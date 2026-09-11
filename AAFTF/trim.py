@@ -47,105 +47,157 @@ def find_trimmomatic():
 
 
 # flake8: noqa: C901
-def run(parser, args):
+def run(
+    left,
+    right=None,
+    basename=None,
+    method="bbduk",
+    cpus=1,
+    memory=None,
+    minlen=75,
+    avgqual=10,
+    trimmomatic_adaptors="TruSeq3-PE.fa",
+    trimmomatic_clip="2:30:10",
+    trimmomatic_leadingwindow=3,
+    trimmomatic_trailingwindow=3,
+    trimmomatic_slidingwindow="4:15",
+    trimmomatic_quality="phred33",
+    merge=False,
+    dedup=False,
+    cutfront=False,
+    cuttail=False,
+    cutright=False,
+    debug=False,
+    pipe=False,
+    **kwargs,
+):
     """Run command for the module subtool of AAFTF."""
-    if not args.basename:
-        if "_" in os.path.basename(args.left):
-            args.basename = os.path.basename(args.left).split("_")[0]
-        elif "." in os.path.basename(args.left):
-            args.basename = os.path.basename(args.left).split(".")[0]
+    if not basename:
+        if "_" in os.path.basename(left):
+            basename = os.path.basename(left).split("_")[0]
+        elif "." in os.path.basename(left):
+            basename = os.path.basename(left).split(".")[0]
         else:
-            args.basename = os.path.basename(args.left)
+            basename = os.path.basename(left)
 
-    total = countfastq(args.left)
-    if args.right:
+    total = countfastq(left)
+    if right:
         total = total * 2
     status(f"Loading {total:,} total reads")
 
     DEVNULL = open(os.devnull, "w")
-    if args.method == "bbduk":
-        if args.memory:
-            MEM = f"-Xmx{args.memory}g"
+    if method == "bbduk":
+        if memory:
+            MEM = f"-Xmx{memory}g"
         else:
             MEM = f"-Xmx{round(0.6 * getRAM())}g"
 
         status("Adapter trimming using BBDuk")
-        bbduk_base = ["bbduk.sh", MEM, "ref=adapters", f"t={args.cpus}", "ktrim=r", "k=23", "mink=11", f"minlen={args.minlen}", "hdist=1", f"maq={args.avgqual}", "ftm=5", "tpe", "tbo", "overwrite=true"]
-        if args.left and args.right:
+        bbduk_base = [
+            "bbduk.sh",
+            MEM,
+            "ref=adapters",
+            f"t={cpus}",
+            "ktrim=r",
+            "k=23",
+            "mink=11",
+            f"minlen={minlen}",
+            "hdist=1",
+            f"maq={avgqual}",
+            "ftm=5",
+            "tpe",
+            "tbo",
+            "overwrite=true",
+        ]
+        if left and right:
             # Paired mode (in1=/in2=) hits a bug in this BBDuk build's
             # PairStreamer on large/variable-length paired FASTQ: it silently
             # truncates the stream after a few hundred reads instead of
             # erroring loudly. Feed it an INTERLEAVED single file instead
             # (bbduk's single-end reader handles the full file correctly),
             # then de-interleave the trimmed output.
-            interleaved_in = f"{args.basename}_ivl.fq.gz"
-            interleaved_out = f"{args.basename}_ivl.trimmed.fq.gz"
-            shuffle_cmd = ["shuffle.sh", f"in1={args.left}", f"in2={args.right}", f"out={interleaved_in}"]
+            interleaved_in = f"{basename}_ivl.fq.gz"
+            interleaved_out = f"{basename}_ivl.trimmed.fq.gz"
+            shuffle_cmd = ["shuffle.sh", f"in1={left}", f"in2={right}", f"out={interleaved_in}"]
             printCMD(shuffle_cmd)
-            if args.debug:
+            if debug:
                 subprocess.run(shuffle_cmd)
             else:
                 subprocess.run(shuffle_cmd, stderr=DEVNULL)
 
             cmd = bbduk_base + [f"in={interleaved_in}", "interleaved=true", f"out={interleaved_out}"]
             printCMD(cmd)
-            if args.debug:
+            if debug:
                 subprocess.run(cmd)
             else:
                 subprocess.run(cmd, stderr=DEVNULL)
 
-            reformat_cmd = ["reformat.sh", f"in={interleaved_out}", f"out1={args.basename}_1P.fastq.gz", f"out2={args.basename}_2P.fastq.gz"]
+            reformat_cmd = [
+                "reformat.sh",
+                f"in={interleaved_out}",
+                f"out1={basename}_1P.fastq.gz",
+                f"out2={basename}_2P.fastq.gz",
+            ]
             printCMD(reformat_cmd)
-            if args.debug:
+            if debug:
                 subprocess.run(reformat_cmd)
             else:
                 subprocess.run(reformat_cmd, stderr=DEVNULL)
             SafeRemove(interleaved_in)
             SafeRemove(interleaved_out)
-        elif args.left:
-            cmd = bbduk_base + [f"in={args.left}", f"out={args.basename}_1U.fastq.gz"]
+        elif left:
+            cmd = bbduk_base + [f"in={left}", f"out={basename}_1U.fastq.gz"]
             printCMD(cmd)
-            if args.debug:
+            if debug:
                 subprocess.run(cmd)
             else:
                 subprocess.run(cmd, stderr=DEVNULL)
 
-        if args.right:
-            clean = countfastq(f"{args.basename}_1P.fastq.gz")
+        if right:
+            clean = countfastq(f"{basename}_1P.fastq.gz")
             clean = clean * 2
             status(f"{clean:,} reads remaining and writing to file")
-            status("Trimming finished:\n\tFor: {:}\n\tRev {:}".format(args.basename + "_1P.fastq.gz", args.basename + "_2P.fastq.gz"))
-            if not args.pipe:
-                status("Your next command might be:\n\t" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(args.basename + "_1P.fastq.gz", args.basename + "_2P.fastq.gz", args.basename, args.cpus))
+            status(
+                "Trimming finished:\n\tFor: {:}\n\tRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz")
+            )
+            if not pipe:
+                status(
+                    "Your next command might be:\n\t"
+                    + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(
+                        basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus
+                    )
+                )
         else:
-            clean = countfastq(f"{args.basename}_1U.fastq.gz")
+            clean = countfastq(f"{basename}_1U.fastq.gz")
             status(f"{clean:,} reads remaining and writing to file")
-            status("Trimming finished:\n\tSingle: {:}".format(args.basename + "_1U.fastq.gz"))
-            if not args.pipe:
-                status("Your next command might be:\n\t" + "AAFTF filter -l {:} -o {:} -c {:}\n".format(args.basename + "_1U.fastq.gz", args.basename, args.cpus))
+            status("Trimming finished:\n\tSingle: {:}".format(basename + "_1U.fastq.gz"))
+            if not pipe:
+                status(
+                    "Your next command might be:\n\t"
+                    + "AAFTF filter -l {:} -o {:} -c {:}\n".format(basename + "_1U.fastq.gz", basename, cpus)
+                )
 
-    elif args.method == "trimmomatic":
+    elif method == "trimmomatic":
         # find path
         trimmomatic_path = find_trimmomatic()
         if trimmomatic_path:
             jarfile = trimmomatic_path
-        elif args.trimmomatic:
-            jarfile = args.trimmomatic
         else:
             status("Trimmomatic cannot be found - " + "please provide location of trimmomatic.jar file.")
             sys.exit(1)
 
         if jarfile:
-            path_to_adaptors = args.trimmomatic_adaptors
-            leadingwindow = f"LEADING:{args.trimmomatic_leadingwindow}"
-            trailingwindow = f"TRAILING:{args.trimmomatic_trailingwindow}"
-            slidingwindow = f"SLIDINGWINDOW:{args.trimmomatic_slidingwindow}"
+            path_to_adaptors = trimmomatic_adaptors
+            clipstr = f"ILLUMINACLIP:{path_to_adaptors}:{trimmomatic_clip}"
+            leadingwindow = f"LEADING:{trimmomatic_leadingwindow}"
+            trailingwindow = f"TRAILING:{trimmomatic_trailingwindow}"
+            slidingwindow = f"SLIDINGWINDOW:{trimmomatic_slidingwindow}"
 
-            quality = args.trimmomatic_quality
+            quality = trimmomatic_quality
             quality = f"-{quality}"  # add leading dash
 
             if not os.path.exists(path_to_adaptors):
-                if args.right:
+                if right:
                     path_to_adaptors = os.path.join(dirname(jarfile), TRIMMOMATIC_TRUSEQPE)
                 else:
                     path_to_adaptors = os.path.join(dirname(jarfile), TRIMMOMATIC_TRUSEQSE)
@@ -155,7 +207,7 @@ def run(parser, args):
                     path_to_adaptors = ""
                     while findpath:
                         if os.path.exists(findpath + "/share"):
-                            if args.right:
+                            if right:
                                 path_to_adaptors = os.path.join(findpath, "/share/trimmomatic", TRIMMOMATIC_TRUSEQPE)
                             else:
                                 path_to_adaptors = os.path.join(findpath, "/share/trimmomatic", TRIMMOMATIC_TRUSEQSE)
@@ -169,84 +221,152 @@ def run(parser, args):
                     status("Cannot find adaptors file please specify manually")
                     return
 
-            clipstr = args.trimmomatic_clip % (path_to_adaptors)
-
             cmd = []
 
-            if args.left and args.right:
-                cmd = ["java", "-jar", jarfile, "PE", "-threads", str(args.cpus), quality, args.left, args.right, args.basename + "_1P.fastq", args.basename + "_1U.fastq", args.basename + "_2P.fastq", args.basename + "_2U.fastq", clipstr, leadingwindow, trailingwindow, slidingwindow, f"MINLEN:{args.minlen}"]
-            elif args.left and not args.right:
-                cmd = ["java", "-jar", jarfile, "SE", "-threads", str(args.cpus), quality, args.left, args.basename + "_1U.fastq", clipstr, leadingwindow, trailingwindow, slidingwindow, f"MINLEN:{args.minlen}"]
+            if left and right:
+                cmd = [
+                    "java",
+                    "-jar",
+                    jarfile,
+                    "PE",
+                    "-threads",
+                    str(cpus),
+                    quality,
+                    left,
+                    right,
+                    basename + "_1P.fastq",
+                    basename + "_1U.fastq",
+                    basename + "_2P.fastq",
+                    basename + "_2U.fastq",
+                    clipstr,
+                    leadingwindow,
+                    trailingwindow,
+                    slidingwindow,
+                    f"MINLEN:{minlen}",
+                ]
+            elif left and not right:
+                cmd = [
+                    "java",
+                    "-jar",
+                    jarfile,
+                    "SE",
+                    "-threads",
+                    str(cpus),
+                    quality,
+                    left,
+                    basename + "_1U.fastq",
+                    clipstr,
+                    leadingwindow,
+                    trailingwindow,
+                    slidingwindow,
+                    f"MINLEN:{minlen}",
+                ]
             else:
                 status("Must provide left and right pairs or single read set")
                 return
 
             status("Running trimmomatic adapter and quality trimming")
             printCMD(cmd)
-            if args.debug:
+            if debug:
                 subprocess.run(cmd)
             else:
                 subprocess.run(cmd, stderr=DEVNULL)
-            if args.right:
+            if right:
                 status("Compressing trimmed PE FASTQ files")
-                Fzip_inplace(args.basename + "_1P.fastq", args.cpus)
-                Fzip_inplace(args.basename + "_2P.fastq", args.cpus)
-                SafeRemove(args.basename + "_1U.fastq")
-                SafeRemove(args.basename + "_2U.fastq")
-                status("Trimming finished:\n\tFor: {:}\n\tRev {:}".format(args.basename + "_1P.fastq.gz", args.basename + "_2P.fastq.gz"))
-                if not args.pipe:
-                    status("Your next command might be:\n\t" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(args.basename + "_1P.fastq.gz", args.basename + "_2P.fastq.gz", args.basename, args.cpus))
+                Fzip_inplace(basename + "_1P.fastq", cpus)
+                Fzip_inplace(basename + "_2P.fastq", cpus)
+                SafeRemove(basename + "_1U.fastq")
+                SafeRemove(basename + "_2U.fastq")
+                status(
+                    "Trimming finished:\n\tFor: {:}\n\tRev {:}".format(
+                        basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"
+                    )
+                )
+                if not pipe:
+                    status(
+                        "Your next command might be:\n\t"
+                        + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(
+                            basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus
+                        )
+                    )
             else:
                 status("Compressing trimmed SE FASTQ file")
-                Fzip_inplace(args.basename + "_1U.fastq", args.cpus)
-                status("Trimming finished:\n\tSingle: {:}".format(args.basename + "_1U.fastq.gz"))
-                if not args.pipe:
-                    status("Your next command might be:\n\t" + "AAFTF filter -l {:} -o {:} -c {:}\n".format(args.basename + "_1U.fastq.gz", args.basename, args.cpus))
+                Fzip_inplace(basename + "_1U.fastq", cpus)
+                status("Trimming finished:\n\tSingle: {:}".format(basename + "_1U.fastq.gz"))
+                if not pipe:
+                    status(
+                        "Your next command might be:\n\t"
+                        + "AAFTF filter -l {:} -o {:} -c {:}\n".format(basename + "_1U.fastq.gz", basename, cpus)
+                    )
 
-    elif args.method == "fastp":
+    elif method == "fastp":
         status("Adapter trimming using fastp")
-        cmd = ["fastp", "--low_complexity_filter", "-l", f"{args.minlen}", "--average_qual", f"{args.avgqual}", "-w", f"{args.cpus}"]
+        cmd = [
+            "fastp",
+            "--low_complexity_filter",
+            "-l",
+            f"{minlen}",
+            "--average_qual",
+            f"{avgqual}",
+            "-w",
+            f"{cpus}",
+        ]
 
-        #               '-wref=adapters', 't={:}'.format(args.cpus), 'ktrim=r',
-        #           'k=23', 'mink=11', 'minlen={:}'.format(args.minlen), 'hdist=1',
+        #               '-wref=adapters', 't={:}'.format(cpus), 'ktrim=r',
+        #           'k=23', 'mink=11', 'minlen={:}'.format(minlen), 'hdist=1',
         #           'ftm=5', 'tpe', 'tbo', 'overwrite=true']
-        if args.left and args.right:
+        if left and right:
             # could add merging ...
-            cmd += [f"--in1={args.left}", f"--in2={args.right}", f"--out1={args.basename}_1P.fastq.gz", f"--out2={args.basename}_2P.fastq.gz"]
-            if args.merge:
-                cmd += ["--merge", f"--merged_out={args.basename}_MG.fastq.gz"]
+            cmd += [
+                f"--in1={left}",
+                f"--in2={right}",
+                f"--out1={basename}_1P.fastq.gz",
+                f"--out2={basename}_2P.fastq.gz",
+            ]
+            if merge:
+                cmd += ["--merge", f"--merged_out={basename}_MG.fastq.gz"]
 
-        elif args.left:
-            cmd += [f"--in={args.left}", f"--out={args.basename}_1U.fastq.gz"]
-        if args.dedup:
+        elif left:
+            cmd += [f"--in={left}", f"--out={basename}_1U.fastq.gz"]
+        if dedup:
             cmd += ["--dedup"]
-        if args.cutfront:
+        if cutfront:
             cmd += ["--cut_front"]
-        if args.cuttail:
+        if cuttail:
             cmd += ["--cut_tail"]
-        if args.cutright:
+        if cutright:
             cmd += ["--cut_right"]
 
-        cmd += [f"--html={args.basename}.fastp.html", f"--json={args.basename}.fastp.json"]
+        cmd += [f"--html={basename}.fastp.html", f"--json={basename}.fastp.json"]
         printCMD(cmd)
-        if args.debug:
+        if debug:
             subprocess.run(cmd)
         else:
             subprocess.run(cmd, stderr=DEVNULL)
 
-        if args.right:
-            clean = countfastq(f"{args.basename}_1P.fastq.gz")
+        if right:
+            clean = countfastq(f"{basename}_1P.fastq.gz")
             clean = clean * 2
             status(f"{clean:,} reads remaining and writing to file")
-            status("Trimming finished:\n\tFor: {:}\n\tRev {:}".format(args.basename + "_1P.fastq.gz", args.basename + "_2P.fastq.gz"))
-            if not args.pipe:
-                status("Your next command might be:\n\t" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(args.basename + "_1P.fastq.gz", args.basename + "_2P.fastq.gz", args.basename, args.cpus))
+            status(
+                "Trimming finished:\n\tFor: {:}\n\tRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz")
+            )
+            if not pipe:
+                status(
+                    "Your next command might be:\n\t"
+                    + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(
+                        basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus
+                    )
+                )
         else:
-            clean = countfastq(f"{args.basename}_1U.fastq.gz")
+            clean = countfastq(f"{basename}_1U.fastq.gz")
             status(f"{clean:,} reads remaining and writing to file")
-            status("Trimming finished:\n\tSingle: {:}".format(args.basename + "_1U.fastq.gz"))
-            if not args.pipe:
-                status("Your next command might be:\n\t" + "AAFTF filter --left {:} -o {:} -c {:}\n".format(args.basename + "_1U.fastq.gz", args.basename, args.cpus))
+            status("Trimming finished:\n\tSingle: {:}".format(basename + "_1U.fastq.gz"))
+            if not pipe:
+                status(
+                    "Your next command might be:\n\t"
+                    + "AAFTF filter --left {:} -o {:} -c {:}\n".format(basename + "_1U.fastq.gz", basename, cpus)
+                )
 
     else:
-        status(f"Unknown trimming method: {args.method}")
+        status(f"Unknown trimming method: {method}")

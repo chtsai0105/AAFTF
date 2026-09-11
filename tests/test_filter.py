@@ -32,11 +32,11 @@ pytestmark = pytest.mark.unit
 def _parse_filter(argv):
     captured = {}
 
-    def _capture(parser, args):
-        captured["args"] = args
+    def _capture(**kwargs):
+        captured["args"] = Namespace(**kwargs)
 
     with patch.object(sys, "argv", argv):
-        with patch("AAFTF.AAFTF_main.run_subtool", side_effect=_capture):
+        with patch("AAFTF.filter.run", side_effect=_capture):
             main()
     return captured.get("args")
 
@@ -203,7 +203,7 @@ class TestFilterRunGuards:
         with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
             with patch("AAFTF.filter.countfastq", return_value=0):
                 with pytest.raises(SystemExit):
-                    run(None, args)
+                    run(**vars(args))
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +223,7 @@ class TestFilterContamdbCreation:
         with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
             with patch("AAFTF.filter.countfastq", return_value=100):
                 with patch("AAFTF.filter.subprocess.run"):
-                    run(None, args)
+                    run(**vars(args))
 
         contamdb = workdir / "contamdb.fa"
         assert contamdb.exists()
@@ -240,7 +240,7 @@ class TestFilterContamdbCreation:
         with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
             with patch("AAFTF.filter.countfastq", return_value=100):
                 with patch("AAFTF.filter.subprocess.run"):
-                    run(None, args)
+                    run(**vars(args))
 
         contamdb = Path(args.workdir) / "contamdb.fa"
         content = contamdb.read_text()
@@ -256,7 +256,7 @@ class TestFilterContamdbCreation:
         with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
             with patch("AAFTF.filter.countfastq", return_value=100):
                 with patch("AAFTF.filter.subprocess.run"):
-                    run(None, args)
+                    run(**vars(args))
 
         contamdb = Path(args.workdir) / "contamdb.fa"
         assert contamdb.stat().st_size > 0
@@ -278,7 +278,7 @@ def _run_filter_bbduk(tmp_path, left, right=None, **extra):
     with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
         with patch("AAFTF.filter.countfastq", return_value=100):
             with patch("AAFTF.filter.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-                run(None, args)
+                run(**vars(args))
     return cmds, args
 
 
@@ -301,15 +301,14 @@ class TestFilterRunBbduk:
     def test_pe_output_files_use_filtered_basename(self, tmp_path):
         left = str(tmp_path / "sample_R1.fastq.gz")
         right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, args = _run_filter_bbduk(tmp_path, left, right)
-        expected_out1 = f"{args.basename}_filtered_1.fastq.gz"
-        assert any(expected_out1 in " ".join(c) for c in cmds)
+        cmds, _ = _run_filter_bbduk(tmp_path, left, right)
+        assert any("sample_filtered_1.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_se_output_uses_U_suffix(self, tmp_path):
         left = str(tmp_path / "sample_R1.fastq.gz")
-        cmds, args = _run_filter_bbduk(tmp_path, left, right=None)
+        cmds, _ = _run_filter_bbduk(tmp_path, left, right=None)
         cmd_str = " ".join(cmds[0])
-        assert f"{args.basename}_filtered_U.fastq.gz" in cmd_str
+        assert "sample_filtered_U.fastq.gz" in cmd_str
 
     def test_command_starts_with_bbduk(self, tmp_path):
         left = str(tmp_path / "sample_R1.fastq.gz")
@@ -326,13 +325,13 @@ class TestFilterRunBbduk:
 
     def test_basename_derived_from_underscore_split(self, tmp_path):
         left = str(tmp_path / "MySample_R1.fastq.gz")
-        _, args = _run_filter_bbduk(tmp_path, left)
-        assert args.basename == "MySample"
+        cmds, _ = _run_filter_bbduk(tmp_path, left)
+        assert any("MySample_filtered_U.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_explicit_basename_preserved(self, tmp_path):
         left = str(tmp_path / "sample_R1.fastq.gz")
-        _, args = _run_filter_bbduk(tmp_path, left, basename="custom")
-        assert args.basename == "custom"
+        cmds, _ = _run_filter_bbduk(tmp_path, left, basename="custom")
+        assert any("custom_filtered_U.fastq.gz" in " ".join(c) for c in cmds)
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +378,7 @@ def _run_filter_bwa(tmp_path, left, right=None, **extra):
                     with patch("AAFTF.utility.get_samtools_version", return_value=Version("1.23")):
                         with patch("AAFTF.filter.bam_read_count", return_value=(50, 50)):
                             with patch("AAFTF.filter.SafeRemove"):
-                                run(None, args)
+                                run(**vars(args))
     return cmds, popen_cmds, args
 
 

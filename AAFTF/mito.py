@@ -77,7 +77,19 @@ def orient_to_start(fasta_in, fasta_out, folder=".", start=False):
         os.remove(startFile)
 
 
-def run(parser, args):
+def run(
+    left,
+    right,
+    out,
+    workdir=None,
+    minlen=10000,
+    maxlen=100000,
+    seed=None,
+    starting=None,
+    reference=None,
+    pipe=False,
+    **kwargs,
+):
     """Run the NOVOplasty tool."""
     # first check if NOVOplasty and minimap2 are installed, else exit
     programs = ["NOVOPlasty.pl", "minimap2"]
@@ -87,40 +99,40 @@ def run(parser, args):
             sys.exit(1)
     # first we need to generate working directory
     unique_id = str(uuid.uuid4())[:8]
-    if not args.workdir:
-        args.workdir = "mito_" + unique_id
-    if not os.path.isdir(args.workdir):
-        os.makedirs(args.workdir)
+    if not workdir:
+        workdir = "mito_" + unique_id
+    if not os.path.isdir(workdir):
+        os.makedirs(workdir)
 
     # now estimate read lengths of FASTQ
-    read_len = GuessRL(args.left)
+    read_len = GuessRL(left)
 
     # check for seed sequence, otherwise write one
-    if not args.seed:
-        if not args.reference:
+    if not seed:
+        if not reference:
             seedFasta = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "mito-seed.fasta"))
         else:
-            seedFasta = os.path.abspath(args.reference)
+            seedFasta = os.path.abspath(reference)
     else:
-        seedFasta = os.path.abspath(args.seed)
+        seedFasta = os.path.abspath(seed)
 
     # now write the novoplasty config file
     defaultConfig = os.path.join(os.path.dirname(__file__), "data", "novoplasty-config.txt")
-    novoConfig = os.path.join(args.workdir, "novo-config.txt")
-    if args.reference:
-        refgenome = os.path.abspath(args.reference)
+    novoConfig = os.path.join(workdir, "novo-config.txt")
+    if reference:
+        refgenome = os.path.abspath(reference)
     else:
         refgenome = ""
     checkWords = ("<PROJECT>", "<MINLEN>", "<MAXLEN>", "<MAXMEM>", "<SEED>", "<READLEN>", "<FORWARD>", "<REVERSE>", "<REFERENCE>")
     repWords = (
         unique_id,  # project
-        str(args.minlen),  # minlen
-        str(args.maxlen),  # maxlen
+        str(minlen),  # minlen
+        str(maxlen),  # maxlen
         str(int(getRAM() * 0.75)),  # maxRAM
         seedFasta,  # seed fasta seq
         str(read_len),  # read length
-        os.path.abspath(args.left),  # forward read
-        os.path.abspath(args.right),  # rev read
+        os.path.abspath(left),  # forward read
+        os.path.abspath(right),  # rev read
         refgenome,
     )  # ref genome file
     with open(novoConfig, "w") as outfile:
@@ -134,36 +146,36 @@ def run(parser, args):
     status("De novo assembling mitochondrial genome using NOVOplasty")
     cmd = ["NOVOPlasty.pl", "-c", "novo-config.txt"]
     printCMD(cmd)
-    novolog = os.path.join(args.workdir, "novoplasty.log")
+    novolog = os.path.join(workdir, "novoplasty.log")
     with open(novolog, "w") as logfile:
-        p1 = subprocess.Popen(cmd, cwd=args.workdir, stdout=logfile, stderr=logfile)
+        p1 = subprocess.Popen(cmd, cwd=workdir, stdout=logfile, stderr=logfile)
         p1.communicate()
 
     # now parse the results
     draftMito = None
     circular = False
-    for f in os.listdir(args.workdir):
+    for f in os.listdir(workdir):
         if f.startswith("Circularized_assembly_"):
-            draftMito = os.path.join(args.workdir, f)
+            draftMito = os.path.join(workdir, f)
             circular = True
             break
         if f.startswith("Contigs_1_"):
-            draftMito = os.path.join(args.workdir, f)
+            draftMito = os.path.join(workdir, f)
             break
         if f.startswith("Uncircularized_assemblies_"):
-            draftMito = os.path.join(args.workdir, f)
+            draftMito = os.path.join(workdir, f)
             break
     if circular:
         status("NOVOplasty assembled complete circular genome")
-        if args.starting:
-            status(f"Rotating assembly to start with {args.starting}")
+        if starting:
+            status(f"Rotating assembly to start with {starting}")
         else:
             status("Rotating assembly to start with Cytochrome b (cob) gene")
-        orient_to_start(draftMito, args.out, folder=args.workdir, start=args.starting)
+        orient_to_start(draftMito, out, folder=workdir, start=starting)
     else:
         numContigs = 0
         contigLength = 0
-        with open(args.out, "w") as outfile:
+        with open(out, "w") as outfile:
             with open(draftMito) as infile:
                 for title, seq in SimpleFastaParser(infile):
                     numContigs += 1
@@ -172,6 +184,6 @@ def run(parser, args):
         # weird formatting here for PEP8
         status(f"NOVOplasty assembled {numContigs} contigs consisting of {contigLength:,} bp," + "but was unable to circularize genome")
 
-    status(f"AAFTF mito complete: {args.out}")
-    if not args.pipe:
-        shutil.rmtree(args.workdir)
+    status(f"AAFTF mito complete: {out}")
+    if not pipe:
+        shutil.rmtree(workdir)

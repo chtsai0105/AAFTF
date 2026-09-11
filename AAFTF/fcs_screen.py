@@ -21,31 +21,41 @@ from AAFTF.resources import FCSADAPTOR
 from AAFTF.utility import SafeRemove, printCMD, status
 
 
-def run(parser, args):
+def run(
+    infile,
+    outfile,
+    AAFTF_DB=None,
+    container_engine="singularity",
+    workdir=None,
+    image=None,
+    prok=False,
+    fcs_script=None,
+    debug=False,
+    **kwargs,
+):
     """Perform vector trimming via the fcs screening tool."""
-    if args.AAFTF_DB:
-        DB = args.AAFTF_DB
+    if AAFTF_DB:
+        DB = AAFTF_DB
     elif "AAFTF_DB" in os.environ:
         DB = os.environ["AAFTF_DB"]
     else:
         status("ERROR: AAFTF_DB not set. Provide --AAFTF_DB or set the $AAFTF_DB environment variable.")
         sys.exit(1)
 
-    containerengine = args.container_engine
-    infilename = os.path.basename(os.path.realpath(args.infile))
-    image = args.image
+    containerengine = container_engine
+    infilename = os.path.basename(os.path.realpath(infile))
     tax = "--euk"
-    if args.prok:
+    if prok:
         tax = "--prok"
     custom_workdir = 1
-    if not args.workdir:
+    if not workdir:
         custom_workdir = 0
-        args.workdir = "aaftf-fcsscreen_" + str(uuid.uuid4())[:8]
+        workdir = "aaftf-fcsscreen_" + str(uuid.uuid4())[:8]
 
-    if not os.path.exists(args.workdir):
-        os.mkdir(args.workdir)
+    if not os.path.exists(workdir):
+        os.mkdir(workdir)
 
-    fcsexe = args.fcs_script
+    fcsexe = fcs_script
     if fcsexe is None:
         fcsexe = shutil.which("run_fcsadaptor.sh")
     if fcsexe is None:
@@ -53,7 +63,7 @@ def run(parser, args):
         #  This will help download the fcs-adaptor shell script rather than re-implementing it here
         if not os.path.exists(fcsexe):
             url = os.path.join(FCSADAPTOR["EXEURL"] % (FCSADAPTOR["VERSION"]))
-            if args.debug:
+            if debug:
                 status(f"url {url} download to {fcsexe}")
             urllib.request.urlretrieve(url, fcsexe)
             os.chmod(fcsexe, 0o444)
@@ -64,7 +74,7 @@ def run(parser, args):
             image = os.path.join(DB, FCSADAPTOR["SIFLOCAL"] % (FCSADAPTOR["VERSION"]))
             if not os.path.exists(image):
                 url = os.path.join(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"])
-                if args.debug:
+                if debug:
                     status(f"url {url} download to {image}")
                 urllib.request.urlretrieve(url, image)
         if shutil.which("singularity") is None and shutil.which("apptainer") is None:
@@ -79,11 +89,11 @@ def run(parser, args):
             status("ERROR: --container_engine docker requires 'docker' on PATH.")
             sys.exit(1)
 
-    cmd = [fcsexe, "--fasta-input", args.infile, "--output-dir", args.workdir, tax, "--container-engine", containerengine, "--image", image]
+    cmd = [fcsexe, "--fasta-input", infile, "--output-dir", workdir, tax, "--container-engine", containerengine, "--image", image]
     printCMD(cmd)
     DEVNULL = open(os.devnull, "w")
     try:
-        if args.debug:
+        if debug:
             call(cmd)
         else:
             call(cmd, stderr=DEVNULL)
@@ -91,18 +101,18 @@ def run(parser, args):
     except NameError:
         print(f"error in calling executable {cmd}")
 
-    os.mkdir(os.path.join(args.workdir, "cleaned_sequences"))
-    cleanresult = os.path.join(args.workdir, "cleaned_sequences", infilename)
-    if args.debug:
-        status(f"copy from: {cleanresult} -> {args.outfile}")
-    os.rename(cleanresult, args.outfile)
-    fcsreport = os.path.join(args.workdir, "fcs_adaptor_report.txt")
+    os.mkdir(os.path.join(workdir, "cleaned_sequences"))
+    cleanresult = os.path.join(workdir, "cleaned_sequences", infilename)
+    if debug:
+        status(f"copy from: {cleanresult} -> {outfile}")
+    os.rename(cleanresult, outfile)
+    fcsreport = os.path.join(workdir, "fcs_adaptor_report.txt")
     with open(fcsreport) as fh:
         status("FCS report:")
         for line in fh:
             print(line, end="")
     # make a copy of the report to show
-    os.rename(fcsreport, args.outfile + ".fcs_adaptor_report.txt")
+    os.rename(fcsreport, outfile + ".fcs_adaptor_report.txt")
     # cleanup after running
-    if not args.debug and not custom_workdir:
-        SafeRemove(args.workdir)
+    if not debug and not custom_workdir:
+        SafeRemove(workdir)

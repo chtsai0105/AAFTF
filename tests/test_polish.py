@@ -29,11 +29,11 @@ from AAFTF.AAFTF_main import main
 def _parse_polish(argv):
     captured = {}
 
-    def _capture(parser, args):
-        captured["args"] = args
+    def _capture(**kwargs):
+        captured["args"] = Namespace(**kwargs)
 
     with patch.object(sys, "argv", argv):
-        with patch("AAFTF.AAFTF_main.run_subtool", side_effect=_capture):
+        with patch("AAFTF.polish.run", side_effect=_capture):
             main()
     return captured.get("args")
 
@@ -194,21 +194,21 @@ class TestPolishRunGuards:
         from AAFTF.polish import run
 
         with pytest.raises(SystemExit):
-            run(None, args)
+            run(**vars(args))
 
     def test_pilon_without_reads_exits(self, tmp_path):
         args = _make_args(tmp_path, method="pilon", left=None, right=None)
         from AAFTF.polish import run
 
         with pytest.raises(SystemExit):
-            run(None, args)
+            run(**vars(args))
 
     def test_polca_without_reads_exits(self, tmp_path):
         args = _make_args(tmp_path, method="polca", left=None, right=None)
         from AAFTF.polish import run
 
         with pytest.raises(SystemExit):
-            run(None, args)
+            run(**vars(args))
 
     def test_zero_iterations_exits(self, tmp_path):
         (tmp_path / "R1.fq").write_text("@r\nA\n+\nI\n")
@@ -217,7 +217,7 @@ class TestPolishRunGuards:
         from AAFTF.polish import run
 
         with pytest.raises(SystemExit):
-            run(None, args)
+            run(**vars(args))
 
     def test_negative_iterations_exits(self, tmp_path):
         (tmp_path / "R1.fq").write_text("@r\nA\n+\nI\n")
@@ -226,7 +226,7 @@ class TestPolishRunGuards:
         from AAFTF.polish import run
 
         with pytest.raises(SystemExit):
-            run(None, args)
+            run(**vars(args))
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +270,7 @@ class TestPolishPolcaFailure:
             with patch("AAFTF.polish.get_samtools_version", return_value=Version("1.23")):
                 with patch("AAFTF.polish.shutil.which", return_value=True):
                     with pytest.raises(SystemExit) as exc:
-                        run(None, args)
+                        run(**vars(args))
         assert exc.value.code == 1
 
     def test_missing_output_file_raises_systemexit(self, tmp_path):
@@ -288,7 +288,7 @@ class TestPolishPolcaFailure:
             with patch("AAFTF.polish.get_samtools_version", return_value=Version("1.23")):
                 with patch("AAFTF.polish.shutil.which", return_value=True):
                     with pytest.raises(SystemExit) as exc:
-                        run(None, args)
+                        run(**vars(args))
         assert exc.value.code == 1
 
     def test_success_copies_corrected_fasta(self, tmp_path):
@@ -312,7 +312,7 @@ class TestPolishPolcaFailure:
         with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
             with patch("AAFTF.polish.get_samtools_version", return_value=Version("1.23")):
                 with patch("AAFTF.polish.shutil.which", return_value=True):
-                    run(None, args)
+                    run(**vars(args))
 
         assert (tmp_path / "polished.fasta").exists()
 
@@ -336,7 +336,7 @@ class TestPolishPolcaFailure:
         with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
             with patch("AAFTF.polish.get_samtools_version", return_value=Version("1.23")):
                 with patch("AAFTF.polish.shutil.which", return_value=True):
-                    run(None, args)
+                    run(**vars(args))
 
         assert (tmp_path / "polished.fasta.vcf").exists()
 
@@ -360,7 +360,7 @@ class TestPolishPolcaFailure:
         with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
             with patch("AAFTF.polish.get_samtools_version", return_value=Version("1.23")):
                 with patch("AAFTF.polish.shutil.which", return_value=True):
-                    run(None, args)
+                    run(**vars(args))
 
         assert (tmp_path / "polished.fasta.polca_report.txt").exists()
 
@@ -387,7 +387,7 @@ class TestPolishPolcaFailure:
         with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
             with patch("AAFTF.polish.get_samtools_version", return_value=Version("1.23")):
                 with patch("AAFTF.polish.shutil.which", return_value=True):
-                    run(None, args)
+                    run(**vars(args))
 
         polca_cmd = captured_cmds[0]
         reads_arg = next((polca_cmd[i + 1] for i, a in enumerate(polca_cmd) if a == "-r"), None)
@@ -442,7 +442,7 @@ class TestPolishPilonConvergence:
         with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
             with patch("AAFTF.polish.make_bwa_bam", side_effect=_fake_make_bwa_bam):
                 with patch("AAFTF.polish.shutil.which", return_value=True):
-                    run(None, args)
+                    run(**vars(args))
 
         # Only one pilon invocation — converged at iteration 1
         pilon_calls = [c for c in subprocess_calls if c and c[0] == "pilon"]
@@ -490,7 +490,7 @@ class TestPolishPilonConvergence:
         with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
             with patch("AAFTF.polish.make_bwa_bam", side_effect=_fake_make_bwa_bam):
                 with patch("AAFTF.polish.shutil.which", return_value=True):
-                    run(None, args)
+                    run(**vars(args))
 
         assert call_count[0] == 2
         assert (tmp_path / "polished.fasta").exists()
@@ -556,7 +556,7 @@ class TestPolishPilonIntegration:
 
         from AAFTF.polish import run
 
-        run(None, args)
+        run(**vars(args))
 
         out = Path(outfile)
         assert out.exists(), "polished FASTA was not created"
@@ -586,7 +586,7 @@ class TestPolishPilonIntegration:
 
         from AAFTF.polish import run
 
-        run(None, args)
+        run(**vars(args))
 
         with open(outfile) as fh:
             first_line = fh.readline()
@@ -616,7 +616,7 @@ class TestPolishPilonIntegration:
 
         from AAFTF.polish import run
 
-        run(None, args)
+        run(**vars(args))
 
         input_size = _INPUT_FASTA.stat().st_size
         output_size = Path(outfile).stat().st_size

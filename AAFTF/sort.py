@@ -5,18 +5,18 @@ from Bio.SeqIO.FastaIO import SimpleFastaParser
 from AAFTF.utility import softwrap, status
 
 
-def run(parser, args):
+def run(input, out, minlen=0, name="scaffold", **kwargs):
     """Sort contig/scaffold file longest to shortest and rename."""
     status("Sorting sequences by length longest --> shortest")
     AllSeqs = {}
-    with open(args.input) as fasta_in:
+    with open(input) as fasta_in:
         for Header, Seq in SimpleFastaParser(fasta_in):
             if Header not in AllSeqs:
-                if len(Seq) >= args.minlen:
+                if len(Seq) >= minlen:
                     AllSeqs[Header] = Seq
     sortSeqs = sorted(AllSeqs.items(), key=lambda item: len(item[1]), reverse=True)
-    with open(args.out, "w") as fasta_out:
+    with open(out, "w") as fasta_out:
         for i, (Header, Seq) in enumerate(sortSeqs):
-            fasta_out.write(f">{args.name}_{i + 1}\n{softwrap(Seq)}\n")
+            fasta_out.write(f">{name}_{i + 1}\n{softwrap(Seq)}\n")
 
-    status(f"Output written to: {args.out}")
+    status(f"Output written to: {out}")

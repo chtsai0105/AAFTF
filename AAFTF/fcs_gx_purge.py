@@ -15,19 +15,28 @@ from AAFTF.utility import SafeRemove, checkfile, fastastats, printCMD, status
 
 
 # flake8: noqa: C901
-def run(parser, args):
+def run(
+    input,
+    outfile,
+    workdir=None,
+    taxid=4890,
+    db="/my_tmpfs/gxdb/all",
+    debug=False,
+    pipe=False,
+    **kwargs,
+):
     """Run NCBI fcs_gx routines to detect and remove contaminant contigs."""
-    if not args.workdir:
-        args.workdir = f"aaftf-fcsgx_{str(uuid.uuid4())[:8]}"
-    if not os.path.exists(args.workdir):
-        os.mkdir(args.workdir)
+    if not workdir:
+        workdir = f"aaftf-fcsgx_{str(uuid.uuid4())[:8]}"
+    if not os.path.exists(workdir):
+        os.mkdir(workdir)
 
     # parse database locations
-    if not args.db or not os.path.isfile(f"{args.db}.gxi"):
-        status(f"{args.db}.gxi not found, needs to have setup the fcs_gx db - https://github.com/ncbi/fcs/wiki/FCS-GX")
+    if not db or not os.path.isfile(f"{db}.gxi"):
+        status(f"{db}.gxi not found, needs to have setup the fcs_gx db - https://github.com/ncbi/fcs/wiki/FCS-GX")
         sys.exit(1)
 
-    numSeqs, assemblySize = fastastats(os.path.join(args.input))
+    numSeqs, assemblySize = fastastats(os.path.join(input))
     status(f"Assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
 
     # now filter for taxonomy with sourmash lca classify
@@ -38,26 +47,26 @@ def run(parser, args):
     fcsgx_compute = [
         "run_gx.py",
         "--fasta",
-        args.input,
+        input,
         "--tax-id",
-        f"{args.taxid}",  # taxid is a numeric
+        f"{taxid}",  # taxid is a numeric
         "--gx-db",
-        args.db,
+        db,
         "--out-dir",
-        args.workdir,
+        workdir,
     ]
     printCMD(fcsgx_compute)
     fcs_log = "fcs_gx.log"
-    with open(os.path.join(args.workdir, fcs_log), "w") as logfile:
+    with open(os.path.join(workdir, fcs_log), "w") as logfile:
         subprocess.run(fcsgx_compute, stderr=logfile)
 
-    fname = os.path.splitext(os.path.basename(args.input))[0]
+    fname = os.path.splitext(os.path.basename(input))[0]
     # output tsv:
     # seq_id	start_pos	end_pos	seq_len	action	div	agg_cont_cov	top_tax_name
 
     Seq2Drop = {}
 
-    fcsgxTSV = os.path.join(args.workdir, f"{fname}.{args.taxid}.fcs_gx_report.txt")
+    fcsgxTSV = os.path.join(workdir, f"{fname}.{taxid}.fcs_gx_report.txt")
     if not os.path.isfile(fcsgxTSV):
         status(f"fcs_gx did not produce file {fcsgxTSV}")
         return
@@ -70,32 +79,32 @@ def run(parser, args):
 
     # drop contigs from taxonomy before calculating coverage
     status(f"Dropping {len(Seq2Drop)} contigs from fcs-gx taxonomy screen")
-    with open(args.outfile, "w") as ofh:
-        for record in SeqIO.parse(args.input, "fasta"):
+    with open(outfile, "w") as ofh:
+        for record in SeqIO.parse(input, "fasta"):
             if record.id not in Seq2Drop:
                 SeqIO.write(record, ofh, "fasta")
 
-    if args.debug:
+    if debug:
         print("Contigs dropped due to taxonomy: {:}".format(",".join(Seq2Drop)))
 
-    numSeqs, assemblySize = fastastats(args.outfile)
+    numSeqs, assemblySize = fastastats(outfile)
     status(f"fcs-gx assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
-    if "_" in args.outfile:
-        nextOut = args.outfile.split("_")[0] + ".rmdup.fasta"
-    elif "." in args.outfile:
-        nextOut = args.outfile.split(".")[0] + ".rmdup.fasta"
+    if "_" in outfile:
+        nextOut = outfile.split("_")[0] + ".rmdup.fasta"
+    elif "." in outfile:
+        nextOut = outfile.split(".")[0] + ".rmdup.fasta"
     else:
-        nextOut = f"{args.outfile}.rmdup.fasta"
+        nextOut = f"{outfile}.rmdup.fasta"
 
     if checkfile(fcsgxTSV):
-        outbase = os.path.basename(args.outfile)
-        basedir = os.path.dirname(os.path.realpath(args.outfile))
+        outbase = os.path.basename(outfile)
+        basedir = os.path.dirname(os.path.realpath(outfile))
         if "." in outbase:
             outbase = outbase.rsplit(".", 1)[0]
         shutil.copy(fcsgxTSV, os.path.join(basedir, f"{outbase}.fcs_gx-taxonomy.tsv"))
 
-    if not args.debug:
-        SafeRemove(args.workdir)
+    if not debug:
+        SafeRemove(workdir)
 
-    if not args.pipe:
-        status(f"Your next command might be:\n\tAAFTF rmdup -i {args.outfile} -o {nextOut}\n")
+    if not pipe:
+        status(f"Your next command might be:\n\tAAFTF rmdup -i {outfile} -o {nextOut}\n")

@@ -292,7 +292,7 @@ class TestMosdepthReal:
 class TestDepthRunEndToEnd:
     def test_report_written_with_expected_sections(self, synthetic_data, tmp_path):
         args = _depth_args(synthetic_data, tmp_path)
-        depth.run(None, args)
+        depth.run(**vars(args))
 
         report = Path(args.out)
         assert report.exists() and report.stat().st_size > 0
@@ -305,7 +305,7 @@ class TestDepthRunEndToEnd:
 
     def test_organelle_flagged_as_outlier(self, synthetic_data, tmp_path):
         args = _depth_args(synthetic_data, tmp_path)
-        depth.run(None, args)
+        depth.run(**vars(args))
         text = Path(args.out).read_text()
         # The organelle contig line should carry the OUTLIER flag.
         organelle_line = next(ln for ln in text.splitlines() if ln.strip().startswith("organelle"))
@@ -313,7 +313,7 @@ class TestDepthRunEndToEnd:
 
     def test_coverage_breadth_near_complete(self, synthetic_data, tmp_path):
         args = _depth_args(synthetic_data, tmp_path)
-        depth.run(None, args)
+        depth.run(**vars(args))
         text = Path(args.out).read_text()
         breadth_line = next((ln for ln in text.splitlines() if "Bases covered" in ln), None)
         assert breadth_line is not None
@@ -326,7 +326,7 @@ class TestDepthRunEndToEnd:
         # the auto-created dir never lands in the repo.
         monkeypatch.chdir(tmp_path)
         args = _depth_args(synthetic_data, tmp_path, workdir=None)
-        depth.run(None, args)
+        depth.run(**vars(args))
         assert Path(args.out).exists()
         leaked = list(tmp_path.glob("aaftf-depth_*"))
         assert not leaked, f"workdir not cleaned up: {leaked}"
@@ -334,7 +334,7 @@ class TestDepthRunEndToEnd:
     @pytest.mark.skipif(not depth.HAS_MATPLOTLIB, reason="matplotlib not installed")
     def test_plots_generated_when_enabled(self, synthetic_data, tmp_path):
         args = _depth_args(synthetic_data, tmp_path, no_plot=False, plot_format="png")
-        depth.run(None, args)
+        depth.run(**vars(args))
         prefix = depth._get_plot_prefix(args.input, args.out)
         assert Path(prefix + ".depth_heatmap.png").exists()
         assert Path(prefix + ".depth_barplot.png").exists()
@@ -346,7 +346,7 @@ class TestDepthRunEndToEnd:
 class TestDepthRunBwaAligner:
     def test_bwa_aligner_produces_report(self, synthetic_data, tmp_path):
         args = _depth_args(synthetic_data, tmp_path, aligner="bwa")
-        depth.run(None, args)
+        depth.run(**vars(args))
         report = Path(args.out)
         assert report.exists() and report.stat().st_size > 0
         text = report.read_text()

@@ -136,17 +136,16 @@ def findTelomere(seq, monomer, n, window=200):
     return forward, reverse
 
 
-def run(parser, args):
+def run(input, report=None, telomere_monomer="TAA[C]+", telomere_n_repeat=2, telomere_window=200, **kwargs):
     """This is the general run command to calculate the genome statistics.
 
     This function will also attempt to find the telomere repeats and count these.
     """
-    if not os.path.exists(args.input):
-        status(f"Inputfile {args.input} was not readable, check parameters")
+    if not os.path.exists(input):
+        status(f"Inputfile {input} was not readable, check parameters")
 
     output_handle = None
 
-    if args.report:
-        output_handle = open(args.report, "w")
-    window = getattr(args, "telomere_window", 200)
-    genome_asm_stats(args.input, output_handle, args.telomere_monomer, args.telomere_n_repeat, window)
+    if report:
+        output_handle = open(report, "w")
+    genome_asm_stats(input, output_handle, telomere_monomer, telomere_n_repeat, telomere_window)

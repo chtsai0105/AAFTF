@@ -15,55 +15,72 @@ from packaging.version import Version
 from AAFTF.utility import SafeRemove, get_samtools_version, line_count, printCMD, samtools_sort_cmd, samtools_view_bam_cmd, status
 
 
-def run(parser, args):  # noqa: C901
+def run(  # noqa: C901
+    infile,
+    outfile=None,
+    method="pilon",
+    memory=16,
+    cpus=1,
+    left=None,
+    right=None,
+    longreads=None,
+    workdir=None,
+    iterations=5,
+    diploid=False,
+    ploidy=1,
+    polca="polca.sh",
+    polca_samtools=None,
+    debug=False,
+    pipe=False,
+    **kwargs,
+):
     """Execute polishing step in multiple rounds provided with illumina reads and contig assembly FastA file."""
     # find reads for polishing
 
-    polishMethod = args.method
-    memperthread = int(args.memory / args.cpus)
+    polishMethod = method
+    memperthread = int(memory / cpus)
     if memperthread == 0:
         # minimum should be 1Gb
         memperthread = "1"
 
     memperthread = f"{memperthread}G"
-    status(f"calling {polishMethod} with memoryper thread as {memperthread}, input memory is {args.memory}GB and num cpus is {args.cpus}")
+    status(f"calling {polishMethod} with memoryper thread as {memperthread}, input memory is {memory}GB and num cpus is {cpus}")
     forReads, revReads = (None,) * 2
-    if args.left:
-        forReads = os.path.abspath(args.left)
-    if args.right:
-        revReads = os.path.abspath(args.right)
+    if left:
+        forReads = os.path.abspath(left)
+    if right:
+        revReads = os.path.abspath(right)
 
-    longreads = None
-    if args.longreads:
+    if longreads:
         # racon or nextpolish can use these
-        longreads = os.path.abspath(args.longreads)
+        longreads = os.path.abspath(longreads)
     elif polishMethod == "racon":
         status(f"calling {polishMethod} without long reads (pacbio/ONT)")
         sys.exit(1)
 
-    if args.method == "racon" and not longreads:
+    if method == "racon" and not longreads:
         status("Unable to located long read FASTQ raw reads, pass via -lr or --longreads")
         sys.exit(1)
-    if not forReads and args.method != "racon":
+    if not forReads and method != "racon":
         status("Unable to located FASTQ raw reads, pass via -l,--left and/or -r,--right")
         sys.exit(1)
 
     custom_workdir = 1
-    if not args.workdir:
+    if not workdir:
         custom_workdir = 0
-        args.workdir = f"aaftf-polish_{str(uuid.uuid4())[:8]}"
-    if not os.path.exists(args.workdir):
-        os.mkdir(args.workdir)
+        workdir = f"aaftf-polish_{str(uuid.uuid4())[:8]}"
+    if not os.path.exists(workdir):
+        os.mkdir(workdir)
 
     # Output file
     polishedFasta = None
-    if args.outfile:
-        polishedFasta = args.outfile
+    if outfile:
+        polishedFasta = outfile
     else:
-        fbasename = os.path.basename(args.infile).split(".f")[0]
+        fbasename = os.path.basename(infile).split(".f")[0]
         polishedFasta = f"{fbasename}.polished.fasta"
 
-    method = args.method.lower()
+    method = method.lower()
     nextPolishExe = None
     polish_log = f"{method}.log"
 
@@ -71,7 +88,7 @@ def run(parser, args):  # noqa: C901
     # bwa is used by make_bwa_bam() for every short-read method.
     # For polca/masurca, honour a user-supplied --polca path/name rather than
     # assuming the executable is literally "polca.sh".
-    polca_exe = getattr(args, "polca", None) or "polca.sh"
+    polca_exe = polca
     required_exes = {
         "pilon": ["bwa", "samtools", "pilon"],
         "nextpolish": ["bwa", "samtools", "nextPolish"],
@@ -86,36 +103,36 @@ def run(parser, args):  # noqa: C901
         sys.exit(1)
 
     if method == "pilon" or method == "nextpolish":
-        if args.iterations < 1:
+        if iterations < 1:
             status("ERROR: --iterations must be >= 1")
             sys.exit(1)
-        for i in range(1, args.iterations + 1):
+        for i in range(1, iterations + 1):
             status(f"Starting {method} polishing iteration {i}")
             correctedBase = f"polished{i}"
             if i == 1:  # first loop
-                initialFasta = args.infile
-                initialFasta = os.path.join(args.workdir, os.path.basename(args.infile))
-                shutil.copyfile(args.infile, initialFasta)
+                initialFasta = infile
+                initialFasta = os.path.join(workdir, os.path.basename(infile))
+                shutil.copyfile(infile, initialFasta)
             else:
-                initialFasta = os.path.join(args.workdir, "polished" + str(i - 1) + ".fasta")
-            BAMfile = make_bwa_bam(initialFasta, forReads, revReads, args.workdir, args.cpus, memperthread)
-            if not os.path.exists(os.path.join(args.workdir, BAMfile)):
-                status(f"BAMfile {BAMfile} did not get created for {forReads} {revReads} in {args.workdir}")
+                initialFasta = os.path.join(workdir, "polished" + str(i - 1) + ".fasta")
+            BAMfile = make_bwa_bam(initialFasta, forReads, revReads, workdir, cpus, memperthread)
+            if not os.path.exists(os.path.join(workdir, BAMfile)):
+                status(f"BAMfile {BAMfile} did not get created for {forReads} {revReads} in {workdir}")
                 sys.exit(1)
             run_cmd = []
             dirty = []
             if method == "pilon":
                 # run Pilon
-                run_cmd = ["pilon", "--genome", os.path.basename(initialFasta), "--frags", BAMfile, f"-Xmx{args.memory}g", "--output", correctedBase, "--threads", str(args.cpus), "--changes"]
-                if args.diploid or args.ploidy == 2:
+                run_cmd = ["pilon", "--genome", os.path.basename(initialFasta), "--frags", BAMfile, f"-Xmx{memory}g", "--output", correctedBase, "--threads", str(cpus), "--changes"]
+                if diploid or ploidy == 2:
                     run_cmd.append("--diploid")
 
                 polish_log = "pilon_" + str(i) + ".log"
 
                 printCMD(run_cmd)
-                with open(os.path.join(args.workdir, polish_log), "w") as logfile:
-                    subprocess.run(run_cmd, cwd=args.workdir, stderr=logfile, stdout=logfile)
-                n_chg = line_count(os.path.join(args.workdir, correctedBase + ".changes"))
+                with open(os.path.join(workdir, polish_log), "w") as logfile:
+                    subprocess.run(run_cmd, cwd=workdir, stderr=logfile, stdout=logfile)
+                n_chg = line_count(os.path.join(workdir, correctedBase + ".changes"))
 
                 status(f"Found {n_chg:,} changes in Pilon iteration {i}")
                 if n_chg == 0:
@@ -135,47 +152,47 @@ def run(parser, args):  # noqa: C901
                 # initialFasta should have already been copied to the working dir
                 # or is carryforward from last iteration
                 run_cmd = ["samtools", "faidx", os.path.basename(initialFasta)]
-                subprocess.run(run_cmd, cwd=args.workdir)
+                subprocess.run(run_cmd, cwd=workdir)
                 tempoutfasta = f"temp_{correctedBase}.fasta"
-                run_cmd = ["python", nextPolishExe, "-g", os.path.basename(initialFasta), "-t", "1", "-s", BAMfile, "-p", str(args.cpus), "-o", tempoutfasta]
-                if args.diploid or args.ploidy == 2:
+                run_cmd = ["python", nextPolishExe, "-g", os.path.basename(initialFasta), "-t", "1", "-s", BAMfile, "-p", str(cpus), "-o", tempoutfasta]
+                if diploid or ploidy == 2:
                     run_cmd.extend(["-ploidy", "2"])
-                elif args.ploidy:
-                    run_cmd.extend(["-ploidy", str(args.ploidy)])
+                elif ploidy:
+                    run_cmd.extend(["-ploidy", str(ploidy)])
                 polish_log = "nextpolish_t1_" + str(i) + ".log"
-                with open(os.path.join(args.workdir, polish_log), "w") as logfile:
+                with open(os.path.join(workdir, polish_log), "w") as logfile:
                     printCMD(run_cmd)
-                    subprocess.run(run_cmd, cwd=args.workdir, stderr=logfile, stdout=logfile)
+                    subprocess.run(run_cmd, cwd=workdir, stderr=logfile, stdout=logfile)
                 logfile.close()
                 run_cmd = ["samtools", "faidx", tempoutfasta]
                 # make second BAM file for second task of nextPolish
-                BAMfile = make_bwa_bam(tempoutfasta, forReads, revReads, args.workdir, args.cpus, memperthread)
+                BAMfile = make_bwa_bam(tempoutfasta, forReads, revReads, workdir, cpus, memperthread)
 
-                run_cmd = ["python", nextPolishExe, "-g", tempoutfasta, "-t", "2", "-debug", "-p", str(args.cpus), "-s", BAMfile, "-o", correctedBase + ".fasta"]
-                if args.diploid or args.ploidy == 2:
+                run_cmd = ["python", nextPolishExe, "-g", tempoutfasta, "-t", "2", "-debug", "-p", str(cpus), "-s", BAMfile, "-o", correctedBase + ".fasta"]
+                if diploid or ploidy == 2:
                     run_cmd.extend(["-ploidy", "2"])
-                elif args.ploidy:
-                    run_cmd.extend(["-ploidy", str(args.ploidy)])
+                elif ploidy:
+                    run_cmd.extend(["-ploidy", str(ploidy)])
                 polish_log = "nextpolish_t2_" + str(i) + ".log"
-                with open(os.path.join(args.workdir, polish_log), "w") as logfile:
+                with open(os.path.join(workdir, polish_log), "w") as logfile:
                     printCMD(run_cmd)
-                    subprocess.run(run_cmd, cwd=args.workdir, stderr=logfile, stdout=logfile)
+                    subprocess.run(run_cmd, cwd=workdir, stderr=logfile, stdout=logfile)
                 dirty.append(tempoutfasta)
 
             # clean-up as we iterate to prevent tmp directory from blowing up
-            dirty.extend([initialFasta + ".sa", initialFasta + ".amb", initialFasta + ".ann", initialFasta + ".pac", initialFasta + ".bwt", os.path.join(args.workdir, BAMfile), os.path.join(args.workdir, BAMfile + ".bai")])
+            dirty.extend([initialFasta + ".sa", initialFasta + ".amb", initialFasta + ".ann", initialFasta + ".pac", initialFasta + ".bwt", os.path.join(workdir, BAMfile), os.path.join(workdir, BAMfile + ".bai")])
             for f in dirty:
                 if i == 1:
-                    if os.path.isfile(os.path.join(args.workdir, f)):
-                        os.remove(os.path.join(args.workdir, f))
+                    if os.path.isfile(os.path.join(workdir, f)):
+                        os.remove(os.path.join(workdir, f))
                 else:
                     if os.path.isfile(f):
                         os.remove(f)
 
         # iteration count is the i in the counter above
-        shutil.copyfile(os.path.join(args.workdir, "polished" + str(i) + ".fasta"), polishedFasta)
+        shutil.copyfile(os.path.join(workdir, "polished" + str(i) + ".fasta"), polishedFasta)
 
-        status(f"AAFTF polish completed {args.iterations} iterations.")
+        status(f"AAFTF polish completed {iterations} iterations.")
         status(f"{method} polished assembly: {polishedFasta}")
         if "_" in polishedFasta:
             nextOut = polishedFasta.split("_")[0] + ".final.fasta"
@@ -183,15 +200,14 @@ def run(parser, args):  # noqa: C901
             nextOut = polishedFasta.split(".")[0] + ".final.fasta"
         else:
             nextOut = polishedFasta + ".final.fasta"
-    elif args.method.lower() == "polca" or args.method.lower() == "masurca":
+    elif method.lower() == "polca" or method.lower() == "masurca":
         # Warn early if the system samtools is incompatible with polca.sh
         samtoolsver = get_samtools_version()
-        if samtoolsver >= Version("1.21") and not getattr(args, "polca_samtools", None):
+        if samtoolsver >= Version("1.21") and not polca_samtools:
             status(f"(this may be red herring now) WARNING: samtools {samtoolsver} detected; polca.sh uses 'samtools sort -f' " "which was removed in samtools 1.21+. " "Use --polca_samtools to point to a compatible samtools (< 1.21), " "or switch to --method pilon.")
 
         # Build the subprocess environment, optionally injecting a compatible samtools
         polca_env = os.environ.copy()
-        polca_samtools = getattr(args, "polca_samtools", None)
         if polca_samtools:
             polca_samtools = os.path.abspath(polca_samtools)
             # Most polca.sh builds honour the SAMTOOLS variable; also prepend its
@@ -199,22 +215,22 @@ def run(parser, args):  # noqa: C901
             polca_env["SAMTOOLS"] = polca_samtools
             polca_env["PATH"] = os.path.dirname(polca_samtools) + ":" + polca_env.get("PATH", "")
 
-        initialFasta = os.path.basename(args.infile)
-        shutil.copyfile(args.infile, os.path.join(args.workdir, initialFasta))
-        polca_cmd = [args.polca, "-a", initialFasta, "-r", f"{forReads} {revReads}", "-t", str(args.cpus), "-m", memperthread]
+        initialFasta = os.path.basename(infile)
+        shutil.copyfile(infile, os.path.join(workdir, initialFasta))
+        polca_cmd = [polca, "-a", initialFasta, "-r", f"{forReads} {revReads}", "-t", str(cpus), "-m", memperthread]
         printCMD(polca_cmd)
         # run the polca polishing
-        with open(os.path.join(args.workdir, polish_log), "w") as logfile:
-            ret = subprocess.run(polca_cmd, cwd=args.workdir, stderr=logfile, stdout=logfile, env=polca_env)
-        polca_out = os.path.join(args.workdir, f"{initialFasta}.PolcaCorrected.fa")
+        with open(os.path.join(workdir, polish_log), "w") as logfile:
+            ret = subprocess.run(polca_cmd, cwd=workdir, stderr=logfile, stdout=logfile, env=polca_env)
+        polca_out = os.path.join(workdir, f"{initialFasta}.PolcaCorrected.fa")
         if ret.returncode != 0 or not os.path.exists(polca_out):
-            status(f"ERROR: polca failed (exit {ret.returncode}); check log: {os.path.join(args.workdir, polish_log)}")
+            status(f"ERROR: polca failed (exit {ret.returncode}); check log: {os.path.join(workdir, polish_log)}")
             if samtoolsver >= Version("1.21") and not polca_samtools:
                 status(f"NOTE: samtools {samtoolsver} is installed; polca.sh uses 'samtools sort -f' " "which was removed in samtools 1.21+. " "Re-run with --polca_samtools /path/to/old/samtools (< 1.21) " "or switch to --method pilon.")
             sys.exit(1)
         shutil.copyfile(polca_out, polishedFasta)
-        shutil.copyfile(os.path.join(args.workdir, f"{initialFasta}.vcf"), f"{polishedFasta}.vcf")
-        shutil.copyfile(os.path.join(args.workdir, f"{initialFasta}.report"), f"{polishedFasta}.polca_report.txt")
+        shutil.copyfile(os.path.join(workdir, f"{initialFasta}.vcf"), f"{polishedFasta}.vcf")
+        shutil.copyfile(os.path.join(workdir, f"{initialFasta}.report"), f"{polishedFasta}.polca_report.txt")
         status("AAFTF polish completed.")
         status(f"{method} polished assembly: {polishedFasta}")
 
@@ -225,10 +241,10 @@ def run(parser, args):  # noqa: C901
     else:
         nextOut = polishedFasta + ".final.fasta"
 
-    if not args.debug and not custom_workdir:
-        SafeRemove(args.workdir)
+    if not debug and not custom_workdir:
+        SafeRemove(workdir)
 
-    if not args.pipe:
+    if not pipe:
         status("Your next command might be:\n" + f"\tAAFTF sort -i {polishedFasta} -o {nextOut}\n")
 
 

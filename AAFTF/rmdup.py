@@ -14,12 +14,24 @@ from Bio.SeqIO.FastaIO import SimpleFastaParser
 from AAFTF.utility import SafeRemove, calcN50, execute, fastastats, softwrap, status
 
 
-def run(parser, args):
+def run(
+    input,
+    out,
+    workdir=None,
+    cpus=1,
+    percent_id=95,
+    percent_cov=95,
+    minlen=500,
+    exhaustive=False,
+    debug=False,
+    pipe=False,
+    **kwargs,
+):
     """Run routines to identify and remove duplicate contigs."""
 
     def generateFastas(fasta, pref, query, reference):
-        qfile = os.path.join(args.workdir, pref + "query.fasta")
-        rfile = os.path.join(args.workdir, pref + "reference.fasta")
+        qfile = os.path.join(workdir, pref + "query.fasta")
+        rfile = os.path.join(workdir, pref + "reference.fasta")
         with open(qfile, "w") as qout:
             with open(rfile, "w") as rout:
                 with open(fasta) as infile:
@@ -33,15 +45,15 @@ def run(parser, args):
     def runMinimap2(query, reference, name):
         """Run minimap2 for matching contigs."""
         garbage = False  # assume this is a good contig
-        for line in execute(["minimap2", "-t", str(args.cpus), "-x", "asm5", "-N5", reference, query], "."):
+        for line in execute(["minimap2", "-t", str(cpus), "-x", "asm5", "-N5", reference, query], "."):
             qID, qLen, qStart, qEnd, strand, tID, tLen, tStart, tEnd, matches, alnLen, mapQ = line.split("\t")[:12]
             pident = float(matches) / int(alnLen) * 100
             cov = float(alnLen) / int(qLen) * 100
-            if args.debug:
+            if debug:
                 print(f"\tquery={qID} hit={tID} pident={pident:.2f} coverage={cov:.2f}")
 
-            if pident > args.percent_id and cov > args.percent_cov:
-                if args.debug:
+            if pident > percent_id and cov > percent_cov:
+                if debug:
                     print(f"{name} duplicated: {pident:.0f}% identity over {cov:.0f}% of the contig. length={qLen}")
                 garbage = True
                 break
@@ -49,18 +61,21 @@ def run(parser, args):
 
     # start here -- functions nested so they can inherit the arguments
     custom_workdir = 1
-    if not args.workdir:
+    if not workdir:
         custom_workdir = 0
-        args.workdir = "aaftf-rmdup_" + str(uuid.uuid4())[:8]
-    if not os.path.exists(args.workdir):
-        os.mkdir(args.workdir)
+        workdir = "aaftf-rmdup_" + str(uuid.uuid4())[:8]
+    if not os.path.exists(workdir):
+        os.mkdir(workdir)
 
-    if args.debug:
-        status(args)
+    if debug:
+        status(
+            f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} "
+            f"percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive} pipe={pipe}"
+        )
     status("Looping through assembly shortest --> longest searching for duplicated contigs using minimap2")
-    numSeqs, assemblySize = fastastats(args.input)
+    numSeqs, assemblySize = fastastats(input)
     fasta_lengths = []
-    with open(args.input) as infile:
+    with open(input) as infile:
         # trunk-ignore(ruff/B007)
         for Header, Seq in SimpleFastaParser(infile):
             fasta_lengths.append(len(Seq))
@@ -70,27 +85,27 @@ def run(parser, args):
 
     # get list of tuples of sequences sorted by size (shortest --> longest)
     AllSeqs = {}
-    with open(args.input) as infile:
+    with open(input) as infile:
         for Header, Seq in SimpleFastaParser(infile):
             if Header not in AllSeqs:
                 AllSeqs[Header] = len(Seq)
     sortSeqs = sorted(AllSeqs.items(), key=operator.itemgetter(1), reverse=False)
-    if args.exhaustive:
+    if exhaustive:
         n75 = sortSeqs[-1][1]
     those2check = [x for x in sortSeqs if x[1] < n75]
-    status(f"Will check {len(those2check):,} contigs for duplication --> those that are < {n75:,} && > {args.minlen:,}")
+    status(f"Will check {len(those2check):,} contigs for duplication --> those that are < {n75:,} && > {minlen:,}")
     # loop through sorted list of tuples
     ignore = []
     for i, x in enumerate(sortSeqs):
         sys.stdout.flush()
-        if x[1] < args.minlen:
+        if x[1] < minlen:
             ignore.append(x[0])
             continue
         if x[1] > n75:
             sys.stdout.flush()
             sys.stdout.write("\n")
             break
-        if args.debug:
+        if debug:
             status(f"Working on {x[0]} len={x[1]} remove_tally={len(ignore)}")
         else:
             text = f"\rProgress: {i} of {len(those2check)}; remove tally={len(ignore):,}; current={x[0]}; length={x[1]}     "
@@ -98,29 +113,29 @@ def run(parser, args):
         # generate input files for minimap2
         theRest = [i[0] for i in sortSeqs[i + 1 :]]
         pid = str(os.getpid())
-        qfile, rfile = generateFastas(args.input, pid, x[0], theRest)
+        qfile, rfile = generateFastas(input, pid, x[0], theRest)
         # run minimap2
         result = runMinimap2(qfile, rfile, x[0])
         if result:
             ignore.append(x[0])
 
     ignore = set(ignore)
-    with open(args.out, "w") as clean_out:
-        with open(args.input) as infile:
+    with open(out, "w") as clean_out:
+        with open(input) as infile:
             for Header, Seq in SimpleFastaParser(infile):
                 if Header not in ignore:
                     clean_out.write(f">{Header}\n{softwrap(Seq)}\n")
-    numSeqs, assemblySize = fastastats(args.out)
+    numSeqs, assemblySize = fastastats(out)
     status(f"Cleaned assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
-    if "_" in args.out:
-        nextOut = args.out.split("_")[0] + ".polish.fasta"
-    elif "." in args.out:
-        nextOut = args.out.split(".")[0] + ".polish.fasta"
+    if "_" in out:
+        nextOut = out.split("_")[0] + ".polish.fasta"
+    elif "." in out:
+        nextOut = out.split(".")[0] + ".polish.fasta"
     else:
-        nextOut = args.out + ".polish.fasta"
+        nextOut = out + ".polish.fasta"
 
-    if not args.pipe:
-        status(f"Your next command might be:\n\tAAFTF polish -i {args.out} -l PE_R1.fastq.gz -r PE_R2.fastq.gz -o {nextOut}\n")
+    if not pipe:
+        status(f"Your next command might be:\n\tAAFTF polish -i {out} -l PE_R1.fastq.gz -r PE_R2.fastq.gz -o {nextOut}\n")
 
-    if not args.debug and not custom_workdir:
-        SafeRemove(args.workdir)
+    if not debug and not custom_workdir:
+        SafeRemove(workdir)

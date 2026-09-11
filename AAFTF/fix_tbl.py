@@ -131,6 +131,6 @@ def fix_tbl(tbl_fh, adjustment_fh, output_handle):
             print("\t".join(feature), file=output_handle)
 
 
-def run(parser, args):
+def run(table, report, output, **kwargs):
     """Run the fix_tbl subcommand."""
-    fix_tbl(args.table, args.report, args.output)
+    fix_tbl(table, report, output)

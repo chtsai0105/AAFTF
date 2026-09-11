@@ -1,130 +1,50 @@
 """Tests for the AAFTF CLI framework.
 
-Covers ALIAS_MAP routing, subcommand registration, argparse defaults,
-required-argument enforcement, and the run_subtool() dispatcher.
+Covers subcommand registration, argparse defaults, and required-argument
+enforcement. Each subcommand parser binds its own subtool's run() function
+directly via parser.set_defaults(func=<module>.run) in AAFTF/_menu.py, and
+main() invokes it as args.func(**vars(args)); these tests intercept that by
+patching the relevant module's run() before it fires.
 
 No external bioinformatics tools are invoked.
 """
 
 import sys
 from argparse import Namespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from AAFTF.AAFTF_main import ALIAS_MAP, main, run_subtool
+from AAFTF.AAFTF_main import main
 
 pytestmark = pytest.mark.unit
-
-
-# ---------------------------------------------------------------------------
-# ALIAS_MAP
-# ---------------------------------------------------------------------------
-
-EXPECTED_ALIASES = {
-    # trim
-    "trim_reads": "trim",
-    "read_trim": "trim",
-    # filter
-    "filter_reads": "filter",
-    "read_filter": "filter",
-    # assemble
-    "asm": "assemble",
-    "spades": "assemble",
-    # vecscreen
-    "vectorscreen": "vecscreen",
-    "vector_blast": "vecscreen",
-    # fcs_screen
-    "ncbi_fcs": "fcs_screen",
-    "ncbi_fcs-screen": "fcs_screen",
-    # fcs_gx_purge
-    "ncbi_fcs-gx": "fcs_gx_purge",
-    "ncbi_fcs_gx": "fcs_gx_purge",
-    "gx": "fcs_gx_purge",
-    # sourpurge
-    "purge": "sourpurge",
-    # rmdup
-    "dedup": "rmdup",
-    # polish
-    "pilon": "polish",
-    "polca": "polish",
-    # assess
-    "stats": "assess",
-    # fix_tbl
-    "fix": "fix_tbl",
-    # mito
-    "mito_asm": "mito",
-    "mitochondria": "mito",
-    # depth
-    "coverage": "depth",
-    "cov": "depth",
-}
-
-
-class TestAliasMap:
-    def test_depth_alias_coverage(self):
-        assert ALIAS_MAP.get("coverage") == "depth"
-
-    def test_depth_alias_cov(self):
-        assert ALIAS_MAP.get("cov") == "depth"
-
-    def test_all_expected_aliases_present(self):
-        for alias, canonical in EXPECTED_ALIASES.items():
-            assert ALIAS_MAP.get(alias) == canonical, f"Alias '{alias}' should map to '{canonical}', " f"got '{ALIAS_MAP.get(alias)}'"
-
-    def test_no_alias_maps_to_itself(self):
-        for alias, canonical in ALIAS_MAP.items():
-            assert alias != canonical, f"Alias '{alias}' maps to itself — should be a canonical name"
-
-
-# ---------------------------------------------------------------------------
-# run_subtool dispatcher
-# ---------------------------------------------------------------------------
-
-
-class TestRunSubtool:
-    """Verify run_subtool() resolves aliases and handles unknown commands.
-
-    We test ALIAS_MAP-level behaviour only.  The import-then-call dispatch
-    cannot be reliably intercepted via sys.modules patching once submodules
-    have been imported (Python binds 'import A.B as x' to the package
-    attribute, not to sys.modules["A.B"]).  Full dispatch is exercised
-    indirectly by the CLI parser tests that mock run_subtool at main().
-    """
-
-    def test_unknown_command_calls_parser_parse_args(self):
-        """An unrecognised command should call parser.parse_args("")."""
-        mock_parser = MagicMock()
-        run_subtool(mock_parser, Namespace(command="definitely_not_real_xyzzy"))
-        mock_parser.parse_args.assert_called_with("")
-
-    def test_alias_map_resolves_stats_to_assess(self):
-        assert ALIAS_MAP.get("stats") == "assess"
-
-    def test_alias_map_resolves_coverage_to_depth(self):
-        assert ALIAS_MAP.get("coverage") == "depth"
-
-    def test_alias_map_resolves_cov_to_depth(self):
-        assert ALIAS_MAP.get("cov") == "depth"
-
-    def test_alias_map_resolves_dedup_to_rmdup(self):
-        assert ALIAS_MAP.get("dedup") == "rmdup"
 
 
 # ---------------------------------------------------------------------------
 # Subcommand help (argparse –– no tool execution)
 # ---------------------------------------------------------------------------
 
+# Maps the subcommand/alias used in this file's test argv to the module whose
+# run() must be intercepted before it actually executes.
+_COMMAND_MODULE = {
+    "depth": "AAFTF.depth",
+    "coverage": "AAFTF.depth",
+    "assess": "AAFTF.assess",
+    "sort": "AAFTF.sort",
+    "fix_tbl": "AAFTF.fix_tbl",
+}
+
 
 def _parse_with_main(argv):
-    """Run main() with sys.argv patched, intercept run_subtool before it fires."""
+    """Run main() with sys.argv patched, intercept the subtool's run() before it fires."""
     captured = {}
 
-    def _capture(parser, args):
-        captured["args"] = args
+    def _capture(**kwargs):
+        captured["args"] = Namespace(**kwargs)
 
+    module = _COMMAND_MODULE[argv[1]]
     with patch.object(sys, "argv", argv):
-        with patch("AAFTF.AAFTF_main.run_subtool", side_effect=_capture):
+        with patch(f"{module}.run", side_effect=_capture):
             main()
     return captured.get("args")
 

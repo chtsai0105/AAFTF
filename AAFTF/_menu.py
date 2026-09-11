@@ -1,9 +1,11 @@
 """Consolidated argparse subcommand parser (menu) definitions for AAFTF.
 
 Each ``<name>_menu(subparsers)`` function below builds and registers one
-AAFTF subcommand's argparse parser via ``subparsers.add_parser(...)``. This
-keeps all CLI surface/wiring in one place, separate from each subcommand
-module's own ``run(parser, args)`` execution logic.
+AAFTF subcommand's argparse parser via ``subparsers.add_parser(...)``, and
+binds that subtool's ``run()`` function to it via ``parser_x.set_defaults(
+func=<module>.run)``. This keeps all CLI surface/wiring in one place,
+separate from each subcommand module's own ``run(**kwargs)`` execution logic.
+``AAFTF_main.py`` invokes the selected subtool via ``args.func(**vars(args))``.
 
 ``menu_common_args()`` adds the three arguments common to every subcommand
 (``-v/--debug``, ``--pipe``, ``-q/--quiet``). Call it last, passing the
@@ -14,6 +16,23 @@ in a separate leading section.
 
 import argparse as ap
 
+import AAFTF.assemble as assemble
+import AAFTF.assess as assess
+import AAFTF.check_dependencies as check_dependencies
+import AAFTF.depth as depth
+import AAFTF.download as download
+import AAFTF.fcs_gx_purge as fcs_gx_purge
+import AAFTF.fcs_screen as fcs_screen
+import AAFTF.filter as aaftf_filter
+import AAFTF.fix_tbl as fix_tbl
+import AAFTF.mito as mito
+import AAFTF.pipeline as pipeline
+import AAFTF.polish as polish
+import AAFTF.rmdup as rmdup
+import AAFTF.sort as aaftf_sort
+import AAFTF.sourpurge as sourpurge
+import AAFTF.trim as trim
+import AAFTF.vecscreen as vecscreen
 from AAFTF.utility import CustomHelpFormatter
 
 
@@ -77,6 +96,7 @@ def download_menu(subparsers):
         help="Skip downloading NCBI FCS-adaptor resources",
     )
     menu_common_args(optional)
+    parser_download.set_defaults(func=download.run)
     return parser_download
 
 
@@ -176,33 +196,24 @@ def trim_menu(subparsers):
     optional.add_argument("-m", "--memory", type=int, dest="memory", required=False, help="Max Memory (in GB)")
     menu_common_args(optional)
 
-    tool_group = parser_trim.add_mutually_exclusive_group(required=False)
-
-    tool_group.add_argument(
-        "--trimmomatic", "--jar", metavar="trimmomatic_jar", type=str, required=False, help="Trimmomatic JAR path"
-    )
-    trimmomatic_group = parser_trim.add_argument_group(title="Trimmomatic options", description="Trimmomatic trimming options")
+    trimmomatic_group = parser_trim.add_argument_group(title="Trimmomatic options")
 
     trimmomatic_group.add_argument("--trimmomatic_adaptors", default="TruSeq3-PE.fa", help="Trimmomatic adaptor file")
 
+    trimmomatic_group.add_argument("--trimmomatic_clip", type=str, default="2:30:10", help="Trimmomatic ILLUMINACLIP argument")
+
     trimmomatic_group.add_argument(
-        "--trimmomatic_clip",
-        default="ILLUMINACLIP:%s:2:30:10",
-        help="Trimmomatic clipping",
+        "--trimmomatic_leadingwindow", type=int, default="3", help="Trimmomatic window processing arguments"
     )
 
     trimmomatic_group.add_argument(
-        "--trimmomatic_leadingwindow", default="3", type=int, help="Trimmomatic window processing arguments"
-    )
-
-    trimmomatic_group.add_argument(
-        "--trimmomatic_trailingwindow", default="3", type=int, help="Trimmomatic window processing arguments"
+        "--trimmomatic_trailingwindow", type=int, default="3", help="Trimmomatic window processing arguments"
     )
 
     trimmomatic_group.add_argument(
         "--trimmomatic_slidingwindow",
-        default="4:15",
         type=str,
+        default="4:15",
         help="Trimmomatic window processing arguments",
     )
 
@@ -210,6 +221,7 @@ def trim_menu(subparsers):
         "--trimmomatic_quality", default="phred33", help="Trimmomatic quality encoding -phred33 or phred64"
     )
 
+    parser_trim.set_defaults(func=trim.run)
     return parser_trim
 
 
@@ -256,6 +268,7 @@ def mito_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_mito.set_defaults(func=mito.run)
     return parser_mito
 
 
@@ -313,6 +326,7 @@ def filter_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_filter.set_defaults(func=aaftf_filter.run)
     return parser_filter
 
 
@@ -395,6 +409,7 @@ def assemble_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_asm.set_defaults(func=assemble.run)
     return parser_asm
 
 
@@ -443,6 +458,7 @@ def vecscreen_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_vecscreen.set_defaults(func=vecscreen.run)
     return parser_vecscreen
 
 
@@ -499,6 +515,7 @@ def fcs_screen_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_fcs_screen.set_defaults(func=fcs_screen.run)
     return parser_fcs_screen
 
 
@@ -554,6 +571,7 @@ def fcs_gx_purge_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_fcsgx.set_defaults(func=fcs_gx_purge.run)
     return parser_fcsgx
 
 
@@ -622,6 +640,7 @@ def sourpurge_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_sour.set_defaults(func=sourpurge.run)
     return parser_sour
 
 
@@ -694,6 +713,7 @@ def rmdup_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_rmdup.set_defaults(func=rmdup.run)
     return parser_rmdup
 
 
@@ -774,6 +794,7 @@ def polish_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_polish.set_defaults(func=polish.run)
     return parser_polish
 
 
@@ -801,6 +822,7 @@ def sort_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_sort.set_defaults(func=aaftf_sort.run)
     return parser_sort
 
 
@@ -839,6 +861,7 @@ def assess_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_assess.set_defaults(func=assess.run)
     return parser_assess
 
 
@@ -865,6 +888,7 @@ def fix_tbl_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_fix.set_defaults(func=fix_tbl.run)
     return parser_fix
 
 
@@ -1003,6 +1027,7 @@ def depth_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_depth.set_defaults(func=depth.run)
     return parser_depth
 
 
@@ -1066,6 +1091,7 @@ def pipeline_menu(subparsers):
 
     menu_common_args(optional)
 
+    parser_pipeline.set_defaults(func=pipeline.run)
     return parser_pipeline
 
 
@@ -1078,6 +1104,7 @@ def check_dependencies_menu(subparsers):
         description="Check whether all external tool and Python package dependencies required by AAFTF are installed.",
         help="Check that AAFTF dependencies are installed",
     )
+    parser_check_deps.set_defaults(func=check_dependencies.run)
     return parser_check_deps
 
 

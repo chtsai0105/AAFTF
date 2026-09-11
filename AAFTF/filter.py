@@ -17,31 +17,46 @@ from AAFTF.utility import SafeRemove, bam_read_count, countfastq, getRAM, printC
 
 
 # flake8: noqa: C901
-def run(parser, args):
+def run(
+    left,
+    right=None,
+    workdir=None,
+    cpus=1,
+    AAFTF_DB=None,
+    screen_accessions=None,
+    screen_urls=None,
+    screen_local=None,
+    basename=None,
+    aligner="bbduk",
+    memory=None,
+    debug=False,
+    pipe=False,
+    **kwargs,
+):
     """Generic run command for this submodule for filtering reads."""
     custom_workdir = 1
-    if not args.workdir:
+    if not workdir:
         custom_workdir = 0
-        args.workdir = "aaftf-filter_" + str(uuid.uuid4())[:8]
-    if not os.path.exists(args.workdir):
-        os.mkdir(args.workdir)
+        workdir = "aaftf-filter_" + str(uuid.uuid4())[:8]
+    if not os.path.exists(workdir):
+        os.mkdir(workdir)
 
     # parse database locations
     DB = None
-    if not args.AAFTF_DB:
+    if not AAFTF_DB:
         try:
             DB = os.environ["AAFTF_DB"]
         except KeyError:
-            if args.AAFTF_DB:
-                DB = args.AAFTF_DB
+            if AAFTF_DB:
+                DB = AAFTF_DB
             else:
                 pass
     else:
-        DB = args.AAFTF_DB
+        DB = AAFTF_DB
 
     bamthreads = 4
-    if args.cpus < 4:
-        bamthreads = args.cpus
+    if cpus < 4:
+        bamthreads = cpus
 
     earliest_file_age = -1
     contam_filenames = []
@@ -52,7 +67,7 @@ def run(parser, args):
             if DB:
                 acc_file = os.path.join(DB, acc)
             else:
-                acc_file = os.path.join(args.workdir, acc)
+                acc_file = os.path.join(workdir, acc)
             contam_filenames.append(acc_file)
         if not os.path.exists(acc_file):
             try:
@@ -69,21 +84,21 @@ def run(parser, args):
         if DB:
             acc_file = os.path.join(DB, acc)
         else:
-            acc_file = os.path.join(args.workdir, acc)
+            acc_file = os.path.join(workdir, acc)
         contam_filenames.append(acc_file)
         if not os.path.exists(acc_file):
             urllib.request.urlretrieve(url, acc_file)
             if earliest_file_age < 0 or earliest_file_age < os.path.getctime(acc_file):
                 earliest_file_age = os.path.getctime(acc_file)
 
-    if args.screen_accessions:
-        for acc in args.screen_accessions:
+    if screen_accessions:
+        for acc in screen_accessions:
             if DB:
                 acc_file = os.path.join(DB, acc + ".fna")
                 if not os.path.exists(acc_file):
-                    acc_file = os.path.join(args.workdir, acc + ".fna")
+                    acc_file = os.path.join(workdir, acc + ".fna")
             else:
-                acc_file = os.path.join(args.workdir, acc + ".fna")
+                acc_file = os.path.join(workdir, acc + ".fna")
             contam_filenames.append(acc_file)
             if not os.path.exists(acc_file):
                 url = SeqDBs["nucleotide"] % (acc)
@@ -91,22 +106,22 @@ def run(parser, args):
             if earliest_file_age < 0 or earliest_file_age < os.path.getctime(acc_file):
                 earliest_file_age = os.path.getctime(acc_file)
 
-    if args.screen_urls:
-        for url in args.screen_urls:
-            url_file = os.path.join(args.workdir, os.path.basename(url))
+    if screen_urls:
+        for url in screen_urls:
+            url_file = os.path.join(workdir, os.path.basename(url))
             contam_filenames.append(url_file)
             if not os.path.exists(url_file):
                 urllib.request.urlretrieve(url, url_file)
             if earliest_file_age < 0 or earliest_file_age < os.path.getctime(url_file):
                 earliest_file_age = os.path.getctime(url_file)
 
-    if args.screen_local:
-        for f in args.screen_local:
+    if screen_local:
+        for f in screen_local:
             contam_filenames.append(os.path.abspath(f))
 
     # concat vector db
 
-    contamdb = os.path.join(args.workdir, "contamdb.fa")
+    contamdb = os.path.join(workdir, "contamdb.fa")
     filelist = "\n".join(contam_filenames)
     status(f"Generating combined contamination database {contamdb} from:\n{filelist}")
     if not os.path.exists(contamdb) or (os.path.getctime(contamdb) < earliest_file_age):
@@ -121,10 +136,10 @@ def run(parser, args):
 
     # find reads
     forReads, revReads = (None,) * 2
-    if args.left:
-        forReads = os.path.abspath(args.left)
-    if args.right:
-        revReads = os.path.abspath(args.right)
+    if left:
+        forReads = os.path.abspath(left)
+    if right:
+        revReads = os.path.abspath(right)
     if not forReads:
         status("Must provide --left, unable to locate FASTQ reads")
         sys.exit(1)
@@ -134,25 +149,25 @@ def run(parser, args):
     status(f"Loading {total:,} total reads")
 
     # seems like this needs to be stripping trailing extension?
-    if not args.basename:
+    if not basename:
         if "_" in os.path.basename(forReads):
-            args.basename = os.path.basename(forReads).split("_")[0]
+            basename = os.path.basename(forReads).split("_")[0]
         elif "." in os.path.basename(forReads):
-            args.basename = os.path.basename(forReads).split(".")[0]
+            basename = os.path.basename(forReads).split(".")[0]
         else:
-            args.basename = os.path.basename(forReads)
+            basename = os.path.basename(forReads)
 
     # logger.info('Loading {:,} FASTQ reads'.format(countfastq(forReads)))
     DEVNULL = open(os.devnull, "w")
 
-    alignBAM = os.path.join(args.workdir, args.basename + "_contam_db.bam")
-    unsorted_bam = os.path.join(args.workdir, args.basename + "_contam.unsorted.bam")
-    clean_reads = args.basename + "_filtered"
+    alignBAM = os.path.join(workdir, basename + "_contam_db.bam")
+    unsorted_bam = os.path.join(workdir, basename + "_contam.unsorted.bam")
+    clean_reads = basename + "_filtered"
     refmatch_bbduk = [contamdb, "phix", "artifacts", "lambda"]
-    if args.aligner == "bbduk":
+    if aligner == "bbduk":
         status("Kmer filtering reads using BBDuk")
-        if args.memory:
-            MEM = f"-Xmx{args.memory}g"
+        if memory:
+            MEM = f"-Xmx{memory}g"
         else:
             MEM = f"-Xmx{round(0.6 * getRAM())}g"
         leftcleanfname = f"{clean_reads}_1.fastq.gz"
@@ -163,43 +178,43 @@ def run(parser, args):
             # instead of erroring loudly. Feed it an INTERLEAVED single file
             # instead (bbduk's single-end reader handles the full file
             # correctly), then de-interleave the cleaned output.
-            interleaved_in = os.path.join(args.workdir, f"{args.basename}_ivl.fq.gz")
-            interleaved_out = os.path.join(args.workdir, f"{args.basename}_ivl.clean.fq.gz")
+            interleaved_in = os.path.join(workdir, f"{basename}_ivl.fq.gz")
+            interleaved_out = os.path.join(workdir, f"{basename}_ivl.clean.fq.gz")
             shuffle_cmd = ["shuffle.sh", f"in1={forReads}", f"in2={revReads}", f"out={interleaved_in}"]
             printCMD(shuffle_cmd)
-            if args.debug:
+            if debug:
                 subprocess.run(shuffle_cmd)
             else:
                 subprocess.run(shuffle_cmd, stderr=DEVNULL)
 
-            cmd = ["bbduk.sh", MEM, f"t={args.cpus}", "hdist=1", "k=27", "overwrite=true", f"in={interleaved_in}", "interleaved=true", f"out={interleaved_out}"]
+            cmd = ["bbduk.sh", MEM, f"t={cpus}", "hdist=1", "k=27", "overwrite=true", f"in={interleaved_in}", "interleaved=true", f"out={interleaved_out}"]
             cmd.extend(["ref={}".format(",".join(refmatch_bbduk))])
             printCMD(cmd)
-            if args.debug:
+            if debug:
                 subprocess.run(cmd)
             else:
                 subprocess.run(cmd, stderr=DEVNULL)
 
             reformat_cmd = ["reformat.sh", f"in={interleaved_out}", f"out1={clean_reads}_1.fastq.gz", f"out2={clean_reads}_2.fastq.gz"]
             printCMD(reformat_cmd)
-            if args.debug:
+            if debug:
                 subprocess.run(reformat_cmd)
             else:
                 subprocess.run(reformat_cmd, stderr=DEVNULL)
         else:
-            cmd = ["bbduk.sh", MEM, f"t={args.cpus}", "hdist=1", "k=27", "overwrite=true"]
+            cmd = ["bbduk.sh", MEM, f"t={cpus}", "hdist=1", "k=27", "overwrite=true"]
             cmd.extend([f"in={forReads}", f"out={clean_reads}_U.fastq.gz"])
             leftcleanfname = f"{clean_reads}_U.fastq.gz"
             cmd.extend(["ref={}".format(",".join(refmatch_bbduk))])
             # cmd.extend(['prealloc','qhdist=1'])
             printCMD(cmd)
-            if args.debug:
+            if debug:
                 subprocess.run(cmd)
             else:
                 subprocess.run(cmd, stderr=DEVNULL)
 
-        if not args.debug and not custom_workdir:
-            SafeRemove(args.workdir)
+        if not debug and not custom_workdir:
+            SafeRemove(workdir)
 
         clean = countfastq(leftcleanfname)
         if revReads:
@@ -209,17 +224,17 @@ def run(parser, args):
 
         if revReads:
             status("Filtering complete:\n\tFor: {:}\n\tRev: {:}".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz"))
-            if not args.pipe:
-                status("Your next command might be:\n\tAAFTF assemble -l {:} -r {:} -c {:} -o {:}\n".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz", args.cpus, args.basename + ".spades.fasta"))
+            if not pipe:
+                status("Your next command might be:\n\tAAFTF assemble -l {:} -r {:} -c {:} -o {:}\n".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz", cpus, basename + ".spades.fasta"))
 
         else:
             status("Filtering complete:\n\tSingle: {:}".format(clean_reads + "_U.fastq.gz"))
-            if not args.pipe:
-                status("Your next command might be:\n\tAAFTF assemble --merged {:} -c {:} -o {:}\n".format(clean_reads + "_U.fastq.gz", args.cpus, args.basename + ".spades.fasta"))
+            if not pipe:
+                status("Your next command might be:\n\tAAFTF assemble --merged {:} -c {:} -o {:}\n".format(clean_reads + "_U.fastq.gz", cpus, basename + ".spades.fasta"))
 
         return
 
-    elif args.aligner == "bowtie2":
+    elif aligner == "bowtie2":
         # likely not used and less accurate than bbmap?
         if not os.path.isfile(alignBAM):
             status("Aligning reads to contamination database using bowtie2")
@@ -230,7 +245,7 @@ def run(parser, args):
                 printCMD(bowtie_index)
                 subprocess.run(bowtie_index, stderr=DEVNULL, stdout=DEVNULL)
 
-            bowtie_cmd = ["bowtie2", "-x", os.path.basename(contamdb), "-p", str(args.cpus), "--very-sensitive"]
+            bowtie_cmd = ["bowtie2", "-x", os.path.basename(contamdb), "-p", str(cpus), "--very-sensitive"]
             if forReads and revReads:
                 bowtie_cmd = bowtie_cmd + ["-1", forReads, "-2", revReads]
             elif forReads:
@@ -239,14 +254,14 @@ def run(parser, args):
             # now run and write to BAM sorted
             printCMD(bowtie_cmd)
 
-            p1 = subprocess.Popen(bowtie_cmd, cwd=args.workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=args.workdir, stdin=p1.stdout, stderr=DEVNULL)
+            p1 = subprocess.Popen(bowtie_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
+            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=DEVNULL)
             p1.stdout.close()
             p2.communicate()
             subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=DEVNULL)
             SafeRemove(unsorted_bam)
 
-    elif args.aligner == "bwa":
+    elif aligner == "bwa":
         # likely less accurate than bbduk so may not be used
         if not os.path.isfile(alignBAM):
             status("Aligning reads to contamination database using BWA")
@@ -255,32 +270,32 @@ def run(parser, args):
                 printCMD(bwa_index)
                 subprocess.run(bwa_index, stderr=DEVNULL, stdout=DEVNULL)
 
-            bwa_cmd = ["bwa", "mem", "-t", str(args.cpus), os.path.basename(contamdb), forReads]
+            bwa_cmd = ["bwa", "mem", "-t", str(cpus), os.path.basename(contamdb), forReads]
             if revReads:
                 bwa_cmd.append(revReads)
 
             # now run and write to BAM sorted
             printCMD(bwa_cmd)
-            p1 = subprocess.Popen(bwa_cmd, cwd=args.workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=args.workdir, stdin=p1.stdout, stderr=DEVNULL)
+            p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
+            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=DEVNULL)
             p1.stdout.close()
             p2.communicate()
             subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=DEVNULL)
             SafeRemove(unsorted_bam)
 
-    elif args.aligner == "minimap2":
+    elif aligner == "minimap2":
         # likely not used but may be useful for pacbio/nanopore?
         if not os.path.isfile(alignBAM):
             status("Aligning reads to contamination database using minimap2")
 
-            minimap2_cmd = ["minimap2", "-ax", "sr", "-t", str(args.cpus), os.path.basename(contamdb), forReads]
+            minimap2_cmd = ["minimap2", "-ax", "sr", "-t", str(cpus), os.path.basename(contamdb), forReads]
             if revReads:
                 minimap2_cmd.append(revReads)
 
             # now run and write to BAM sorted
             printCMD(minimap2_cmd)
-            p1 = subprocess.Popen(minimap2_cmd, cwd=args.workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=args.workdir, stdin=p1.stdout, stderr=DEVNULL)
+            p1 = subprocess.Popen(minimap2_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
+            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=DEVNULL)
             p1.stdout.close()
             p2.communicate()
             subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=DEVNULL)
@@ -301,14 +316,14 @@ def run(parser, args):
         elif forReads:
             samtools_cmd = ["samtools", "fastq", "-f", "4", "-1", clean_reads + ".fastq.gz", alignBAM]
         subprocess.run(samtools_cmd, stderr=DEVNULL)
-        if not args.debug:
-            SafeRemove(args.workdir)
+        if not debug:
+            SafeRemove(workdir)
 
         if revReads:
             status("Filtering complete:\n\tFor: {:}\n\tRev: {:}".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz"))
-            if not args.pipe:
-                status("Your next command might be:\n\tAAFTF assemble -l {:} -r {:} -c {:} -o {:}\n".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz", args.cpus, args.basename + ".spades.fasta"))
+            if not pipe:
+                status("Your next command might be:\n\tAAFTF assemble -l {:} -r {:} -c {:} -o {:}\n".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz", cpus, basename + ".spades.fasta"))
         else:
             status("Filtering complete:\n\tSingle: {:}".format(clean_reads + ".fastq.gz"))
-            if not args.pipe:
-                status("Your next command might be:\n\tAAFTF assemble -l {:} -c {:} -o {:}\n".format(clean_reads + ".fastq.gz", args.cpus, args.basename + ".spades.fasta"))
+            if not pipe:
+                status("Your next command might be:\n\tAAFTF assemble -l {:} -c {:} -o {:}\n".format(clean_reads + ".fastq.gz", cpus, basename + ".spades.fasta"))

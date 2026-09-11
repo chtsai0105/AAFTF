@@ -142,7 +142,7 @@ def _download_sourmash(db_dir, sourdb_type="gbk", force=False):
         indices = list(type_map.values())
     else:
         if sourdb_type not in type_map:
-            status(f"  ERROR: unknown sourdb_type '{sourdb_type}'. " f"Choose from {list(type_map.keys()) + ['all']}")
+            status(f"  ERROR: unknown sourdb_type '{sourdb_type}'. Choose from {list(type_map.keys()) + ['all']}")
             return
         indices = [type_map[sourdb_type]]
 
@@ -181,7 +181,7 @@ def _download_fcs(db_dir, force=False):
         _download(image_url, image_dest, force=force)
 
 
-def run(parser, args):
+def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourdb_type="all", **kwargs):
     """Execute the ``download`` subcommand.
 
     Downloads reference databases to the ``AAFTF_DB`` directory so that
@@ -189,12 +189,18 @@ def run(parser, args):
     """
     # Resolve database directory
     db_dir = None
-    if args.AAFTF_DB:
-        db_dir = args.AAFTF_DB
+    if AAFTF_DB:
+        db_dir = AAFTF_DB
     elif "AAFTF_DB" in os.environ:
         db_dir = os.environ["AAFTF_DB"]
     else:
-        status("ERROR: No database directory specified.\n" "  Set the AAFTF_DB environment variable or pass --AAFTF_DB.\n" "  Example:\n" "    export AAFTF_DB=/path/to/aaftf_db\n" "    AAFTF download")
+        status(
+            "ERROR: No database directory specified.\n"
+            "  Set the AAFTF_DB environment variable or pass --AAFTF_DB.\n"
+            "  Example:\n"
+            "    export AAFTF_DB=/path/to/aaftf_db\n"
+            "    AAFTF download"
+        )
         sys.exit(1)
 
     db_dir = os.path.abspath(db_dir)
@@ -204,27 +210,27 @@ def run(parser, args):
     errors = []
 
     # Core databases (always downloaded unless --skip-core)
-    if not args.skip_core:
+    if not skip_core:
         try:
-            _download_contaminants(db_dir, force=args.force)
+            _download_contaminants(db_dir, force=force)
         except Exception as e:
             errors.append(f"Contaminant accessions: {e}")
         try:
-            _download_db_links(db_dir, force=args.force)
+            _download_db_links(db_dir, force=force)
         except Exception as e:
             errors.append(f"DB_Links: {e}")
 
     # Sourmash taxonomy databases (optional)
-    if not args.skip_sourmash:
+    if not skip_sourmash:
         try:
-            _download_sourmash(db_dir, sourdb_type=args.sourdb_type, force=args.force)
+            _download_sourmash(db_dir, sourdb_type=sourdb_type, force=force)
         except Exception as e:
             errors.append(f"Sourmash DB: {e}")
 
     # NCBI FCS-adaptor resources (optional)
-    if not args.skip_fcs:
+    if not skip_fcs:
         try:
-            _download_fcs(db_dir, force=args.force)
+            _download_fcs(db_dir, force=force)
         except Exception as e:
             errors.append(f"FCS resources: {e}")
 
@@ -232,7 +238,7 @@ def run(parser, args):
         status("\nSome downloads failed:")
         for err in errors:
             status(f"  - {err}")
-        status("\nYou can re-run 'AAFTF download' later; already-downloaded " "files will be skipped unless you pass --force.")
+        status("\nYou can re-run 'AAFTF download' later; already-downloaded files will be skipped unless you pass --force.")
         sys.exit(1)
 
-    status("Setup complete. Future AAFTF runs will use cached files from " f"{db_dir}")
+    status(f"Setup complete. Future AAFTF runs will use cached files from {db_dir}")

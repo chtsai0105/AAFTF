@@ -154,12 +154,12 @@ class TestGenomeAsmStats:
 
 class TestAssessRun:
     def test_run_prints_to_stdout(self, assess_args, capsys):
-        run(None, assess_args)
+        run(**vars(assess_args))
         out = capsys.readouterr().out
         assert "CONTIG COUNT" in out
 
     def test_run_writes_report_file(self, assess_args):
-        run(None, assess_args)
+        run(**vars(assess_args))
         report_path = assess_args.report
         assert os.path.exists(report_path)
         content = open(report_path).read()
@@ -177,6 +177,6 @@ class TestAssessRun:
             debug=False,
             pipe=True,
         )
-        run(None, args)  # should not raise
+        run(**vars(args))  # should not raise
         out = capsys.readouterr().out
         assert "CONTIG COUNT" in out

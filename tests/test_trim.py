@@ -27,11 +27,11 @@ pytestmark = pytest.mark.unit
 def _parse_trim(argv):
     captured = {}
 
-    def _capture(parser, args):
-        captured["args"] = args
+    def _capture(**kwargs):
+        captured["args"] = Namespace(**kwargs)
 
     with patch.object(sys, "argv", argv):
-        with patch("AAFTF.AAFTF_main.run_subtool", side_effect=_capture):
+        with patch("AAFTF.trim.run", side_effect=_capture):
             main()
     return captured.get("args")
 
@@ -65,9 +65,8 @@ def _make_trim_args(tmp_path, method="bbduk", left=None, right=_UNSET, **overrid
         cutright=False,
         debug=False,
         pipe=True,
-        trimmomatic=None,
         trimmomatic_adaptors="TruSeq3-PE.fa",
-        trimmomatic_clip="ILLUMINACLIP:%s:2:30:10",
+        trimmomatic_clip="2:30:10",
         trimmomatic_leadingwindow=3,
         trimmomatic_trailingwindow=3,
         trimmomatic_slidingwindow="4:15",
@@ -221,7 +220,7 @@ def _run_bbduk(tmp_path, left, right=None, **extra):
         with patch("AAFTF.trim.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)) as _:
             from AAFTF.trim import run
 
-            run(None, args)
+            run(**vars(args))
     return cmds, args
 
 
@@ -244,9 +243,9 @@ class TestTrimRunBbduk:
         # not the first command.
         left = str(tmp_path / "sample_R1.fastq.gz")
         right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, args = _run_bbduk(tmp_path, left, right)
-        assert any(f"out1={args.basename}_1P.fastq.gz" in " ".join(c) for c in cmds)
-        assert any(f"out2={args.basename}_2P.fastq.gz" in " ".join(c) for c in cmds)
+        cmds, _ = _run_bbduk(tmp_path, left, right)
+        assert any("out1=sample_1P.fastq.gz" in " ".join(c) for c in cmds)
+        assert any("out2=sample_2P.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_se_command_includes_in(self, tmp_path):
         left = str(tmp_path / "sample_R1.fastq.gz")
@@ -255,8 +254,8 @@ class TestTrimRunBbduk:
 
     def test_se_command_includes_out(self, tmp_path):
         left = str(tmp_path / "sample_R1.fastq.gz")
-        cmds, args = _run_bbduk(tmp_path, left, right=None)
-        assert any(f"out={args.basename}_1U.fastq.gz" in " ".join(c) for c in cmds)
+        cmds, _ = _run_bbduk(tmp_path, left, right=None)
+        assert any("out=sample_1U.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_command_includes_minlen(self, tmp_path):
         left = str(tmp_path / "sample_R1.fastq.gz")
@@ -272,18 +271,18 @@ class TestTrimRunBbduk:
 
     def test_basename_derived_from_underscore_split(self, tmp_path):
         left = str(tmp_path / "MySample_R1.fastq.gz")
-        _, args = _run_bbduk(tmp_path, left)
-        assert args.basename == "MySample"
+        cmds, _ = _run_bbduk(tmp_path, left)
+        assert any("out=MySample_1U.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_basename_derived_from_dot_split(self, tmp_path):
         left = str(tmp_path / "MySample.R1.fastq.gz")
-        _, args = _run_bbduk(tmp_path, left)
-        assert args.basename == "MySample"
+        cmds, _ = _run_bbduk(tmp_path, left)
+        assert any("out=MySample_1U.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_explicit_basename_not_overridden(self, tmp_path):
         left = str(tmp_path / "sample_R1.fastq.gz")
-        _, args = _run_bbduk(tmp_path, left, basename="mybase")
-        assert args.basename == "mybase"
+        cmds, _ = _run_bbduk(tmp_path, left, basename="mybase")
+        assert any("out=mybase_1U.fastq.gz" in " ".join(c) for c in cmds)
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +297,7 @@ def _run_fastp(tmp_path, left, right=None, **extra):
         with patch("AAFTF.trim.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
             from AAFTF.trim import run
 
-            run(None, args)
+            run(**vars(args))
     return cmds, args
 
 
@@ -314,18 +313,18 @@ class TestTrimRunFastp:
     def test_pe_command_includes_out1_out2(self, tmp_path):
         left = str(tmp_path / "s_R1.fastq.gz")
         right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, args = _run_fastp(tmp_path, left, right)
+        cmds, _ = _run_fastp(tmp_path, left, right)
         cmd_str = " ".join(cmds[0])
-        assert f"--out1={args.basename}_1P.fastq.gz" in cmd_str
-        assert f"--out2={args.basename}_2P.fastq.gz" in cmd_str
+        assert "--out1=s_1P.fastq.gz" in cmd_str
+        assert "--out2=s_2P.fastq.gz" in cmd_str
 
     def test_merge_adds_merge_flag_and_output(self, tmp_path):
         left = str(tmp_path / "s_R1.fastq.gz")
         right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, args = _run_fastp(tmp_path, left, right, merge=True)
+        cmds, _ = _run_fastp(tmp_path, left, right, merge=True)
         cmd_str = " ".join(cmds[0])
         assert "--merge" in cmd_str
-        assert f"--merged_out={args.basename}_MG.fastq.gz" in cmd_str
+        assert "--merged_out=s_MG.fastq.gz" in cmd_str
 
     def test_dedup_adds_dedup_flag(self, tmp_path):
         left = str(tmp_path / "s_R1.fastq.gz")
@@ -387,14 +386,14 @@ class TestTrimRunTrimmomatic:
     def test_no_jar_exits(self, tmp_path):
         left = str(tmp_path / "s_R1.fastq.gz")
         right = str(tmp_path / "s_R2.fastq.gz")
-        args = _make_trim_args(tmp_path, method="trimmomatic", left=left, right=right, trimmomatic=None)
+        args = _make_trim_args(tmp_path, method="trimmomatic", left=left, right=right)
 
         from AAFTF.trim import run
 
         with patch("AAFTF.trim.find_trimmomatic", return_value=False):
             with patch("AAFTF.trim.countfastq", return_value=100):
                 with pytest.raises(SystemExit):
-                    run(None, args)
+                    run(**vars(args))
 
     def test_jar_found_builds_pe_command(self, tmp_path):
         left = str(tmp_path / "s_R1.fastq.gz")
@@ -417,7 +416,7 @@ class TestTrimRunTrimmomatic:
                         with patch("AAFTF.trim.SafeRemove"):
                             from AAFTF.trim import run
 
-                            run(None, args)
+                            run(**vars(args))
         assert len(cmds) > 0
         assert "PE" in cmds[0]
         assert fake_jar in cmds[0]
