@@ -260,7 +260,6 @@ def make_bwa_bam(inFasta, forReads, revReads, workdir, cpus, memperthread):
     tempfile_sort = f"{ASMpref}.sort.bam"
     tempfile_unsorted = f"{ASMpref}.unsorted.bam"
     tempfiles = [tempfile_fixmate, tempfile_markdup, tempfile_sort, tempfile_unsorted]
-    DEVNULL = open(os.devnull, "w")
     bamthreads = 4
     if cpus < 4:
         bamthreads = cpus
@@ -268,54 +267,54 @@ def make_bwa_bam(inFasta, forReads, revReads, workdir, cpus, memperthread):
     if not os.path.isfile(os.path.join(workdir, BAM)):
         bwa_index = ["bwa", "index", ASMname]
         printCMD(bwa_index)
-        subprocess.run(bwa_index, cwd=workdir, stderr=DEVNULL)
+        subprocess.run(bwa_index, cwd=workdir, stderr=subprocess.DEVNULL)
         bwa_cmd = ["bwa", "mem", "-t", str(cpus), ASMname, forReads]
         if revReads:
             bwa_cmd.append(revReads)
 
         # run BWA and pipe to samtools sort
         printCMD(bwa_cmd)
-        p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
+        p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         samtoolsversion = get_samtools_version()
 
         if samtoolsversion < Version("1.0"):
             # run fix mate after creating BAM files from from bwa output with samtools < 1.0
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", tempfile_unsorted, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=DEVNULL)
+            p2 = subprocess.Popen(samtools_view_bam_cmd("-", tempfile_unsorted, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
             p1.stdout.close()
             p2.communicate()
             samtools_cmd = ["samtools", "fixmate", "-r", tempfile_unsorted, tempfile_fixmate]
-            subprocess.run(samtools_cmd, cwd=workdir, stderr=DEVNULL)
+            subprocess.run(samtools_cmd, cwd=workdir, stderr=subprocess.DEVNULL)
 
             samtools_cmd = samtools_sort_cmd(tempfile_sort, tempfile_markdup, bamthreads, memory_per_thread=memperthread)
             printCMD(samtools_cmd)
-            subprocess.run(samtools_cmd, cwd=workdir, stderr=DEVNULL)
+            subprocess.run(samtools_cmd, cwd=workdir, stderr=subprocess.DEVNULL)
             # keep only paired reads
             samtools_cmd = samtools_view_bam_cmd(tempfile_sort, BAM, bamthreads, include_flags="0x2")
             printCMD(samtools_cmd)
-            subprocess.run(samtools_cmd, cwd=workdir, stderr=DEVNULL)
+            subprocess.run(samtools_cmd, cwd=workdir, stderr=subprocess.DEVNULL)
 
         else:
             # run fix mate directly from bwa output with samtools >= 1.0
             fixmate_fmt = "bam,level=1" if samtoolsversion >= Version("1.6") else "bam"
             samtools_cmd = ["samtools", "fixmate", "-O", fixmate_fmt, "-m", "-", tempfile_unsorted]
-            p2 = subprocess.Popen(samtools_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=DEVNULL, stdin=p1.stdout)
+            p2 = subprocess.Popen(samtools_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=p1.stdout)
             p1.stdout.close()
             p2.communicate()
 
             # sort to stdout, pipe into markdup
             sort_cmd = samtools_sort_cmd(tempfile_unsorted, "-", bamthreads, memory_per_thread=memperthread, tmp_prefix=ASMpref)
             printCMD(sort_cmd)
-            p3 = subprocess.Popen(sort_cmd, stdout=subprocess.PIPE, cwd=workdir, stderr=DEVNULL)
+            p3 = subprocess.Popen(sort_cmd, stdout=subprocess.PIPE, cwd=workdir, stderr=subprocess.DEVNULL)
             samtools_cmd = ["samtools", "markdup", "-@", str(bamthreads), "-", tempfile_markdup]
             printCMD(samtools_cmd)
-            p4 = subprocess.Popen(samtools_cmd, stdin=p3.stdout, cwd=workdir, stderr=DEVNULL)
+            p4 = subprocess.Popen(samtools_cmd, stdin=p3.stdout, cwd=workdir, stderr=subprocess.DEVNULL)
             p3.stdout.close()
             p4.communicate()
 
             # keep only paired reads
             samtools_cmd = samtools_view_bam_cmd(tempfile_markdup, BAM, bamthreads, include_flags="0x2")
             printCMD(samtools_cmd)
-            subprocess.run(samtools_cmd, cwd=workdir, stderr=DEVNULL)
+            subprocess.run(samtools_cmd, cwd=workdir, stderr=subprocess.DEVNULL)
 
         # BAM file needs to be indexed
         samtools_cmd = ["samtools", "index", "-@", str(cpus), BAM]

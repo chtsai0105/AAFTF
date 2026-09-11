@@ -347,8 +347,7 @@ def status(string):
 
 def execute(cmd, dir):
     """Execute a command and wait for result."""
-    DEVNULL = open(os.devnull, "w")
-    popen = subprocess.Popen(cmd, cwd=dir, stdout=subprocess.PIPE, universal_newlines=True, stderr=DEVNULL)
+    popen = subprocess.Popen(cmd, cwd=dir, stdout=subprocess.PIPE, universal_newlines=True, stderr=subprocess.DEVNULL)
     yield from iter(popen.stdout.readline, "")
     popen.stdout.close()
     return_code = popen.wait()

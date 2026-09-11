@@ -16,7 +16,7 @@ import os
 import shutil
 import urllib.request
 import uuid
-from subprocess import call
+from subprocess import DEVNULL, call
 
 # biopython needed
 from Bio import SeqIO
@@ -26,7 +26,6 @@ from AAFTF.utility import SafeRemove, countfasta, printCMD, softwrap, status
 
 BlastPercent_ID_ContamMatch = "90.0"
 BlastPercent_ID_MitoMatch = "98.6"
-DEVNULL = open(os.devnull, "w")
 
 # VecScreen matches
 """

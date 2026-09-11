@@ -158,7 +158,6 @@ def run(
             basename = os.path.basename(forReads)
 
     # logger.info('Loading {:,} FASTQ reads'.format(countfastq(forReads)))
-    DEVNULL = open(os.devnull, "w")
 
     alignBAM = os.path.join(workdir, basename + "_contam_db.bam")
     unsorted_bam = os.path.join(workdir, basename + "_contam.unsorted.bam")
@@ -185,7 +184,7 @@ def run(
             if debug:
                 subprocess.run(shuffle_cmd)
             else:
-                subprocess.run(shuffle_cmd, stderr=DEVNULL)
+                subprocess.run(shuffle_cmd, stderr=subprocess.DEVNULL)
 
             cmd = ["bbduk.sh", MEM, f"t={cpus}", "hdist=1", "k=27", "overwrite=true", f"in={interleaved_in}", "interleaved=true", f"out={interleaved_out}"]
             cmd.extend(["ref={}".format(",".join(refmatch_bbduk))])
@@ -193,14 +192,14 @@ def run(
             if debug:
                 subprocess.run(cmd)
             else:
-                subprocess.run(cmd, stderr=DEVNULL)
+                subprocess.run(cmd, stderr=subprocess.DEVNULL)
 
             reformat_cmd = ["reformat.sh", f"in={interleaved_out}", f"out1={clean_reads}_1.fastq.gz", f"out2={clean_reads}_2.fastq.gz"]
             printCMD(reformat_cmd)
             if debug:
                 subprocess.run(reformat_cmd)
             else:
-                subprocess.run(reformat_cmd, stderr=DEVNULL)
+                subprocess.run(reformat_cmd, stderr=subprocess.DEVNULL)
         else:
             cmd = ["bbduk.sh", MEM, f"t={cpus}", "hdist=1", "k=27", "overwrite=true"]
             cmd.extend([f"in={forReads}", f"out={clean_reads}_U.fastq.gz"])
@@ -211,7 +210,7 @@ def run(
             if debug:
                 subprocess.run(cmd)
             else:
-                subprocess.run(cmd, stderr=DEVNULL)
+                subprocess.run(cmd, stderr=subprocess.DEVNULL)
 
         if not debug and not custom_workdir:
             SafeRemove(workdir)
@@ -243,7 +242,7 @@ def run(
                 # the db
                 bowtie_index = ["bowtie2-build", contamdb, contamdb]
                 printCMD(bowtie_index)
-                subprocess.run(bowtie_index, stderr=DEVNULL, stdout=DEVNULL)
+                subprocess.run(bowtie_index, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
 
             bowtie_cmd = ["bowtie2", "-x", os.path.basename(contamdb), "-p", str(cpus), "--very-sensitive"]
             if forReads and revReads:
@@ -254,11 +253,11 @@ def run(
             # now run and write to BAM sorted
             printCMD(bowtie_cmd)
 
-            p1 = subprocess.Popen(bowtie_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=DEVNULL)
+            p1 = subprocess.Popen(bowtie_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
             p1.stdout.close()
             p2.communicate()
-            subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=DEVNULL)
+            subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=subprocess.DEVNULL)
             SafeRemove(unsorted_bam)
 
     elif aligner == "bwa":
@@ -268,7 +267,7 @@ def run(
             if not os.path.exists(contamdb + ".amb") or os.path.getctime(contamdb + ".amb") < os.path.getctime(contamdb):
                 bwa_index = ["bwa", "index", contamdb]
                 printCMD(bwa_index)
-                subprocess.run(bwa_index, stderr=DEVNULL, stdout=DEVNULL)
+                subprocess.run(bwa_index, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
 
             bwa_cmd = ["bwa", "mem", "-t", str(cpus), os.path.basename(contamdb), forReads]
             if revReads:
@@ -276,11 +275,11 @@ def run(
 
             # now run and write to BAM sorted
             printCMD(bwa_cmd)
-            p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=DEVNULL)
+            p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
             p1.stdout.close()
             p2.communicate()
-            subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=DEVNULL)
+            subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=subprocess.DEVNULL)
             SafeRemove(unsorted_bam)
 
     elif aligner == "minimap2":
@@ -294,11 +293,11 @@ def run(
 
             # now run and write to BAM sorted
             printCMD(minimap2_cmd)
-            p1 = subprocess.Popen(minimap2_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=DEVNULL)
+            p1 = subprocess.Popen(minimap2_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
             p1.stdout.close()
             p2.communicate()
-            subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=DEVNULL)
+            subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=subprocess.DEVNULL)
             SafeRemove(unsorted_bam)
     else:
         status("Must specify bowtie2, bwa, or minimap2 for filtering")
@@ -315,7 +314,7 @@ def run(
             samtools_cmd = ["samtools", "fastq", "-f", "12", "-1", clean_reads + "_1.fastq.gz", "-2", clean_reads + "_2.fastq.gz", alignBAM]
         elif forReads:
             samtools_cmd = ["samtools", "fastq", "-f", "4", "-1", clean_reads + ".fastq.gz", alignBAM]
-        subprocess.run(samtools_cmd, stderr=DEVNULL)
+        subprocess.run(samtools_cmd, stderr=subprocess.DEVNULL)
         if not debug:
             SafeRemove(workdir)
 

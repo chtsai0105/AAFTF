@@ -64,11 +64,10 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, a
     # now run the spades job
     status("Assembling FASTQ data using Spades")
     printCMD(runcmd)
-    DEVNULL = open(os.devnull, "w")
     if debug:
         subprocess.run(runcmd)
     else:
-        subprocess.run(runcmd, stdout=DEVNULL, stderr=DEVNULL)
+        subprocess.run(runcmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # pull out assembly
     if out:
@@ -134,11 +133,10 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
     status("Assembling FASTQ data using Spades")
 
     printCMD(runcmd)
-    DEVNULL = open(os.devnull, "w")
     if debug:
         subprocess.run(runcmd)
     else:
-        subprocess.run(runcmd, stdout=DEVNULL, stderr=DEVNULL)
+        subprocess.run(runcmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # pull out assembly file
     if out:
@@ -203,11 +201,10 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
     # now run the spades job
     status("Assembling FASTQ data using megahit")
     printCMD(runcmd)
-    DEVNULL = open(os.devnull, "w")
     if debug:
         subprocess.run(runcmd)
     else:
-        subprocess.run(runcmd, stdout=DEVNULL, stderr=DEVNULL)
+        subprocess.run(runcmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # pull out assembly
     if out:
         finalOut = out
@@ -274,11 +271,10 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     # now run the spades job
     status("Assembling FASTQ data using Unicycler")
     printCMD(runcmd)
-    DEVNULL = open(os.devnull, "w")
     if debug:
         subprocess.run(runcmd)
     else:
-        subprocess.run(runcmd, stdout=DEVNULL, stderr=DEVNULL)
+        subprocess.run(runcmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # pull out assembly
     if out:

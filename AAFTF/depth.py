@@ -81,11 +81,6 @@ def count_fastq_reads(fastq_file):
         return -1
 
 
-def _open_devnull():
-    """Return an open handle to /dev/null."""
-    return open(os.devnull, "w")
-
-
 def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumina_preset, longread_preset, aligner, debug):
     """Map reads to the genome assembly and produce sorted, indexed BAM files.
 
@@ -111,8 +106,7 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
         type was not provided.  bam_combined is the single BAM to use for
         mosdepth (merged when both types are present).
     """
-    devnull = _open_devnull()
-    stderr_dest = None if debug else devnull
+    stderr_dest = None if debug else subprocess.DEVNULL
 
     bam_illumina = None
     bam_longreads = None
@@ -183,12 +177,10 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
         _map_and_sort(map_cmd, bam_longreads)
         subprocess.run(["samtools", "index", bam_longreads], stderr=stderr_dest)
 
-    devnull.close()
 
     # --- Combine ---
     if bam_illumina and bam_longreads:
         bam_combined = os.path.join(workdir, "combined.sorted.bam")
-        devnull2 = _open_devnull()
         merge_cmd = [
             "samtools",
             "merge",
@@ -200,9 +192,8 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
             bam_longreads,
         ]
         printCMD(merge_cmd)
-        subprocess.run(merge_cmd, stderr=None if debug else devnull2)
-        subprocess.run(["samtools", "index", bam_combined], stderr=None if debug else devnull2)
-        devnull2.close()
+        subprocess.run(merge_cmd, stderr=None if debug else subprocess.DEVNULL)
+        subprocess.run(["samtools", "index", bam_combined], stderr=None if debug else subprocess.DEVNULL)
     elif bam_illumina:
         bam_combined = bam_illumina
     else:
@@ -241,7 +232,6 @@ def run_mosdepth(bam_file, workdir, cpus, prefix="coverage", debug=False):
     Returns:
         Path to the mosdepth summary text file.
     """
-    devnull = _open_devnull()
     mosdepth_prefix = os.path.join(os.path.abspath(workdir), prefix)
     cmd = [
         "mosdepth",
@@ -252,8 +242,7 @@ def run_mosdepth(bam_file, workdir, cpus, prefix="coverage", debug=False):
         os.path.abspath(bam_file),
     ]
     printCMD(cmd)
-    subprocess.run(cmd, stderr=None if debug else devnull)
-    devnull.close()
+    subprocess.run(cmd, stderr=None if debug else subprocess.DEVNULL)
     return mosdepth_prefix + ".mosdepth.summary.txt"
 
 
@@ -371,7 +360,6 @@ def run_mosdepth_quantized(bam_file, workdir, cpus, quantize_str, env_dict, pref
     Returns:
         Tuple (summary_file, quantized_bed) — paths to the two output files.
     """
-    devnull = _open_devnull()
     mosdepth_prefix = os.path.join(os.path.abspath(workdir), prefix)
     run_env = os.environ.copy()
     run_env.update(env_dict)
@@ -386,8 +374,7 @@ def run_mosdepth_quantized(bam_file, workdir, cpus, quantize_str, env_dict, pref
         os.path.abspath(bam_file),
     ]
     printCMD(cmd)
-    subprocess.run(cmd, stderr=None if debug else devnull, env=run_env)
-    devnull.close()
+    subprocess.run(cmd, stderr=None if debug else subprocess.DEVNULL, env=run_env)
     summary_file = mosdepth_prefix + ".mosdepth.summary.txt"
     quantized_bed = mosdepth_prefix + ".quantized.bed.gz"
     return summary_file, quantized_bed

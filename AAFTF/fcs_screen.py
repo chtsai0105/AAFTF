@@ -15,7 +15,7 @@ import shutil
 import sys
 import urllib.request
 import uuid
-from subprocess import call
+from subprocess import DEVNULL, call
 
 from AAFTF.resources import FCSADAPTOR
 from AAFTF.utility import SafeRemove, printCMD, status
@@ -91,13 +91,11 @@ def run(
 
     cmd = [fcsexe, "--fasta-input", infile, "--output-dir", workdir, tax, "--container-engine", containerengine, "--image", image]
     printCMD(cmd)
-    DEVNULL = open(os.devnull, "w")
     try:
         if debug:
             call(cmd)
         else:
             call(cmd, stderr=DEVNULL)
-        DEVNULL.close()
     except NameError:
         print(f"error in calling executable {cmd}")
 

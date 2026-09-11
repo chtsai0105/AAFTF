@@ -85,7 +85,6 @@ def run(
         total = total * 2
     status(f"Loading {total:,} total reads")
 
-    DEVNULL = open(os.devnull, "w")
     if method == "bbduk":
         if memory:
             MEM = f"-Xmx{memory}g"
@@ -123,14 +122,14 @@ def run(
             if debug:
                 subprocess.run(shuffle_cmd)
             else:
-                subprocess.run(shuffle_cmd, stderr=DEVNULL)
+                subprocess.run(shuffle_cmd, stderr=subprocess.DEVNULL)
 
             cmd = bbduk_base + [f"in={interleaved_in}", "interleaved=true", f"out={interleaved_out}"]
             printCMD(cmd)
             if debug:
                 subprocess.run(cmd)
             else:
-                subprocess.run(cmd, stderr=DEVNULL)
+                subprocess.run(cmd, stderr=subprocess.DEVNULL)
 
             reformat_cmd = [
                 "reformat.sh",
@@ -142,7 +141,7 @@ def run(
             if debug:
                 subprocess.run(reformat_cmd)
             else:
-                subprocess.run(reformat_cmd, stderr=DEVNULL)
+                subprocess.run(reformat_cmd, stderr=subprocess.DEVNULL)
             SafeRemove(interleaved_in)
             SafeRemove(interleaved_out)
         elif left:
@@ -151,7 +150,7 @@ def run(
             if debug:
                 subprocess.run(cmd)
             else:
-                subprocess.run(cmd, stderr=DEVNULL)
+                subprocess.run(cmd, stderr=subprocess.DEVNULL)
 
         if right:
             clean = countfastq(f"{basename}_1P.fastq.gz")
@@ -270,7 +269,7 @@ def run(
             if debug:
                 subprocess.run(cmd)
             else:
-                subprocess.run(cmd, stderr=DEVNULL)
+                subprocess.run(cmd, stderr=subprocess.DEVNULL)
             if right:
                 status("Compressing trimmed PE FASTQ files")
                 Fzip_inplace(basename + "_1P.fastq", cpus)
@@ -342,7 +341,7 @@ def run(
         if debug:
             subprocess.run(cmd)
         else:
-            subprocess.run(cmd, stderr=DEVNULL)
+            subprocess.run(cmd, stderr=subprocess.DEVNULL)
 
         if right:
             clean = countfastq(f"{basename}_1P.fastq.gz")

@@ -100,7 +100,6 @@ def run(
     shutil.copyfile(input, os.path.join(workdir, assembly_working))
     numSeqs, assemblySize = fastastats(os.path.join(workdir, assembly_working))
     status(f"Assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
-    DEVNULL = open(os.devnull, "w")
 
     # now filter for taxonomy with sourmash lca classify
     status("Running SourMash to get taxonomy classification for each contig")
@@ -108,7 +107,7 @@ def run(
 
     sour_compute = ["sourmash", "compute", "-k", kmer, "--scaled=1000", "--singleton", assembly_working]
     printCMD(sour_compute)
-    subprocess.run(sour_compute, cwd=workdir, stderr=DEVNULL)
+    subprocess.run(sour_compute, cwd=workdir, stderr=subprocess.DEVNULL)
     sour_classify = ["sourmash", "lca", "classify", "--db", SOUR, "--query", sour_sketch]
     printCMD(sour_classify)
     # output csv: ID,status,superkingdom,phylum,class,order,family,genus,species,strain
@@ -161,7 +160,7 @@ def run(
             bwa_index = ["bwa", "index", os.path.basename(sourTax)]
             status("Building BWA index")
             printCMD(bwa_index)
-            subprocess.run(bwa_index, cwd=workdir, stderr=DEVNULL)
+            subprocess.run(bwa_index, cwd=workdir, stderr=subprocess.DEVNULL)
             # mapped reads to assembly using BWA
             bwa_cmd = [
                 "bwa",
@@ -177,24 +176,24 @@ def run(
             # run BWA and pipe to samtools sort
             status("Aligning reads to assembly with BWA")
             printCMD(bwa_cmd)
-            p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=DEVNULL)
+            p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             if get_samtools_version() >= Version("1.3"):
                 # Modern samtools sort reads SAM directly from stdin
                 sort_cmd = samtools_sort_cmd("-", os.path.join(workdir, blobBAM), bamthreads)
                 printCMD(sort_cmd)
-                p2 = subprocess.Popen(sort_cmd, stdin=p1.stdout, stderr=DEVNULL)
+                p2 = subprocess.Popen(sort_cmd, stdin=p1.stdout, stderr=subprocess.DEVNULL)
                 p1.stdout.close()
                 p2.communicate()
             else:
                 # Older samtools: convert SAM→BAM first, then sort
                 unsortBAM = os.path.join(workdir, "unsorted.bam")
-                p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsortBAM, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=DEVNULL)
+                p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsortBAM, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
                 p1.stdout.close()
                 p2.communicate()
-                subprocess.run(samtools_sort_cmd(unsortBAM, os.path.join(workdir, blobBAM), bamthreads), stderr=DEVNULL)
+                subprocess.run(samtools_sort_cmd(unsortBAM, os.path.join(workdir, blobBAM), bamthreads), stderr=subprocess.DEVNULL)
                 SafeRemove(unsortBAM)
 
-            subprocess.run(["samtools", "index", os.path.join(workdir, blobBAM)], stderr=DEVNULL)
+            subprocess.run(["samtools", "index", os.path.join(workdir, blobBAM)], stderr=subprocess.DEVNULL)
 
         # now calculate coverage from BAM file
         status("Calculating read coverage per contig")
