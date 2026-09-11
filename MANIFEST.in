@@ -1,5 +1,5 @@
 include requirements.txt
-include AAFTF/__version__.py
+include AAFTF/_version.py
 include version.py
 include AAFTF/data/novoplasty-config.txt
 include AAFTF/data/mito-seed.fasta

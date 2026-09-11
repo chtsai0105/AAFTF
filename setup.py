@@ -4,7 +4,7 @@ import os
 
 from setuptools import setup
 
-from AAFTF.__version__ import __version__
+from AAFTF._version import __version__
 
 version = __version__
 

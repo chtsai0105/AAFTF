@@ -141,14 +141,9 @@ def calculate_n50(contig_lengths):
 - Consider external tool memory requirements in parameter defaults
 
 ### Version Handling
-- AAFTF uses a git-aware version system in `AAFTF/__version__.py`
-- The `get_version()` function automatically includes git commit hash for development installations
-- Version format includes short git hash (7 characters) for traceability:
-  - Clean working tree: `0.6.0-alpha1-7-g261967e+261967e`
-  - Dirty working tree: `0.6.0-alpha1-7-g261967e.dirty+261967e`
-  - Tagged release: `0.6.0+261967e`
-- Main application (`AAFTF_main.py`) uses `get_version()` instead of hardcoded `__version__`
-- Fallback to hardcoded version when git information is unavailable (packaged installations)
+- `AAFTF/_version.py` resolves `__version__` via `importlib.metadata.version("AAFTF")`, falling back to `"0.0.0+unknown"` if the package isn't installed
+- The version string itself is set at build time by `hatch-vcs` from git tags (see `[tool.hatch.version]` in `pyproject.toml`)
+- Main application (`AAFTF_main.py`) imports `__version__` directly from `AAFTF._version`
 - Version is displayed both via `--version` flag and at application startup
 - Maintains PEP 440 compatibility for Python packaging standards
 

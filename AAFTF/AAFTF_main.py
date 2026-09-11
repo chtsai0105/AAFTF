@@ -8,15 +8,11 @@ import argparse as ap
 import sys
 
 # AAFTF imports
-from AAFTF.__version__ import __version__, get_version  # noqa: E402
 from AAFTF._menu import SUBCOMMAND_REGISTRARS
+from AAFTF._version import __version__
 from AAFTF.utility import CustomHelpFormatter, status
 
-try:
-    myversion = get_version()
-except Exception:
-    # Fallback to hardcoded version if git isn't available
-    myversion = __version__
+myversion = __version__
 
 
 def main():
