@@ -118,6 +118,7 @@ venv.bak/
 
 # editor/agent local config
 .claude/
+.vscode/
 
 # large unreferenced test reads (kept local only)
 tests/Rmic_NRRL_5546_R1.fq.gz
