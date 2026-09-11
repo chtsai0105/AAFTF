@@ -4,18 +4,25 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 
 ## Key Architecture Reminders
 
-- Entry point: `AAFTF/AAFTF_main.py` — defines all subcommand parsers and `run_subtool()` dispatcher
-- Each subcommand is a module with a `run(parser, args)` function
+- Entry point: `AAFTF/AAFTF_main.py` — builds the top-level parser, wires up subcommands via `SUBCOMMAND_REGISTRARS` (imported from `AAFTF/_menu.py`), and dispatches through `run_subtool()`
+- All argparse subcommand-parser definitions ("menus") live in one place: `AAFTF/_menu.py`. Each subcommand has a `<name>_menu(subparsers)` function there (e.g. `trim_menu`, `depth_menu`) that builds and registers that subtool's `subparsers.add_parser(...)` block and its arguments; `AAFTF/_menu.py` also defines `menu_common_args()` and the `SUBCOMMAND_REGISTRARS` list. Each subcommand module itself (`trim.py`, `depth.py`, etc.) only contains the `run(parser, args)` execution logic — no parser-building code
 - `AAFTF/pipeline.py` orchestrates the full end-to-end workflow using `Namespace` objects built from `args_dict`
 - Aliases are registered via argparse `aliases=` and normalized by `ALIAS_MAP` in `run_subtool()`
+- `CustomHelpFormatter` lives in `AAFTF/utility.py`. Every subcommand parser (built in `_menu.py`) uses `formatter_class=CustomHelpFormatter`
 
 ## CLI Framework Conventions
 
 - Every subcommand parser must have `-v/--debug` and `--pipe` flags — enforced by test suite (`TestAssessParser`, `TestSortParser`, `TestFixTblParser`)
 - `ALIAS_MAP` in `AAFTF_main.py` maps all aliases to canonical names; update it when adding new aliases
 - When building a `Namespace` for pipeline steps, include **all** attributes the target `run()` function accesses — check the submodule source to avoid `AttributeError`
+- `menu_common_args(target)` (in `AAFTF/_menu.py`) adds exactly three arguments — `-v/--debug`, `--pipe`, `-q/--quiet` — to whatever `target` is passed. Every `<name>_menu()` function calls it **last**, passing its own `optional = parser_x.add_argument_group("optional arguments")` group (not the parser itself), so these three common flags render as the final entries of that subcommand's "optional arguments" section rather than in a separate leading group. Do not pass the raw parser to `menu_common_args()` — always pass the `optional` group, and call it after all of that subcommand's own optional args have been added.
+- All other args a subcommand needs (`-c/--cpus`, `--AAFTF_DB`, `-w/--workdir/--tmpdir`, `-l/--left`/`-r/--right`, etc.) are implemented locally within that subcommand's own `<name>_menu()` in `_menu.py` — there is no shared parent-parser mechanism for them (an earlier version used `argparse` `parents=[...]` for these, but that shared the underlying `Action` objects across every subcommand and any per-subcommand override via `conflict_handler="resolve"` silently corrupted other subcommands; it was removed for this reason). When adding a `-c/--cpus`/`--AAFTF_DB`/`-w/--workdir`/`-l/--left`,`-r/--right` block to a new menu function, copy it verbatim from a similar existing one (e.g. `vecscreen_menu`, `sourpurge_menu`) to keep help text/defaults consistent.
+- Each `<name>_menu()` function that has any required argument also creates two argument groups — `required = parser_x.add_argument_group("required arguments")` and `optional = parser_x.add_argument_group("optional arguments")` — and adds each local argument to the appropriate one (required = `required=True` with no `default=`; everything else = optional).
+- Adding a new subcommand: write its `<name>_menu(subparsers)` function in `AAFTF/_menu.py` (create the subparser, add required/optional groups and any subtool-specific args, call `menu_common_args(optional)` last), add it to `SUBCOMMAND_REGISTRARS` in that same file, write the subtool's `run(parser, args)` in its own module, then wire dispatch into `AAFTF_main.py` (import the module, add an `elif` branch in `run_subtool()`, and any aliases in `ALIAS_MAP`)
 
 ## Subcommand Reference
+
+"Module" below is where each subtool's `run(parser, args)` execution logic lives; its argparse parser/menu is instead in `AAFTF/_menu.py` (as `<name>_menu()`).
 
 | Canonical name | Aliases | Module | Key external tools |
 |---|---|---|---|
@@ -161,5 +168,5 @@ conda run -n base python -m pytest tests/ -v
 python -m py_compile AAFTF/filter.py AAFTF/polish.py AAFTF/trim.py \
     AAFTF/vecscreen.py AAFTF/sourpurge.py AAFTF/fcs_screen.py \
     AAFTF/depth.py AAFTF/AAFTF_main.py AAFTF/pipeline.py \
-    AAFTF/assess.py AAFTF/rmdup.py
+    AAFTF/assess.py AAFTF/rmdup.py AAFTF/_menu.py
 ```

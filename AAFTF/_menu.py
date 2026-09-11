@@ -1,0 +1,1102 @@
+"""Consolidated argparse subcommand parser (menu) definitions for AAFTF.
+
+Each ``<name>_menu(subparsers)`` function below builds and registers one
+AAFTF subcommand's argparse parser via ``subparsers.add_parser(...)``. This
+keeps all CLI surface/wiring in one place, separate from each subcommand
+module's own ``run(parser, args)`` execution logic.
+
+``menu_common_args()`` adds the three arguments common to every subcommand
+(``-v/--debug``, ``--pipe``, ``-q/--quiet``). Call it last, passing the
+subcommand's own "optional arguments" group (not the parser itself), so these
+common flags render as the final entries in that group instead of appearing
+in a separate leading section.
+"""
+
+import argparse as ap
+
+from AAFTF.utility import CustomHelpFormatter
+
+
+def menu_common_args(target):
+    """Add the arguments common to every AAFTF subcommand parser.
+
+    ``target`` is normally a subcommand's "optional arguments" group (from
+    ``parser.add_argument_group("optional arguments")``). Call this only
+    after all of that subcommand's own optional arguments have been added,
+    so ``-v/--debug``, ``--pipe``, and ``-q/--quiet`` render as the final
+    entries of that group.
+    """
+    target.add_argument("--pipe", action="store_true", help="AAFTF is running in pipeline mode")
+    target.add_argument("-q", "--quiet", action="store_true", dest="quiet", help="Do not output warnings to stderr")
+    target.add_argument("-v", "--debug", action="store_true", help="Provide debugging messages")
+    return target
+
+
+def download_menu(subparsers):
+    """Add the download subcommand parser."""
+    parser_download = subparsers.add_parser(
+        "download",
+        aliases=["configure", "install", "download_db", "setup"],
+        formatter_class=CustomHelpFormatter,
+        description="Download reference databases to a persistent directory.",
+        help="Download AAFTF reference databases",
+    )
+    optional = parser_download.add_argument_group("optional arguments")
+    optional.add_argument(
+        "--AAFTF_DB",
+        type=str,
+        required=False,
+        help="Path to AAFTF database directory. Defaults to $AAFTF_DB environment variable.",
+    )
+    optional.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-download files even if they already exist",
+    )
+    optional.add_argument(
+        "--skip-core",
+        action="store_true",
+        help="Skip downloading core contamination databases (UniVec, PhiX, contaminants, mitochondria)",
+    )
+    optional.add_argument(
+        "--skip-sourmash",
+        action="store_true",
+        help="Skip downloading sourmash taxonomy databases",
+    )
+    optional.add_argument(
+        "--sourdb-type",
+        type=str,
+        default="all",
+        choices=["gbk", "gtdb", "gtdbrep", "all"],
+        dest="sourdb_type",
+        help="Which sourmash database(s) to download",
+    )
+    optional.add_argument(
+        "--skip-fcs",
+        action="store_true",
+        help="Skip downloading NCBI FCS-adaptor resources",
+    )
+    menu_common_args(optional)
+    return parser_download
+
+
+def trim_menu(subparsers):
+    """Add the trim subcommand parser."""
+    parser_trim = subparsers.add_parser(
+        "trim",
+        aliases=["trim_reads", "read_trim"],
+        formatter_class=CustomHelpFormatter,
+        description="This command trims reads in FASTQ format to remove low quality reads and trim adaptor sequences",
+        help="Trim FASTQ input reads",
+    )
+
+    required = parser_trim.add_argument_group("required arguments")
+    optional = parser_trim.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-l",
+        "--left",
+        type=str,
+        metavar="FASTQ",
+        required=True,
+        help="left/forward reads of paired-end FASTQ or single-end FASTQ.",
+    )
+
+    optional.add_argument(
+        "-r", "--right", type=str, metavar="FASTQ", required=False, help="right/reverse reads of paired-end FASTQ."
+    )
+
+    optional.add_argument(
+        "-o",
+        "--out",
+        type=str,
+        required=False,
+        dest="basename",
+        help="Output basename, default to base name of --left reads",
+    )
+
+    optional.add_argument(
+        "-ml", "--minlen", type=int, metavar="INT", default=75, required=False, help="Minimum read length after trimming"
+    )
+
+    optional.add_argument(
+        "-aq",
+        "--avgqual",
+        type=int,
+        metavar="INT",
+        default=10,
+        required=False,
+        help="Average Quality of reads must be > than this",
+    )
+
+    optional.add_argument(
+        "--dedup",
+        action="store_true",
+        required=False,
+        help="Run fastp deuplication of fastq reads (default uses ~4gb mem)" + " default: false",
+    )
+
+    optional.add_argument(
+        "--cutfront",
+        action="store_true",
+        required=False,
+        help="Run fastp 5' trimming based on quality. "
+        + "default: false. \n"
+        + "WARNING: this operation will interfere deduplication for SE data",
+    )
+
+    optional.add_argument(
+        "--cuttail",
+        action="store_true",
+        required=False,
+        help="Run fastp 3' trimming based on quality. "
+        + "default: false.\n"
+        + "WARNING: this operation will interfere deduplication for SE data",
+    )
+
+    optional.add_argument(
+        "--cutright",
+        action="store_true",
+        required=False,
+        help="Run fastp move a sliding window from front to tail, "
+        + "if meet one window with mean quality < threshold. \n"
+        + "default: false.\n"
+        + "WARNING: this operation will interfere deduplication for SE data",
+    )
+
+    optional.add_argument(
+        "--method", default="bbduk", choices=["bbduk", "trimmomatic", "fastp"], help="Program to use for adapter trimming"
+    )
+
+    optional.add_argument("--merge", action="store_true", help="Merge paired end reads when running fastp")
+
+    optional.add_argument(
+        "-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use."
+    )
+    optional.add_argument("-m", "--memory", type=int, dest="memory", required=False, help="Max Memory (in GB)")
+    menu_common_args(optional)
+
+    tool_group = parser_trim.add_mutually_exclusive_group(required=False)
+
+    tool_group.add_argument(
+        "--trimmomatic", "--jar", metavar="trimmomatic_jar", type=str, required=False, help="Trimmomatic JAR path"
+    )
+    trimmomatic_group = parser_trim.add_argument_group(title="Trimmomatic options", description="Trimmomatic trimming options")
+
+    trimmomatic_group.add_argument("--trimmomatic_adaptors", default="TruSeq3-PE.fa", help="Trimmomatic adaptor file")
+
+    trimmomatic_group.add_argument(
+        "--trimmomatic_clip",
+        default="ILLUMINACLIP:%s:2:30:10",
+        help="Trimmomatic clipping",
+    )
+
+    trimmomatic_group.add_argument(
+        "--trimmomatic_leadingwindow", default="3", type=int, help="Trimmomatic window processing arguments"
+    )
+
+    trimmomatic_group.add_argument(
+        "--trimmomatic_trailingwindow", default="3", type=int, help="Trimmomatic window processing arguments"
+    )
+
+    trimmomatic_group.add_argument(
+        "--trimmomatic_slidingwindow",
+        default="4:15",
+        type=str,
+        help="Trimmomatic window processing arguments",
+    )
+
+    trimmomatic_group.add_argument(
+        "--trimmomatic_quality", default="phred33", help="Trimmomatic quality encoding -phred33 or phred64"
+    )
+
+    return parser_trim
+
+
+def mito_menu(subparsers):
+    """Add the mito subcommand parser."""
+    parser_mito = subparsers.add_parser(
+        "mito",
+        aliases=["mito_asm", "mitochondria"],
+        description="De novo assembly of mitochondrial genome using " + "NOVOplasty, takes PE Illumina adapter trimmed data.",
+        help="De novo assembly of mitochondrial genome",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_mito.add_argument_group("required arguments")
+    optional = parser_mito.add_argument_group("optional arguments")
+
+    required.add_argument("-l", "--left", required=True, help="Left (Forward) reads")
+
+    required.add_argument("-r", "--right", required=True, help="Right (Reverse) reads")
+
+    required.add_argument("-o", "--out", type=str, required=True, help="Output FASTA file for mitochondrial genome")
+
+    optional.add_argument(
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        required=False,
+        help="Temporary directory to store datafiles and processes in",
+    )
+
+    optional.add_argument("--minlen", default=10000, type=int, help="Minimum expected genome size")
+
+    optional.add_argument("--maxlen", default=100000, type=int, help="Maximum expected genome size")
+
+    optional.add_argument(
+        "-s", "--seed", required=False, help="Seed sequence, ie related mitochondrial genome." + "default: A. nidulans"
+    )
+
+    optional.add_argument("--starting", required=False, help="FASTA file of start sequence, rotate genome to, default COB")
+
+    optional.add_argument("--reference", required=False, help="Run NOVOplasty in reference mode")
+
+    menu_common_args(optional)
+
+    return parser_mito
+
+
+def filter_menu(subparsers):
+    """Add the filter subcommand parser."""
+    parser_filter = subparsers.add_parser(
+        "filter",
+        aliases=["filter_reads", "read_filter"],
+        description="Filter reads which match " + "contaminant databases such as phiX",
+        help="Filter contaminanting reads",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_filter.add_argument_group("required arguments")
+    optional = parser_filter.add_argument_group("optional arguments")
+
+    required.add_argument("-l", "--left", required=True, help="Left (Forward) reads")
+
+    optional.add_argument(
+        "-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use."
+    )
+
+    optional.add_argument("--AAFTF_DB", type=str, required=False, help="Path to AAFTF resources, defaults to $AAFTF_DB")
+
+    optional.add_argument(
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        required=False,
+        help="Temporary directory to store datafiles and processes in",
+    )
+
+    optional.add_argument("-o", "--out", dest="basename", type=str, required=False, help="Output basename")
+
+    optional.add_argument(
+        "-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads."
+    )
+
+    optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URLs to download and screen out initial reads.")
+
+    optional.add_argument("-s", "--screen_local", type=str, nargs="+", help="Local FASTA file(s) to use contamination screen")
+
+    optional.add_argument("-r", "--right", required=False, help="Right (Reverse) reads")
+
+    optional.add_argument(
+        "--aligner",
+        default="bbduk",
+        choices=["bbduk", "bowtie2", "bwa", "minimap2"],
+        help="Aligner to use to map reads to contamination database",
+    )
+
+    optional.add_argument("-m", "--memory", type=int, dest="memory", required=False, help="Max Memory (in GB)")
+
+    menu_common_args(optional)
+
+    return parser_filter
+
+
+def assemble_menu(subparsers):
+    """Add the assemble subcommand parser."""
+    parser_asm = subparsers.add_parser(
+        "assemble",
+        aliases=["asm", "spades"],
+        description="Run assembler on cleaned reads",
+        help="Assemble reads",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_asm.add_argument_group("required arguments")
+    optional = parser_asm.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-o",
+        "--out",
+        type=str,
+        required=True,  # think about sensible replacement in future
+        help="Output assembly FASTA",
+    )
+
+    optional.add_argument(
+        "-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use."
+    )
+
+    optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="assembly output directory")
+
+    optional.add_argument(
+        "--method",
+        type=str,
+        choices=["spades", "dipspades", "megahit", "unicycler"],
+        required=False,
+        default="spades",
+        help="Assembly method: spades, dipspades, megahit, unicycler",
+    )
+
+    optional.add_argument(
+        "-m",
+        "--memory",
+        type=str,
+        dest="memory",
+        required=False,
+        default="32",
+        help="Memory (in GB) setting for SPAdes",
+    )
+
+    optional.add_argument("-l", "--left", required=False, help="Left (Forward) reads")
+
+    optional.add_argument("-r", "--right", required=False, help="Right (Reverse) reads")
+    optional.add_argument("-lr", "--longreads", required=False, help="Long Read fastq (pacbio or ONT)")
+    optional.add_argument(
+        "--single", "--merged", required=False, dest="merged", help="Merged reads from flash or fastp or just single end reads"
+    )
+
+    optional.add_argument(
+        "--careful",
+        required=False,
+        action="store_true",
+        default=True,
+        help="Run --careful mode in spades (Default)",
+        dest="careful",
+    )
+
+    optional.add_argument("--no-careful", required=False, action="store_false", default=True, dest="careful")
+
+    optional.add_argument("--isolate", required=False, action="store_true", dest="isolate", help="Run in isolate mode (default)")
+
+    optional.add_argument("--no-isolate", required=False, action="store_false", dest="isolate", help="Don't run --isolate mode")
+
+    optional.add_argument("--tmpdir", type=str, required=False, help="Assembler temporary dir")
+
+    optional.add_argument("--assembler_args", action="append", required=False, help="Additional SPAdes/Megahit arguments")
+
+    optional.add_argument(
+        "--haplocontigs", dest="haplocontigs", default=False, action="store_true", help="For dipSPAdes take the haplocontigs file"
+    )
+
+    menu_common_args(optional)
+
+    return parser_asm
+
+
+def vecscreen_menu(subparsers):
+    """Add the vecscreen subcommand parser."""
+    parser_vecscreen = subparsers.add_parser(
+        "vecscreen",
+        aliases=["vectorscreen", "vector_blast"],
+        description="Screen contigs for vector and common contaminantion",
+        help="BLASTN Vector and Contaminant Screening of contigs",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_vecscreen.add_argument_group("required arguments")
+    optional = parser_vecscreen.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input contigs or scaffold assembly"
+    )
+
+    required.add_argument("-o", "--outfile", type=str, required=True, help="Output vector screened and cleaned assembly")
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+
+    optional.add_argument("--AAFTF_DB", type=str, required=False, help="Path to AAFTF resources, defaults to $AAFTF_DB")
+
+    optional.add_argument(
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        required=False,
+        help="Temporary directory to store datafiles and processes in",
+    )
+
+    optional.add_argument(
+        "-pid", "--percent_id", type=int, required=False, help="Percent Identity cutoff for vecscreen adaptor matches"
+    )
+
+    optional.add_argument("--prefix", type=str, required=False, help="Prefix for tempfiles")
+
+    optional.add_argument(
+        "-s", "--stringency", default="high", choices=["high", "low"], help="Stringency to filter VecScreen hits"
+    )
+
+    menu_common_args(optional)
+
+    return parser_vecscreen
+
+
+def fcs_screen_menu(subparsers):
+    """Add the fcs_screen subcommand parser."""
+    parser_fcs_screen = subparsers.add_parser(
+        "fcs_screen",
+        aliases=["ncbi_fcs", "ncbi_fcs-screen"],
+        description="Screen with NCBI fcs tool contigs for vector and common contaminantion",
+        help="NCBI Foreign Contaminant Screening for Vector sequences in contigs",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_fcs_screen.add_argument_group("required arguments")
+    optional = parser_fcs_screen.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input contigs or scaffold assembly"
+    )
+
+    required.add_argument("-o", "--outfile", type=str, required=True, help="Output vector screened and cleaned assembly")
+
+    optional.add_argument("--AAFTF_DB", type=str, required=False, help="Path to AAFTF resources, defaults to $AAFTF_DB")
+
+    optional.add_argument(
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        required=False,
+        help="Temporary directory to store datafiles and processes in",
+    )
+
+    optional.add_argument("--prefix", type=str, required=False, help="Prefix for tempfiles")
+
+    optional.add_argument(
+        "--container_engine",
+        type=str,
+        default="singularity",
+        choices=["singularity", "docker"],
+        help="Container engine used to run fcs-adaptor",
+    )
+
+    optional.add_argument("--image", type=str, required=False, help="Container file (or will download and look in AAFTF_DB)")
+
+    optional.add_argument("--prok", action="store_true", help="Run in Prokaryote matching mode")
+
+    optional.add_argument("--euk", action="store_true", help="Run in Eukaryote matching mode (Default)")
+
+    optional.add_argument(
+        "--fcs_script", type=str, required=False, help="location of the run_fcsadaptor.sh script (or will download automatically)"
+    )
+
+    menu_common_args(optional)
+
+    return parser_fcs_screen
+
+
+def fcs_gx_purge_menu(subparsers):
+    """Add the fcs_gx_purge subcommand parser."""
+    parser_fcsgx = subparsers.add_parser(
+        "fcs_gx_purge",
+        aliases=["ncbi_fcs-gx", "ncbi_fcs_gx", "gx"],
+        description="Purge contigs based on fcs_gx results",
+        help="Purge contigs based on contamination search with fcs_gx",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_fcsgx.add_argument_group("required arguments")
+    optional = parser_fcsgx.add_argument_group("optional arguments")
+
+    required.add_argument("-i", "--input", type=str, required=True, help="Input contigs or scaffold assembly")
+
+    required.add_argument(
+        "-o",
+        "--outfile",
+        type=str,
+        required=True,  # think about sensible replacement in future
+        help="Output fcs_gx cleaned assembly",
+    )
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+
+    optional.add_argument("--AAFTF_DB", type=str, required=False, help="Path to AAFTF resources, defaults to $AAFTF_DB")
+
+    optional.add_argument(
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        required=False,
+        help="Temporary directory to store datafiles and processes in",
+    )
+
+    optional.add_argument("--prefix", type=str, required=False, help="Prefix for tempfiles")
+
+    optional.add_argument(
+        "-t",
+        "--taxid",
+        type=int,
+        required=False,
+        default=4890,
+        help="NCBI Taxonomy ID for contamaination matches, i.e. 4890 for Ascomycota",
+    )
+
+    optional.add_argument("-d", "--db", required=False, default="/my_tmpfs/gxdb/all", help="gxdb database path")
+
+    menu_common_args(optional)
+
+    return parser_fcsgx
+
+
+def sourpurge_menu(subparsers):
+    """Add the sourpurge subcommand parser."""
+    parser_sour = subparsers.add_parser(
+        "sourpurge",
+        aliases=["purge"],
+        description="Purge contigs based on sourmash results",
+        help="Purge contigs based on sourmash results",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_sour.add_argument_group("required arguments")
+    optional = parser_sour.add_argument_group("optional arguments")
+
+    required.add_argument("-i", "--input", type=str, required=True, help="Input contigs or scaffold assembly")
+
+    required.add_argument(
+        "-o",
+        "--outfile",
+        type=str,
+        required=True,  # think about sensible replacement in future
+        help="Output sourmash cleaned assembly",
+    )
+
+    required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or Phyla to keep matches, i.e. Ascomycota")
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+
+    optional.add_argument("--AAFTF_DB", type=str, required=False, help="Path to AAFTF resources, defaults to $AAFTF_DB")
+
+    optional.add_argument(
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        required=False,
+        help="Temporary directory to store datafiles and processes in",
+    )
+
+    optional.add_argument("-l", "--left", required=False, help="Left (Forward) reads")
+
+    optional.add_argument("-r", "--right", required=False, help="Right (Reverse) reads")
+
+    optional.add_argument("--prefix", type=str, required=False, help="Prefix for tempfiles")
+
+    optional.add_argument("--sourdb", required=False, help="SourMash LCA taxonomy database (defaults to k-31)")
+
+    optional.add_argument(
+        "-k", "--kmer", required=False, default="31", help="SourMash LCA kmersize when taxonomy database was built"
+    )
+
+    optional.add_argument("-mc", "--mincovpct", default=5, type=int, help="Minimum percent of N50 coverage to remove")
+
+    optional.add_argument(
+        "--sourdb_type",
+        default="gbk",
+        required=False,
+        choices=["gbk", "gtdbrep", "gtdb"],
+        help="Which sourpurge database to use.",
+    )
+
+    optional.add_argument("--just-show-taxonomy", dest="taxonomy", action="store_true", help="Show taxonomy information and exit")
+
+    menu_common_args(optional)
+
+    return parser_sour
+
+
+def rmdup_menu(subparsers):
+    """Add the rmdup subcommand parser."""
+    parser_rmdup = subparsers.add_parser(
+        "rmdup",
+        aliases=["dedup"],
+        description="Remove duplicate contigs",
+        help="Remove duplicate contigs",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_rmdup.add_argument_group("required arguments")
+    optional = parser_rmdup.add_argument_group("optional arguments")
+
+    required.add_argument("-i", "--input", type=str, required=True, help="Input Assembly fasta file(contigs or scaffolds)")
+
+    required.add_argument(
+        "-o",
+        "--out",
+        type=str,
+        required=True,
+        help="Output new version of assembly with " + "duplicated contigs/scaffolds removed",
+    )
+
+    optional.add_argument(
+        "-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use."
+    )
+
+    optional.add_argument(
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        required=False,
+        help="Temporary directory to store datafiles and processes in",
+    )
+
+    optional.add_argument(
+        "-pid",
+        "--percent_id",
+        type=int,
+        dest="percent_id",
+        required=False,
+        default=95,
+        help="Percent Identity used in matching contigs for redundancy",
+    )
+
+    optional.add_argument(
+        "-pcov",
+        "--percent_cov",
+        type=int,
+        dest="percent_cov",
+        required=False,
+        default=95,
+        help="Coverage of contig used to decide if it is redundant",
+    )
+
+    optional.add_argument(
+        "-ml", "--minlen", type=int, required=False, default=500, help="Minimum contig length to keep, shorter ones are dropped"
+    )
+
+    optional.add_argument(
+        "--exhaustive",
+        action="store_true",
+        help="Compute overlaps for every contig, " + "otherwise only process contigs for L75 and below",
+    )
+
+    menu_common_args(optional)
+
+    return parser_rmdup
+
+
+def polish_menu(subparsers):
+    """Add the polish subcommand parser."""
+    parser_polish = subparsers.add_parser(
+        "polish",
+        aliases=["pilon", "polca"],
+        description="Polish contig sequences with Pilon, POLCA, NextPolish",
+        help="Polish contig sequences with short reads",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_polish.add_argument_group("required arguments")
+    optional = parser_polish.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-i", "--infile", "--input", type=str, dest="infile", required=True, help="Input contigs or scaffold assembly"
+    )
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+
+    optional.add_argument(
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        required=False,
+        help="Temporary directory to store datafiles and processes in",
+    )
+
+    optional.add_argument("-l", "--left", required=False, help="Left (Forward) reads")
+
+    optional.add_argument("-r", "--right", required=False, help="Right (Reverse) reads")
+
+    optional.add_argument("-o", "--out", "--outfile", type=str, dest="outfile", required=False, help="Output a Polished assembly")
+
+    optional.add_argument("-m", "--memory", type=int, default=16, dest="memory", required=False, help="Max Memory (in GB)")
+
+    optional.add_argument("-it", "--iterations", type=int, default=5, help="Number of Polishing iterations to run")
+    optional.add_argument(
+        "--method",
+        type=str,
+        choices=["pilon", "polca", "nextpolish", "racon"],
+        required=False,
+        default="pilon",
+        help="Polishing method: pilon, polca, nextpolish, racon",
+    )
+
+    optional.add_argument(
+        "--polca",
+        type=str,
+        default="polca.sh",
+        help="polca exe path - provide full path to deal with samtools mismatch in masurca",
+    )
+
+    optional.add_argument(
+        "--polca_samtools",
+        type=str,
+        default=None,
+        metavar="SAMTOOLS_PATH",
+        help="Path to a samtools binary compatible with polca.sh (e.g. samtools < 1.21). polca.sh uses 'samtools sort -f' which was removed in 1.21+; set this to an older samtools when the system default is >= 1.21.",
+    )
+
+    optional.add_argument("-lr", "--longreads", required=False, help="Long Read FASTQ (PacBio or ONT)")
+
+    optional.add_argument("--prefix", type=str, required=False, help="Prefix for readfiles")
+
+    optional.add_argument("--diploid", action="store_true", help="Run pilon in diploid mode - affects heterozygous SNP calling")
+
+    optional.add_argument(
+        "--ploidy",
+        default=1,
+        type=int,
+        help="Run nextpolish in specific ploidy mode - affects heterozygous SNP calling",
+    )
+
+    menu_common_args(optional)
+
+    return parser_polish
+
+
+def sort_menu(subparsers):
+    """Add the sort subcommand parser."""
+    parser_sort = subparsers.add_parser(
+        "sort",
+        description="Sort contigs by length and rename FASTA headers",
+        help="Sort contigs by length and rename FASTA headers",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_sort.add_argument_group("required arguments")
+    optional = parser_sort.add_argument_group("optional arguments")
+
+    required.add_argument("-i", "--input", "--infile", required=True, dest="input", help="Input genome assembly FASTA")
+
+    required.add_argument("-o", "--out", "--output", required=True, dest="out", help="Output genome assembly FASTA")
+
+    optional.add_argument(
+        "-ml", "--minlen", type=int, required=False, default=0, help="Minimum contig length to keep, shorter ones are dropped"
+    )
+
+    optional.add_argument("-n", "--name", "--basename", default="scaffold", dest="name", help="Basename to rename FASTA headers")
+
+    menu_common_args(optional)
+
+    return parser_sort
+
+
+def assess_menu(subparsers):
+    """Add the assess subcommand parser."""
+    parser_assess = subparsers.add_parser(
+        "assess",
+        aliases=["stats"],
+        description="Assess completeness of genome assembly",
+        help="Assess completeness of genome assembly",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_assess.add_argument_group("required arguments")
+    optional = parser_assess.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-i",
+        "--input",
+        "--infile",
+        required=True,
+        help="Input genome assembly to test completeness and " + "provide summary statistics",
+    )
+
+    optional.add_argument(
+        "-r", "--report", type=str, help="Filename to save report information otherwise " + "will print to stdout"
+    )
+
+    optional.add_argument("-t", "--telomere_monomer", type=str, help="Telomere repeat monomer to search for.", default="TAA[C]+")
+
+    optional.add_argument("-n", "--telomere_n_repeat", type=int, default=2, help="Telomere minimum number of monomer repeats.")
+
+    optional.add_argument(
+        "--telomere_window", type=int, default=200, help="Number of bp to scan at each end for telomere repeats."
+    )
+
+    menu_common_args(optional)
+
+    return parser_assess
+
+
+def fix_tbl_menu(subparsers):
+    """Add the fix_tbl subcommand parser."""
+    parser_fix = subparsers.add_parser(
+        "fix_tbl",
+        aliases=["fix"],
+        description="Fix NCBI tbl file from a trim report from NCBI-FCS",
+        help="Fix the TBL file offsets from trimmimg",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_fix.add_argument_group("required arguments")
+    optional = parser_fix.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-t", "--table", "--infile", type=ap.FileType("rt"), required=True, help="Table format of annotation (NCBL tbl)"
+    )
+
+    required.add_argument("-r", "--report", type=ap.FileType("rt"), required=True, help="FCS report (5 column CSV)")
+
+    required.add_argument("-o", "--output", type=ap.FileType("wt"), required=True, help="Write fixed TBL file")
+
+    menu_common_args(optional)
+
+    return parser_fix
+
+
+def depth_menu(subparsers):
+    """Add the depth subcommand parser."""
+    parser_depth = subparsers.add_parser(
+        "depth",
+        aliases=["coverage", "cov"],
+        description=(
+            "Calculate depth of coverage by mapping Illumina and/or long reads "
+            "to a genome assembly with minimap2 (or bwa), then running mosdepth "
+            "to compute per-contig depth statistics.  Contigs with mean depth "
+            "> assembly_mean + 3*SD are flagged as possible contaminants or "
+            "organellar sequences."
+        ),
+        help="Calculate read depth of coverage for genome assembly",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_depth.add_argument_group("required arguments")
+    optional = parser_depth.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-i",
+        "--input",
+        "--infile",
+        required=True,
+        dest="input",
+        help="Input genome assembly FASTA (e.g. *.sorted.fasta)",
+    )
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+
+    optional.add_argument(
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        required=False,
+        help="Temporary directory to store datafiles and processes in",
+    )
+
+    optional.add_argument(
+        "-o",
+        "--out",
+        "--report",
+        type=str,
+        default="coverage_stats.txt",
+        dest="out",
+        help="Output coverage report file",
+    )
+
+    optional.add_argument(
+        "-l",
+        "--left",
+        required=False,
+        help="Left (Forward) Illumina reads FASTQ",
+    )
+
+    optional.add_argument(
+        "-r",
+        "--right",
+        required=False,
+        help="Right (Reverse) Illumina reads FASTQ",
+    )
+
+    optional.add_argument(
+        "-lr",
+        "--longreads",
+        required=False,
+        help="Long reads FASTQ (PacBio or ONT)",
+    )
+
+    optional.add_argument(
+        "--longread_type",
+        default="map-ont",
+        choices=["map-ont", "map-pb", "map-hifi"],
+        dest="longread_preset",
+        help="minimap2 preset for long reads",
+    )
+
+    optional.add_argument(
+        "--illumina_preset",
+        default="sr",
+        choices=["sr", "short"],
+        dest="illumina_preset",
+        help="minimap2 preset for Illumina reads",
+    )
+
+    optional.add_argument(
+        "--aligner",
+        default="minimap2",
+        choices=["minimap2", "bwa"],
+        help="Aligner to use for Illumina reads",
+    )
+
+    optional.add_argument(
+        "--min_contig_len",
+        type=int,
+        default=500,
+        help="Minimum contig length to include in depth outlier analysis",
+    )
+
+    optional.add_argument(
+        "--plot-format",
+        choices=["pdf", "svg", "png"],
+        default="pdf",
+        dest="plot_format",
+        help="Output format for coverage plots (requires matplotlib)",
+    )
+
+    optional.add_argument(
+        "--no-plot",
+        action="store_true",
+        dest="no_plot",
+        help="Disable coverage plot generation",
+    )
+
+    optional.add_argument(
+        "--quantize",
+        default="0:1:4:100:200:",
+        dest="quantize",
+        help="mosdepth quantize bin boundaries, colon-separated with trailing colon",
+    )
+
+    optional.add_argument(
+        "--quantize-labels",
+        default=None,
+        dest="quantize_labels",
+        metavar="LABELS",
+        help="Comma-separated labels for quantize bins "
+        "(default: NO_COVERAGE,LOW_COVERAGE,CALLABLE,HIGH_COVERAGE,VERY_HIGH_COVERAGE "
+        "for the default bins)",
+    )
+
+    menu_common_args(optional)
+
+    return parser_depth
+
+
+def pipeline_menu(subparsers):
+    """Add the pipeline subcommand parser."""
+    parser_pipeline = subparsers.add_parser(
+        "pipeline",
+        description="Run entire AAFTF pipeline automagically",
+        help="Run AAFTF pipeline",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_pipeline.add_argument_group("required arguments")
+    optional = parser_pipeline.add_argument_group("optional arguments")
+
+    required.add_argument(
+        "-l", "--left", type=str, required=True, help="left/forward reads of paired-end FASTQ or " + "single-end FASTQ."
+    )
+
+    required.add_argument(
+        "-o", "--out", type=str, required=True, dest="basename", help="Output basename, default to base name of --left reads"
+    )
+
+    required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or Phyla to keep matches, i.e. Ascomycota")
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+
+    optional.add_argument("--AAFTF_DB", type=str, required=False, help="Path to AAFTF resources, defaults to $AAFTF_DB")
+
+    optional.add_argument("--tmpdir", type=str, required=False, help="Assembler temporary dir")
+    optional.add_argument("--assembler_args", action="append", required=False, help="Additional SPAdes/Megahit arguments")
+    optional.add_argument(
+        "--method", type=str, required=False, default="spades", help="Assembly method: spades, dipspades, megahit"
+    )
+
+    optional.add_argument("-r", "--right", type=str, required=False, help="right/reverse reads of paired-end FASTQ.")
+
+    optional.add_argument(
+        "-m", "--memory", type=str, dest="memory", required=False, help="Memory (in GB) setting for SPAdes. Default is Auto"
+    )
+
+    optional.add_argument("-ml", "--minlen", type=int, default=75, required=False, help="Minimum read length after trimming")
+
+    optional.add_argument(
+        "-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads."
+    )
+
+    optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URLs to download and screen out initial reads.")
+
+    optional.add_argument("-it", "--iterations", type=int, default=5, help="Number of Pilon Polishing iterations to run")
+
+    optional.add_argument(
+        "-mc", "--mincontiglen", type=int, default=500, required=False, help="Minimum length of contigs to keep"
+    )
+
+    optional.add_argument("-w", "--workdir", type=str, help="temp directory")
+
+    optional.add_argument("--sourdb", required=False, help="SourMash LCA k-31 taxonomy database")
+
+    optional.add_argument("--mincovpct", default=5, type=int, help="Minimum percent of N50 coverage to remove")
+
+    menu_common_args(optional)
+
+    return parser_pipeline
+
+
+def check_dependencies_menu(subparsers):
+    """Add the check_dependencies subcommand parser."""
+    parser_check_deps = subparsers.add_parser(
+        "check_dependencies",
+        aliases=["check_deps", "deps"],
+        formatter_class=CustomHelpFormatter,
+        description="Check whether all external tool and Python package dependencies required by AAFTF are installed.",
+        help="Check that AAFTF dependencies are installed",
+    )
+    return parser_check_deps
+
+
+SUBCOMMAND_REGISTRARS = [
+    download_menu,
+    trim_menu,
+    mito_menu,
+    filter_menu,
+    assemble_menu,
+    vecscreen_menu,
+    fcs_screen_menu,
+    fcs_gx_purge_menu,
+    sourpurge_menu,
+    rmdup_menu,
+    polish_menu,
+    sort_menu,
+    assess_menu,
+    fix_tbl_menu,
+    depth_menu,
+    pipeline_menu,
+    check_dependencies_menu,
+]

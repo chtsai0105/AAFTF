@@ -1,5 +1,6 @@
 """Utility scripts for parsing fasta and downloading datasets."""
 
+import argparse as ap
 import datetime
 import errno
 import gzip
@@ -17,6 +18,35 @@ try:
     from urllib.request import urlopen
 except ImportError:
     from urllib2 import urlopen
+
+
+class CustomHelpFormatter(ap.HelpFormatter):
+    """Custom help formatter for argparse to enhance text wrapping and default value display.
+
+    This formatter adjusts the text wrapping for better readability and ensures that the default value of an argument is displayed
+    in the help message if not already present.
+    """
+
+    def _fill_text(self, text, width, indent):
+        """Format the class/function docstring with appropriate wrapping."""
+        text = [self._whitespace_matcher.sub(" ", paragraph.strip()) for paragraph in text.split("\n\n") if paragraph.strip()]
+        return "\n\n".join([textwrap.fill(line, width) for line in text])
+
+    def _split_lines(self, text, width):
+        """Enable multi-line display in argument help message."""
+        text = [self._whitespace_matcher.sub(" ", line.strip()) for line in text.split("\n") if line.strip()]
+        return [wrapped_line for line in text for wrapped_line in textwrap.wrap(line, width)]
+
+    def _get_help_string(self, action):
+        """Allow additional message after default parameter displayed."""
+        help = action.help
+        pattern = r"\(default: .+\)"
+        if re.search(pattern, action.help) is None:
+            if action.default not in [ap.SUPPRESS, None, False]:
+                defaulting_nargs = [ap.OPTIONAL, ap.ZERO_OR_MORE]
+                if action.option_strings or action.nargs in defaulting_nargs:
+                    help += " (default: %(default)s)"
+        return help
 
 
 def download(url, file_name):
