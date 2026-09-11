@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
@@ -15,7 +16,7 @@ from AAFTF.utility import GuessRL, RevComp, execute, getRAM, printCMD, softwrap,
 def orient_to_start(fasta_in, fasta_out, folder=".", start=False):
     """Reorient the MT assembly based on a starting gene (if found)."""
     # if not starting, then use cytochrome oxidase (cob)
-    startFile = os.path.join(folder, f"{uuid.uuid4()}.fasta")
+    startFile = str(Path(folder, f"{uuid.uuid4()}.fasta"))
     if not start:
         # generated as spoa consensus from select fungal cob genes
         # move this to a configurable file
@@ -55,8 +56,8 @@ def orient_to_start(fasta_in, fasta_out, folder=".", start=False):
             status(f"ERROR: unable to rotate because computed rotation offset {ref_start} is out of range for sequence of length {len(initial_seq)}\n")
             with open(fasta_out, "w") as outfile:
                 outfile.write(">{}\n{}\n".format("mt", softwrap(initial_seq)))
-            if os.path.isfile(startFile):
-                os.remove(startFile)
+            if Path(startFile).is_file():
+                Path(startFile).unlink()
             return
         rotated = initial_seq[ref_start:] + initial_seq[:ref_start]
         if ref_strand == "-":
@@ -73,8 +74,8 @@ def orient_to_start(fasta_in, fasta_out, folder=".", start=False):
             sys.stderr.write(f"{x}\n")
         with open(fasta_out, "w") as outfile:
             outfile.write(">{}\n{}\n".format("mt", softwrap(initial_seq)))
-    if os.path.isfile(startFile):
-        os.remove(startFile)
+    if Path(startFile).is_file():
+        Path(startFile).unlink()
 
 
 def run(
@@ -101,8 +102,8 @@ def run(
     unique_id = str(uuid.uuid4())[:8]
     if not workdir:
         workdir = "mito_" + unique_id
-    if not os.path.isdir(workdir):
-        os.makedirs(workdir)
+    if not Path(workdir).is_dir():
+        Path(workdir).mkdir(parents=True)
 
     # now estimate read lengths of FASTQ
     read_len = GuessRL(left)
@@ -110,17 +111,17 @@ def run(
     # check for seed sequence, otherwise write one
     if not seed:
         if not reference:
-            seedFasta = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "mito-seed.fasta"))
+            seedFasta = str(Path(Path(__file__).parent, "data", "mito-seed.fasta").resolve())
         else:
-            seedFasta = os.path.abspath(reference)
+            seedFasta = str(Path(reference).resolve())
     else:
-        seedFasta = os.path.abspath(seed)
+        seedFasta = str(Path(seed).resolve())
 
     # now write the novoplasty config file
-    defaultConfig = os.path.join(os.path.dirname(__file__), "data", "novoplasty-config.txt")
-    novoConfig = os.path.join(workdir, "novo-config.txt")
+    defaultConfig = str(Path(Path(__file__).parent, "data", "novoplasty-config.txt"))
+    novoConfig = str(Path(workdir, "novo-config.txt"))
     if reference:
-        refgenome = os.path.abspath(reference)
+        refgenome = str(Path(reference).resolve())
     else:
         refgenome = ""
     checkWords = ("<PROJECT>", "<MINLEN>", "<MAXLEN>", "<MAXMEM>", "<SEED>", "<READLEN>", "<FORWARD>", "<REVERSE>", "<REFERENCE>")
@@ -131,8 +132,8 @@ def run(
         str(int(getRAM() * 0.75)),  # maxRAM
         seedFasta,  # seed fasta seq
         str(read_len),  # read length
-        os.path.abspath(left),  # forward read
-        os.path.abspath(right),  # rev read
+        str(Path(left).resolve()),  # forward read
+        str(Path(right).resolve()),  # rev read
         refgenome,
     )  # ref genome file
     with open(novoConfig, "w") as outfile:
@@ -146,7 +147,7 @@ def run(
     status("De novo assembling mitochondrial genome using NOVOplasty")
     cmd = ["NOVOPlasty.pl", "-c", "novo-config.txt"]
     printCMD(cmd)
-    novolog = os.path.join(workdir, "novoplasty.log")
+    novolog = str(Path(workdir, "novoplasty.log"))
     with open(novolog, "w") as logfile:
         p1 = subprocess.Popen(cmd, cwd=workdir, stdout=logfile, stderr=logfile)
         p1.communicate()
@@ -156,14 +157,14 @@ def run(
     circular = False
     for f in os.listdir(workdir):
         if f.startswith("Circularized_assembly_"):
-            draftMito = os.path.join(workdir, f)
+            draftMito = str(Path(workdir, f))
             circular = True
             break
         if f.startswith("Contigs_1_"):
-            draftMito = os.path.join(workdir, f)
+            draftMito = str(Path(workdir, f))
             break
         if f.startswith("Uncircularized_assemblies_"):
-            draftMito = os.path.join(workdir, f)
+            draftMito = str(Path(workdir, f))
             break
     if circular:
         status("NOVOplasty assembled complete circular genome")

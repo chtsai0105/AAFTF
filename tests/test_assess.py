@@ -6,7 +6,7 @@ FASTA files.  No external tools are required.
 """
 
 import io
-import os
+from pathlib import Path
 
 import pytest
 
@@ -161,7 +161,7 @@ class TestAssessRun:
     def test_run_writes_report_file(self, assess_args):
         run(**vars(assess_args))
         report_path = assess_args.report
-        assert os.path.exists(report_path)
+        assert Path(report_path).exists()
         content = open(report_path).read()
         assert "CONTIG COUNT" in content
         assert "TOTAL LENGTH" in content

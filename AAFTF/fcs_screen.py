@@ -15,6 +15,7 @@ import shutil
 import sys
 import urllib.request
 import uuid
+from pathlib import Path
 from subprocess import DEVNULL, call
 
 from AAFTF.resources import FCSADAPTOR
@@ -43,7 +44,7 @@ def run(
         sys.exit(1)
 
     containerengine = container_engine
-    infilename = os.path.basename(os.path.realpath(infile))
+    infilename = Path(infile).resolve().name
     tax = "--euk"
     if prok:
         tax = "--prok"
@@ -52,17 +53,17 @@ def run(
         custom_workdir = 0
         workdir = "aaftf-fcsscreen_" + str(uuid.uuid4())[:8]
 
-    if not os.path.exists(workdir):
-        os.mkdir(workdir)
+    if not Path(workdir).exists():
+        Path(workdir).mkdir()
 
     fcsexe = fcs_script
     if fcsexe is None:
         fcsexe = shutil.which("run_fcsadaptor.sh")
     if fcsexe is None:
-        fcsexe = os.path.join(os.path.join(DB, "run_fcsadaptor.sh"))
+        fcsexe = str(Path(DB, "run_fcsadaptor.sh"))
         #  This will help download the fcs-adaptor shell script rather than re-implementing it here
-        if not os.path.exists(fcsexe):
-            url = os.path.join(FCSADAPTOR["EXEURL"] % (FCSADAPTOR["VERSION"]))
+        if not Path(fcsexe).exists():
+            url = FCSADAPTOR["EXEURL"] % (FCSADAPTOR["VERSION"])
             if debug:
                 status(f"url {url} download to {fcsexe}")
             urllib.request.urlretrieve(url, fcsexe)
@@ -71,9 +72,10 @@ def run(
     if containerengine == "singularity":
         # local SIF file: download once and cache under AAFTF_DB
         if image is None:
-            image = os.path.join(DB, FCSADAPTOR["SIFLOCAL"] % (FCSADAPTOR["VERSION"]))
-            if not os.path.exists(image):
-                url = os.path.join(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"])
+            image = str(Path(DB, FCSADAPTOR["SIFLOCAL"] % (FCSADAPTOR["VERSION"])))
+            if not Path(image).exists():
+                # SIFURL is a URL prefix, not a filesystem path — do not use pathlib here.
+                url = "/".join([FCSADAPTOR["SIFURL"].rstrip("/"), FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]])
                 if debug:
                     status(f"url {url} download to {image}")
                 urllib.request.urlretrieve(url, image)
@@ -99,12 +101,12 @@ def run(
     except NameError:
         print(f"error in calling executable {cmd}")
 
-    os.mkdir(os.path.join(workdir, "cleaned_sequences"))
-    cleanresult = os.path.join(workdir, "cleaned_sequences", infilename)
+    Path(workdir, "cleaned_sequences").mkdir()
+    cleanresult = str(Path(workdir, "cleaned_sequences", infilename))
     if debug:
         status(f"copy from: {cleanresult} -> {outfile}")
     os.rename(cleanresult, outfile)
-    fcsreport = os.path.join(workdir, "fcs_adaptor_report.txt")
+    fcsreport = str(Path(workdir, "fcs_adaptor_report.txt"))
     with open(fcsreport) as fh:
         status("FCS report:")
         for line in fh:

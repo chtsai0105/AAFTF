@@ -1,10 +1,10 @@
 """Run the fcs-gx tool to look for contaminants."""
 
-import os
 import shutil
 import subprocess
 import sys
 import uuid
+from pathlib import Path
 
 from Bio import SeqIO
 
@@ -28,15 +28,15 @@ def run(
     """Run NCBI fcs_gx routines to detect and remove contaminant contigs."""
     if not workdir:
         workdir = f"aaftf-fcsgx_{str(uuid.uuid4())[:8]}"
-    if not os.path.exists(workdir):
-        os.mkdir(workdir)
+    if not Path(workdir).exists():
+        Path(workdir).mkdir()
 
     # parse database locations
-    if not db or not os.path.isfile(f"{db}.gxi"):
+    if not db or not Path(f"{db}.gxi").is_file():
         status(f"{db}.gxi not found, needs to have setup the fcs_gx db - https://github.com/ncbi/fcs/wiki/FCS-GX")
         sys.exit(1)
 
-    numSeqs, assemblySize = fastastats(os.path.join(input))
+    numSeqs, assemblySize = fastastats(str(Path(input)))
     status(f"Assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
 
     # now filter for taxonomy with sourmash lca classify
@@ -57,17 +57,17 @@ def run(
     ]
     printCMD(fcsgx_compute)
     fcs_log = "fcs_gx.log"
-    with open(os.path.join(workdir, fcs_log), "w") as logfile:
+    with open(str(Path(workdir, fcs_log)), "w") as logfile:
         subprocess.run(fcsgx_compute, stderr=logfile)
 
-    fname = os.path.splitext(os.path.basename(input))[0]
+    fname = Path(input).stem
     # output tsv:
     # seq_id	start_pos	end_pos	seq_len	action	div	agg_cont_cov	top_tax_name
 
     Seq2Drop = {}
 
-    fcsgxTSV = os.path.join(workdir, f"{fname}.{taxid}.fcs_gx_report.txt")
-    if not os.path.isfile(fcsgxTSV):
+    fcsgxTSV = str(Path(workdir, f"{fname}.{taxid}.fcs_gx_report.txt"))
+    if not Path(fcsgxTSV).is_file():
         status(f"fcs_gx did not produce file {fcsgxTSV}")
         return
     with open(fcsgxTSV) as fcsgx_out:
@@ -97,11 +97,11 @@ def run(
         nextOut = f"{outfile}.rmdup.fasta"
 
     if checkfile(fcsgxTSV):
-        outbase = os.path.basename(outfile)
-        basedir = os.path.dirname(os.path.realpath(outfile))
+        outbase = Path(outfile).name
+        basedir = str(Path(outfile).resolve().parent)
         if "." in outbase:
             outbase = outbase.rsplit(".", 1)[0]
-        shutil.copy(fcsgxTSV, os.path.join(basedir, f"{outbase}.fcs_gx-taxonomy.tsv"))
+        shutil.copy(fcsgxTSV, str(Path(basedir, f"{outbase}.fcs_gx-taxonomy.tsv")))
 
     if not debug:
         SafeRemove(workdir)

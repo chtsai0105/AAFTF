@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from pathlib import Path
 
 from AAFTF.utility import fastastats, printCMD, status
 
@@ -41,9 +42,9 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, a
     # find reads -- use --left/right or look for cleaned in tmpdir
     forReads, revReads = (None,) * 2
     if left:
-        forReads = os.path.abspath(left)
+        forReads = str(Path(left).resolve())
     if right:
-        revReads = os.path.abspath(right)
+        revReads = str(Path(right).resolve())
     if not forReads:
         status("Unable to located FASTQ raw reads, provide --left")
         sys.exit(1)
@@ -58,7 +59,7 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, a
             runcmd.extend(["--s1", merged])
 
     # this basically overrides everything above and only runs --restart-from option
-    if os.path.isdir(workdir):
+    if Path(workdir).is_dir():
         runcmd = ["spades.py", "-o", workdir, "--threads", str(cpus), "--mem", memory, "--restart-from last"]
 
     # now run the spades job
@@ -73,14 +74,14 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, a
     if out:
         finalOut = out
     else:
-        prefix = os.basename(forReads)
+        prefix = Path(forReads).name
         m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
         if m:
             prefix = m.group(1)
         finalOut = prefix + ".spades.fasta"
 
-    if os.path.isfile(os.path.join(workdir, "scaffolds.fasta")):
-        shutil.copyfile(os.path.join(workdir, "scaffolds.fasta"), finalOut)
+    if Path(workdir, "scaffolds.fasta").is_file():
+        shutil.copyfile(str(Path(workdir, "scaffolds.fasta")), finalOut)
         status(f"Spades assembly finished: {finalOut}")
         numSeqs, assemblySize = fastastats(finalOut)
         status(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
@@ -111,9 +112,9 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
     # find reads -- use --left/right or look for cleaned in tmpdir
     forReads, revReads = (None,) * 2
     if left:
-        forReads = os.path.abspath(left)
+        forReads = str(Path(left).resolve())
     if right:
-        revReads = os.path.abspath(right)
+        revReads = str(Path(right).resolve())
     if not forReads:
         status("Unable to located FASTQ raw reads, provide --left")
         sys.exit(1)
@@ -126,7 +127,7 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
             runcmd.extend(["-s", merged])
 
     # this basically overrides everything above and only runs --restart-from option
-    if os.path.isdir(workdir):
+    if Path(workdir).is_dir():
         runcmd = ["dipspades.py", "-o", workdir, "--continue"]
 
     # now run the spades job
@@ -142,22 +143,22 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
     if out:
         finalOut = out
     else:
-        prefix = os.basename(forReads)
+        prefix = Path(forReads).name
         m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
         if m:
             prefix = m.group(1)
         finalOut = prefix + ".dipspades.fasta"
 
-    if os.path.isfile(os.path.join(workdir, "consensus_contigs.fasta")):
-        shutil.copyfile(os.path.join(workdir, "consensus_contigs.fasta"), finalOut)
-        shutil.copyfile(os.path.join(workdir, "dipspades", "paired_consensus_contigs.fasta"), prefix + ".dipspades_consensus_paired.fasta")
-        shutil.copyfile(os.path.join(workdir, "dipspades", "paired_consensus_contigs.fasta"), prefix + ".dipspades_consensus_unpaired.fasta")
+    if Path(workdir, "consensus_contigs.fasta").is_file():
+        shutil.copyfile(str(Path(workdir, "consensus_contigs.fasta")), finalOut)
+        shutil.copyfile(str(Path(workdir, "dipspades", "paired_consensus_contigs.fasta")), prefix + ".dipspades_consensus_paired.fasta")
+        shutil.copyfile(str(Path(workdir, "dipspades", "paired_consensus_contigs.fasta")), prefix + ".dipspades_consensus_unpaired.fasta")
         status(f"Dipspades assembly finished: {finalOut}")
         status("Dipspades assembly copied over: {:}".format(prefix + ".dipspades_consensus_unpaired.fasta"), prefix + ".dipspades_consensus_paired.fasta")
         numSeqs, assemblySize = fastastats(finalOut)
         status(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
     else:
-        status("Spades assembly output missing -- check Dipspades logfile in {:}.".format(os.path.join(workdir, "dipspades", "dipspades.log")))
+        status("Spades assembly output missing -- check Dipspades logfile in {:}.".format(str(Path(workdir, "dipspades", "dipspades.log"))))
 
     if not pipe:
         status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")
@@ -183,9 +184,9 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
     # find reads -- use --left/right or look for cleaned in tmpdir
     forReads, revReads = (None,) * 2
     if left:
-        forReads = os.path.abspath(left)
+        forReads = str(Path(left).resolve())
     if right:
-        revReads = os.path.abspath(right)
+        revReads = str(Path(right).resolve())
     if not forReads:
         status("Unable to located FASTQ raw reads, provide --left")
         sys.exit(1)
@@ -195,7 +196,7 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
     else:
         runcmd.extend(["-1", forReads, "-2", revReads])
 
-    if os.path.isdir(workdir):
+    if Path(workdir).is_dir():
         status(f"Cannot re-run with existing folder {workdir}")
 
     # now run the spades job
@@ -209,14 +210,14 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
     if out:
         finalOut = out
     else:
-        prefix = os.basename(forReads)
+        prefix = Path(forReads).name
         m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
         if m:
             prefix = m.group(1)
         finalOut = prefix + ".megahit.fasta"
 
-    if os.path.isfile(os.path.join(workdir, "final.contigs.fa")):
-        shutil.copyfile(os.path.join(workdir, "final.contigs.fa"), finalOut)
+    if Path(workdir, "final.contigs.fa").is_file():
+        shutil.copyfile(str(Path(workdir, "final.contigs.fa")), finalOut)
         status(f"Megahit assembly finished: {finalOut}")
         numSeqs, assemblySize = fastastats(finalOut)
         status(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
@@ -241,9 +242,9 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     # find reads -- use --left/right or look for cleaned in tmpdir
     forReads, revReads = (None,) * 2
     if left:
-        forReads = os.path.abspath(left)
+        forReads = str(Path(left).resolve())
     if right:
-        revReads = os.path.abspath(right)
+        revReads = str(Path(right).resolve())
     if not forReads:
         status("Unable to located FASTQ raw reads, provide --left")
         sys.exit(1)
@@ -262,7 +263,7 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
 
     # not supporting restarting a run
     # this basically overrides everything above and only runs --restart-from option
-    #    if os.path.isdir(workdir):
+    #    if Path(workdir).is_dir():
     #    runcmd = ['unicycler', '-o', workdir,
     #            '--threads', str(cpus),
     #            '--mem', memory,
@@ -280,14 +281,14 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     if out:
         finalOut = out
     else:
-        prefix = os.basename(forReads)
+        prefix = Path(forReads).name
         m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
         if m:
             prefix = m.group(1)
         finalOut = prefix + ".unicycler.fasta"
 
-    if os.path.isfile(os.path.join(workdir, "assembly.fasta")):
-        shutil.copyfile(os.path.join(workdir, "assembly.fasta"), finalOut)
+    if Path(workdir, "assembly.fasta").is_file():
+        shutil.copyfile(str(Path(workdir, "assembly.fasta")), finalOut)
         status(f"Unicycler assembly finished: {finalOut}")
         numSeqs, assemblySize = fastastats(finalOut)
         status(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")

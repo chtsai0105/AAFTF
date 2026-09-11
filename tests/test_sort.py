@@ -3,8 +3,8 @@
 sort.run() is pure Python (BioPython only) — no external tools required.
 """
 
-import os
 from argparse import Namespace
+from pathlib import Path
 
 import pytest
 from Bio.SeqIO.FastaIO import SimpleFastaParser
@@ -43,7 +43,7 @@ def _make_args(tmp_path, fasta_file, minlen=0, name="scaffold"):
 class TestSortOrder:
     def test_output_file_created(self, sort_args):
         run(**vars(sort_args))
-        assert os.path.exists(sort_args.out)
+        assert Path(sort_args.out).exists()
 
     def test_sorted_longest_first(self, sort_args):
         run(**vars(sort_args))

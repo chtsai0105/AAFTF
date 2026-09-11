@@ -7,7 +7,7 @@ BED reading.  No external tools (minimap2, samtools, mosdepth) are required.
 
 import gzip
 import math
-import os
+from pathlib import Path
 
 import pytest
 
@@ -236,28 +236,28 @@ class TestGetPlotPrefix:
     def test_strips_fasta_extension(self, tmp_path):
         report = str(tmp_path / "coverage_stats.txt")
         prefix = _get_plot_prefix("genome.fasta", report)
-        assert os.path.basename(prefix) == "genome"
+        assert Path(prefix).name == "genome"
 
     def test_strips_fa_extension(self, tmp_path):
         report = str(tmp_path / "coverage_stats.txt")
         prefix = _get_plot_prefix("assembly.fa", report)
-        assert os.path.basename(prefix) == "assembly"
+        assert Path(prefix).name == "assembly"
 
     def test_strips_fasta_gz_extension(self, tmp_path):
         report = str(tmp_path / "coverage_stats.txt")
         prefix = _get_plot_prefix("genome.fasta.gz", report)
-        assert os.path.basename(prefix) == "genome"
+        assert Path(prefix).name == "genome"
 
     def test_prefix_dir_matches_report_dir(self, tmp_path):
         report = str(tmp_path / "results" / "coverage_stats.txt")
-        os.makedirs(str(tmp_path / "results"), exist_ok=True)
+        Path(tmp_path / "results").mkdir(parents=True, exist_ok=True)
         prefix = _get_plot_prefix("genome.fasta", report)
-        assert os.path.dirname(prefix) == str(tmp_path / "results")
+        assert Path(prefix).parent == tmp_path / "results"
 
     def test_dotted_name_preserves_stem(self, tmp_path):
         report = str(tmp_path / "coverage_stats.txt")
         prefix = _get_plot_prefix("strain.final.sorted.fasta", report)
-        assert os.path.basename(prefix) == "strain.final.sorted"
+        assert Path(prefix).name == "strain.final.sorted"
 
 
 # ---------------------------------------------------------------------------

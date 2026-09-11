@@ -8,6 +8,7 @@ import operator
 import os
 import sys
 import uuid
+from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
@@ -30,8 +31,8 @@ def run(
     """Run routines to identify and remove duplicate contigs."""
 
     def generateFastas(fasta, pref, query, reference):
-        qfile = os.path.join(workdir, pref + "query.fasta")
-        rfile = os.path.join(workdir, pref + "reference.fasta")
+        qfile = str(Path(workdir, pref + "query.fasta"))
+        rfile = str(Path(workdir, pref + "reference.fasta"))
         with open(qfile, "w") as qout:
             with open(rfile, "w") as rout:
                 with open(fasta) as infile:
@@ -64,8 +65,8 @@ def run(
     if not workdir:
         custom_workdir = 0
         workdir = "aaftf-rmdup_" + str(uuid.uuid4())[:8]
-    if not os.path.exists(workdir):
-        os.mkdir(workdir)
+    if not Path(workdir).exists():
+        Path(workdir).mkdir()
 
     if debug:
         status(

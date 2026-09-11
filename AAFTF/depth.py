@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from pathlib import Path
 
 try:
     import matplotlib
@@ -147,10 +148,10 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
 
     # --- Illumina reads ---
     if reads_left:
-        bam_illumina = os.path.join(workdir, "illumina.sorted.bam")
+        bam_illumina = str(Path(workdir, "illumina.sorted.bam"))
         if aligner == "bwa":
             # Copy genome to workdir so BWA index files stay contained
-            genome_local = os.path.join(workdir, os.path.basename(genome))
+            genome_local = str(Path(workdir, Path(genome).name))
             shutil.copyfile(genome, genome_local)
             bwa_index_cmd = ["bwa", "index", genome_local]
             printCMD(bwa_index_cmd)
@@ -172,7 +173,7 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
 
     # --- Long reads ---
     if longreads:
-        bam_longreads = os.path.join(workdir, "longreads.sorted.bam")
+        bam_longreads = str(Path(workdir, "longreads.sorted.bam"))
         map_cmd = ["minimap2", "-ax", longread_preset, "-t", str(cpus), genome, longreads]
         _map_and_sort(map_cmd, bam_longreads)
         subprocess.run(["samtools", "index", bam_longreads], stderr=stderr_dest)
@@ -180,7 +181,7 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
 
     # --- Combine ---
     if bam_illumina and bam_longreads:
-        bam_combined = os.path.join(workdir, "combined.sorted.bam")
+        bam_combined = str(Path(workdir, "combined.sorted.bam"))
         merge_cmd = [
             "samtools",
             "merge",
@@ -232,14 +233,14 @@ def run_mosdepth(bam_file, workdir, cpus, prefix="coverage", debug=False):
     Returns:
         Path to the mosdepth summary text file.
     """
-    mosdepth_prefix = os.path.join(os.path.abspath(workdir), prefix)
+    mosdepth_prefix = str(Path(Path(workdir).resolve(), prefix))
     cmd = [
         "mosdepth",
         "-n",
         "--threads",
         str(cpus),
         mosdepth_prefix,
-        os.path.abspath(bam_file),
+        str(Path(bam_file).resolve()),
     ]
     printCMD(cmd)
     subprocess.run(cmd, stderr=None if debug else subprocess.DEVNULL)
@@ -290,7 +291,7 @@ def _coverage_breadth_from_dist(dist_file):
     Returns:
         Float fraction (0–1) of bases with depth >= 1, or None if unavailable.
     """
-    if not os.path.exists(dist_file):
+    if not Path(dist_file).exists():
         return None
     try:
         with open(dist_file) as fh:
@@ -360,7 +361,7 @@ def run_mosdepth_quantized(bam_file, workdir, cpus, quantize_str, env_dict, pref
     Returns:
         Tuple (summary_file, quantized_bed) — paths to the two output files.
     """
-    mosdepth_prefix = os.path.join(os.path.abspath(workdir), prefix)
+    mosdepth_prefix = str(Path(Path(workdir).resolve(), prefix))
     run_env = os.environ.copy()
     run_env.update(env_dict)
     cmd = [
@@ -371,7 +372,7 @@ def run_mosdepth_quantized(bam_file, workdir, cpus, quantize_str, env_dict, pref
         "--quantize",
         quantize_str,
         mosdepth_prefix,
-        os.path.abspath(bam_file),
+        str(Path(bam_file).resolve()),
     ]
     printCMD(cmd)
     subprocess.run(cmd, stderr=None if debug else subprocess.DEVNULL, env=run_env)
@@ -420,15 +421,15 @@ def _get_plot_prefix(input_file, report_file):
     Returns:
         String path prefix (no extension).
     """
-    basename = os.path.basename(input_file)
+    basename = Path(input_file).name
     for ext in (".fasta.gz", ".fa.gz", ".fasta", ".fa"):
         if basename.endswith(ext):
             basename = basename[: -len(ext)]
             break
     else:
-        basename = os.path.splitext(basename)[0]
-    report_dir = os.path.dirname(os.path.abspath(report_file))
-    return os.path.join(report_dir, basename)
+        basename = Path(basename).stem
+    report_dir = str(Path(report_file).resolve().parent)
+    return str(Path(report_dir, basename))
 
 
 def _cov_colours_for_labels(labels):
@@ -706,10 +707,10 @@ def run(
         status(f"ERROR: assembly file not found or empty: {input}")
         sys.exit(1)
 
-    genome = os.path.abspath(input)
-    reads_left = os.path.abspath(left) if left else None
-    reads_right = os.path.abspath(right) if right else None
-    longreads = os.path.abspath(longreads) if longreads else None
+    genome = str(Path(input).resolve())
+    reads_left = str(Path(left).resolve()) if left else None
+    reads_right = str(Path(right).resolve()) if right else None
+    longreads = str(Path(longreads).resolve()) if longreads else None
 
     for label, fpath in [("--left", reads_left), ("--right", reads_right), ("--longreads", longreads)]:
         if fpath and not checkfile(fpath):
@@ -743,8 +744,8 @@ def run(
     custom_workdir = bool(workdir)
     if not workdir:
         workdir = f"aaftf-depth_{str(uuid.uuid4())[:8]}"
-    workdir = os.path.abspath(workdir)
-    if not os.path.exists(workdir):
+    workdir = str(Path(workdir).resolve())
+    if not Path(workdir).exists():
         os.mkdir(workdir)
 
     report_file = out
@@ -755,14 +756,14 @@ def run(
     status("Counting input reads...")
     illumina_counts = {}
     if reads_left:
-        status(f"  Counting reads in {os.path.basename(reads_left)}")
+        status(f"  Counting reads in {Path(reads_left).name}")
         illumina_counts["left"] = count_fastq_reads(reads_left)
     if reads_right:
-        status(f"  Counting reads in {os.path.basename(reads_right)}")
+        status(f"  Counting reads in {Path(reads_right).name}")
         illumina_counts["right"] = count_fastq_reads(reads_right)
     lr_count = 0
     if longreads:
-        status(f"  Counting reads in {os.path.basename(longreads)}")
+        status(f"  Counting reads in {Path(longreads).name}")
         lr_count = count_fastq_reads(longreads)
 
     # ------------------------------------------------------------------
@@ -782,7 +783,7 @@ def run(
         debug,
     )
 
-    if not bam_combined or not os.path.exists(bam_combined):
+    if not bam_combined or not Path(bam_combined).exists():
         status("ERROR: mapping produced no BAM file")
         sys.exit(1)
 
@@ -819,7 +820,7 @@ def run(
             debug=debug,
         )
 
-    if not os.path.exists(summary_file):
+    if not Path(summary_file).exists():
         status(f"ERROR: mosdepth summary not produced: {summary_file}")
         sys.exit(1)
 
@@ -932,7 +933,7 @@ def run(
     # ------------------------------------------------------------------
     # Coverage plots
     # ------------------------------------------------------------------
-    if quantized_bed and os.path.exists(quantized_bed):
+    if quantized_bed and Path(quantized_bed).exists():
         status("Reading quantized coverage BED...")
         contig_data = _read_quantized_bed(quantized_bed)
         plot_prefix = _get_plot_prefix(input, out)

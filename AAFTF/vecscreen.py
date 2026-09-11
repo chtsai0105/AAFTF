@@ -16,6 +16,7 @@ import os
 import shutil
 import urllib.request
 import uuid
+from pathlib import Path
 from subprocess import DEVNULL, call
 
 # biopython needed
@@ -194,8 +195,8 @@ def make_blastdb(type, file, name):
         idxfile += ".nin"
     else:
         idxfile += ".pin"
-    idxexists = os.path.exists(idxfile)
-    if not idxexists or os.path.getctime(idxfile) < os.path.getctime(file):
+    idxexists = Path(idxfile).exists()
+    if not idxexists or Path(idxfile).stat().st_ctime < Path(file).stat().st_ctime:
         cmd = ["makeblastdb", "-dbtype", type, "-in", file, "-out", name]
         printCMD(cmd)
         call(cmd, stdout=DEVNULL, stderr=DEVNULL)
@@ -217,8 +218,8 @@ def run(
     """Runs vectorscreening via BLASTN against a vectorDB."""
     if not workdir:
         workdir = "aaftf-vecscreen_" + str(uuid.uuid4())[:8]
-    if not os.path.exists(workdir):
-        os.mkdir(workdir)
+    if not Path(workdir).exists():
+        Path(workdir).mkdir()
 
     # parse database locations
     DB = None
@@ -239,8 +240,8 @@ def run(
         percentid_cutoff = BlastPercent_ID_ContamMatch
 
     infile = infile
-    outfile = os.path.basename(outfile)
-    outdir = os.path.dirname(outfile)
+    outfile = Path(outfile).name
+    outdir = str(Path(outfile).parent)
     if ".f" in outfile:
         prefix = outfile.rsplit(".f", 1)[0]
         print("prefix is ", prefix)
@@ -250,7 +251,7 @@ def run(
     if not outfile:
         outfile = f"{prefix}.vecscreen.fasta"
 
-    outfile_vec = os.path.join(workdir, f"{prefix}.tmp_vecscreen.fasta")
+    outfile_vec = str(Path(workdir, f"{prefix}.tmp_vecscreen.fasta"))
 
     # Common Euk/Prot contaminats for blastable DB later on
     status("Building BLAST databases for contamination screen.")
@@ -258,16 +259,16 @@ def run(
     for d in DB_Links:
         if d.startswith("sourmash"):
             continue
-        outfile = os.path.join(workdir, f"{d}.fasta")
+        outfile = str(Path(workdir, f"{d}.fasta"))
         with open(outfile, "wb") as outfa:
             for url in DB_Links[d]:
-                dbname = os.path.basename(str(url))
+                dbname = Path(str(url)).name
                 # logger.debug("testing for url=%s dbname=%s"%(url,dbname))
-                if DB and os.path.exists(os.path.join(DB, dbname)):
-                    file = os.path.join(DB, dbname)
+                if DB and Path(DB, dbname).exists():
+                    file = str(Path(DB, dbname))
                 else:
-                    file = os.path.join(workdir, dbname)
-                if not os.path.exists(file):
+                    file = str(Path(workdir, dbname))
+                if not Path(file).exists():
                     urllib.request.urlretrieve(url, file)
                 if file.endswith(".gz"):
                     with gzip.open(file, "rb") as ingz:
@@ -275,7 +276,7 @@ def run(
                 else:
                     with open(file, "rb") as infa:
                         shutil.copyfileobj(infa, outfa)
-        make_blastdb("nucl", outfile, os.path.join(workdir, d))
+        make_blastdb("nucl", outfile, str(Path(workdir, d)))
 
     contigs_to_remove = {}
     regions_to_trim = {}
@@ -284,8 +285,8 @@ def run(
     # sstart send evalue bitscore
     for contam in ["CONTAM_EUKS", "CONTAM_PROKS"]:
         status(f"{contam} Contamination Screen")
-        blastreport = os.path.join(workdir, f"{contam}.{prefix}.blastn")
-        blastnargs = ["blastn", "-query", infile, "-db", os.path.join(workdir, contam), "-num_threads", str(cpus), "-dust", "yes", "-soft_masking", "true", "-perc_identity", percentid_cutoff, "-lcase_masking", "-outfmt", "6", "-out", blastreport]
+        blastreport = str(Path(workdir, f"{contam}.{prefix}.blastn"))
+        blastnargs = ["blastn", "-query", infile, "-db", str(Path(workdir, contam)), "-num_threads", str(cpus), "-dust", "yes", "-soft_masking", "true", "-perc_identity", percentid_cutoff, "-lcase_masking", "-outfmt", "6", "-out", blastreport]
         printCMD(blastnargs)
         call(blastnargs)
 
@@ -300,7 +301,7 @@ def run(
                         regions_to_trim[row[0]].append((start, end, contam, row[1], float(row[2])))
         status(f"{contam} screening finished")
 
-    eukCleaned = os.path.join(workdir, f"{prefix}.euk-prot_cleaned.fasta")
+    eukCleaned = str(Path(workdir, f"{prefix}.euk-prot_cleaned.fasta"))
     if len(regions_to_trim) > 0:
         with open(eukCleaned, "w") as cleanout:
             with open(infile) as fastain:
@@ -328,8 +329,8 @@ def run(
     # MITO screen
     status("Mitochondria Contamination Screen")
     mitoHits = []
-    blastreport = os.path.join(workdir, "{}.{}.blastn".format("MITO", prefix))
-    blastnargs = ["blastn", "-query", eukCleaned, "-db", os.path.join(workdir, "MITO"), "-num_threads", str(cpus), "-dust", "yes", "-soft_masking", "true", "-perc_identity", BlastPercent_ID_MitoMatch, "-lcase_masking", "-outfmt", "6", "-out", blastreport]
+    blastreport = str(Path(workdir, "{}.{}.blastn".format("MITO", prefix)))
+    blastnargs = ["blastn", "-query", eukCleaned, "-db", str(Path(workdir, "MITO")), "-num_threads", str(cpus), "-dust", "yes", "-soft_masking", "true", "-perc_identity", BlastPercent_ID_MitoMatch, "-lcase_masking", "-outfmt", "6", "-out", blastreport]
     printCMD(blastnargs)
     call(blastnargs)
     with open(blastreport) as report:
@@ -346,8 +347,8 @@ def run(
     count = 1
     while count > 0:
         filepref = f"{prefix}.r{rnd}"
-        report = os.path.join(workdir, f"{filepref}.vecscreen.tab")
-        if not os.path.exists(report):
+        report = str(Path(workdir, f"{filepref}.vecscreen.tab"))
+        if not Path(report).exists():
             cmd = [
                 "blastn",
                 "-task",
@@ -369,7 +370,7 @@ def run(
                 "-searchsp",
                 "1750000000000",
                 "-db",
-                os.path.join(workdir, "UniVec"),
+                str(Path(workdir, "UniVec")),
                 "-outfmt",
                 ("6 qaccver saccver pident length mismatch " + "gapopen qstart qend sstart send evalue " + "bitscore score qlen"),
                 "-num_threads",
@@ -384,7 +385,7 @@ def run(
         # this needs to know/return the new fasta file?
         status(f"Parsing VecScreen round {rnd + 1}: {filepref} for {report}")
 
-        (count, cleanfile) = parse_clean_blastn(eukCleaned, os.path.join(workdir, filepref), report, stringency, contigs_to_remove)
+        (count, cleanfile) = parse_clean_blastn(eukCleaned, str(Path(workdir, filepref)), report, stringency, contigs_to_remove)
         status(f"count is {count} cleanfile is {cleanfile}")
         if count == 0:  # if there are no vector matches < than the pid cutoff
             status(f"copying {eukCleaned} to {outfile_vec}")
@@ -401,7 +402,7 @@ def run(
     # .fasta/fsa/fna and add mito on it I suppose, but assumes
     # a bit about the naming structure
 
-    mitochondria = os.path.join(outdir, prefix + ".mitochondria.fasta")
+    mitochondria = str(Path(outdir, prefix + ".mitochondria.fasta"))
     with open(outfile, "w") as oh, open(mitochondria, "w") as mh:
         for record in SeqIO.parse(outfile_vec, "fasta"):
             if record.id not in contigs_to_remove:

@@ -11,6 +11,7 @@ import os
 import shutil
 import sys
 import urllib.request
+from pathlib import Path
 
 from AAFTF.resources import FCSADAPTOR, Contaminant_Accessions, DB_Links
 from AAFTF.utility import SafeRemove, status
@@ -52,12 +53,12 @@ def _download(url, dest, force=False):
     Returns:
         The absolute path to the downloaded file.
     """
-    if os.path.exists(dest) and not force:
+    if Path(dest).exists() and not force:
         status(f"  Already present: {dest}")
         return dest
 
-    status(f"  Downloading {os.path.basename(dest)} ...")
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    status(f"  Downloading {Path(dest).name} ...")
+    Path(dest).parent.mkdir(parents=True, exist_ok=True)
 
     tmp = dest + ".tmp"
     try:
@@ -71,7 +72,7 @@ def _download(url, dest, force=False):
         os.rename(tmp, dest)
     except Exception as e:
         status(f"  ERROR downloading {url}: {e}")
-        if os.path.exists(tmp):
+        if Path(tmp).exists():
             SafeRemove(tmp)
         raise
 
@@ -103,8 +104,8 @@ def _download_db_links(db_dir, keys=None, force=False):
                 filename = url_or_meta["filename"]
             else:
                 url = url_or_meta
-                filename = os.path.basename(url)
-            dest = os.path.join(db_dir, filename)
+                filename = Path(url).name
+            dest = str(Path(db_dir, filename))
             _download(url, dest, force=force)
 
 
@@ -119,8 +120,8 @@ def _download_contaminants(db_dir, force=False):
     for name, urls in Contaminant_Accessions.items():
         status(f"  {name} ...")
         for url in urls:
-            filename = os.path.basename(url)
-            dest = os.path.join(db_dir, filename)
+            filename = Path(url).name
+            dest = str(Path(db_dir, filename))
             _download(url, dest, force=force)
 
 
@@ -142,14 +143,14 @@ def _download_sourmash(db_dir, sourdb_type="gbk", force=False):
         indices = list(type_map.values())
     else:
         if sourdb_type not in type_map:
-            status(f"  ERROR: unknown sourdb_type '{sourdb_type}'. Choose from {list(type_map.keys()) + ['all']}")
+            status(f"  ERROR: unknown sourdb_type '{sourdb_type}'. " f"Choose from {list(type_map.keys()) + ['all']}")
             return
         indices = [type_map[sourdb_type]]
 
     for idx in indices:
         status(f"Downloading sourmash database ({idx}) ...")
         for entry in DB_Links[idx]:
-            dest = os.path.join(db_dir, entry["filename"])
+            dest = str(Path(db_dir, entry["filename"]))
             _download(entry["url"], dest, force=force)
 
 
@@ -164,8 +165,8 @@ def _download_fcs(db_dir, force=False):
 
     # Wrapper script
     script_url = FCSADAPTOR["EXEURL"] % FCSADAPTOR["VERSION"]
-    script_dest = os.path.join(db_dir, "run_fcsadaptor.sh")
-    if os.path.exists(script_dest) and not force:
+    script_dest = str(Path(db_dir, "run_fcsadaptor.sh"))
+    if Path(script_dest).exists() and not force:
         status(f"  Already present: {script_dest}")
     else:
         _download(script_url, script_dest, force=force)
@@ -173,11 +174,11 @@ def _download_fcs(db_dir, force=False):
 
     # Singularity image
     image_name = FCSADAPTOR["SIFLOCAL"] % FCSADAPTOR["VERSION"]
-    image_dest = os.path.join(db_dir, image_name)
-    if os.path.exists(image_dest) and not force:
+    image_dest = str(Path(db_dir, image_name))
+    if Path(image_dest).exists() and not force:
         status(f"  Already present: {image_dest}")
     else:
-        image_url = os.path.join(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"])
+        image_url = str(Path(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]))
         _download(image_url, image_dest, force=force)
 
 
@@ -194,17 +195,11 @@ def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_f
     elif "AAFTF_DB" in os.environ:
         db_dir = os.environ["AAFTF_DB"]
     else:
-        status(
-            "ERROR: No database directory specified.\n"
-            "  Set the AAFTF_DB environment variable or pass --AAFTF_DB.\n"
-            "  Example:\n"
-            "    export AAFTF_DB=/path/to/aaftf_db\n"
-            "    AAFTF download"
-        )
+        status("ERROR: No database directory specified.\n" "  Set the AAFTF_DB environment variable or pass --AAFTF_DB.\n" "  Example:\n" "    export AAFTF_DB=/path/to/aaftf_db\n" "    AAFTF download")
         sys.exit(1)
 
-    db_dir = os.path.abspath(db_dir)
-    os.makedirs(db_dir, exist_ok=True)
+    db_dir = str(Path(db_dir).resolve())
+    Path(db_dir).mkdir(parents=True, exist_ok=True)
     status(f"AAFTF database directory: {db_dir}")
 
     errors = []
@@ -238,7 +233,7 @@ def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_f
         status("\nSome downloads failed:")
         for err in errors:
             status(f"  - {err}")
-        status("\nYou can re-run 'AAFTF download' later; already-downloaded files will be skipped unless you pass --force.")
+        status("\nYou can re-run 'AAFTF download' later; already-downloaded " "files will be skipped unless you pass --force.")
         sys.exit(1)
 
-    status(f"Setup complete. Future AAFTF runs will use cached files from {db_dir}")
+    status("Setup complete. Future AAFTF runs will use cached files from " f"{db_dir}")

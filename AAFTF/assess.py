@@ -5,8 +5,8 @@ contig statistics.
 """
 
 import gzip
-import os
 import re
+from pathlib import Path
 
 from Bio import SeqIO
 
@@ -141,7 +141,7 @@ def run(input, report=None, telomere_monomer="TAA[C]+", telomere_n_repeat=2, tel
 
     This function will also attempt to find the telomere repeats and count these.
     """
-    if not os.path.exists(input):
+    if not Path(input).exists():
         status(f"Inputfile {input} was not readable, check parameters")
 
     output_handle = None

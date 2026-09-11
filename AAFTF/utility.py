@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import textwrap
+from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.SeqIO.QualityIO import FastqGeneralIterator
@@ -107,13 +108,13 @@ def checkfile(input):
         st = os.stat(filename)
         return st.st_size
 
-    if os.path.isfile(input):
+    if Path(input).is_file():
         filesize = _getSize(input)
         if int(filesize) < 1:
             return False
         else:
             return True
-    elif os.path.islink(input):
+    elif Path(input).is_symlink():
         return True
     else:
         return False
@@ -144,8 +145,8 @@ def getRAM():
 def which_path(file_name):
     """List full path for a file."""
     for path in os.environ["PATH"].split(os.pathsep):
-        full_path = os.path.join(path, file_name)
-        if os.path.exists(full_path) and os.access(full_path, os.X_OK):
+        full_path = str(Path(path, file_name))
+        if Path(full_path).exists() and os.access(full_path, os.X_OK):
             return full_path
     return None
 
@@ -369,10 +370,10 @@ def Fzip_inplace(input, cpus):
 
 def SafeRemove(input):
     """Test and remove a folder or file."""
-    if os.path.isdir(input):
+    if Path(input).is_dir():
         shutil.rmtree(input)
-    elif os.path.isfile(input):
-        os.remove(input)
+    elif Path(input).is_file():
+        Path(input).unlink()
     else:
         return
 
@@ -382,16 +383,16 @@ def which(program):
     import os
 
     def is_exe(fpath):
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+        return Path(fpath).is_file() and os.access(fpath, os.X_OK)
 
-    fpath, fname = os.path.split(program)
-    if fpath:
+    has_dir = os.sep in program or (os.altsep and os.altsep in program)
+    if has_dir:
         if is_exe(program):
             return program
     else:
         for path in os.environ["PATH"].split(os.pathsep):
             path = path.strip('"')
-            exe_file = os.path.join(path, program)
+            exe_file = str(Path(path, program))
             if is_exe(exe_file):
                 return exe_file
     return None

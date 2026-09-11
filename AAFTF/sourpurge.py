@@ -6,6 +6,7 @@ import subprocess
 import sys
 import urllib
 import uuid
+from pathlib import Path
 
 from Bio import SeqIO
 from packaging.version import Version
@@ -38,8 +39,8 @@ def run(
     """Run the sourpurge routines to detect and remove contaminant contigs."""
     if not workdir:
         workdir = "aaftf-sourpurge_" + str(uuid.uuid4())[:8]
-    if not os.path.exists(workdir):
-        os.mkdir(workdir)
+    if not Path(workdir).exists():
+        Path(workdir).mkdir()
 
     bamthreads = 4
     if cpus < 4:
@@ -48,9 +49,9 @@ def run(
     # find reads
     forReads, revReads = (None,) * 2
     if left:
-        forReads = os.path.abspath(left)
+        forReads = str(Path(left).resolve())
     if right:
-        revReads = os.path.abspath(right)
+        revReads = str(Path(right).resolve())
     if not forReads:
         status("Unable to located FASTQ raw reads, low coverage will be skipped. Provide -l,--left (and if paired -r,--right) to enable low coverage filtering.")
         # sys.exit(1)
@@ -80,30 +81,30 @@ def run(
                 status(f"$AAFTF_DB/{dbfile} not found, pass --sourdb")
                 sys.exit(1)
         AAFTF_DB = DB
-        SOUR = os.path.join(DB, dbfile)
-        if not os.path.isfile(SOUR):
+        SOUR = str(Path(DB, dbfile))
+        if not Path(SOUR).is_file():
             try:
                 status(f"{SOUR} sourmash database not found, downloading from {dburl} and renaming to {AAFTF_DB}/{dbfile}")
                 urllib.request.urlretrieve(dburl, SOUR)
             except urllib.error.HTTPError as error:
                 status(f"Error downloading from {dburl}: {error}")
                 sys.exit(1)
-        if not os.path.isfile(SOUR):
+        if not Path(SOUR).is_file():
             status(f"{SOUR} sourmash database download of {dburl} failed. Manually download and rename to {AAFTF_DB}/{dbfile}")
             sys.exit(1)
     else:
-        SOUR = os.path.abspath(sourdb)
+        SOUR = str(Path(sourdb).resolve())
 
     # hard coded tmpfile
     assembly_working = "assembly.fasta"
     blobBAM = "remapped.bam"
-    shutil.copyfile(input, os.path.join(workdir, assembly_working))
-    numSeqs, assemblySize = fastastats(os.path.join(workdir, assembly_working))
+    shutil.copyfile(input, str(Path(workdir, assembly_working)))
+    numSeqs, assemblySize = fastastats(str(Path(workdir, assembly_working)))
     status(f"Assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
 
     # now filter for taxonomy with sourmash lca classify
     status("Running SourMash to get taxonomy classification for each contig")
-    sour_sketch = os.path.basename(assembly_working) + ".sig"
+    sour_sketch = Path(assembly_working).name + ".sig"
 
     sour_compute = ["sourmash", "compute", "-k", kmer, "--scaled=1000", "--singleton", assembly_working]
     printCMD(sour_compute)
@@ -113,7 +114,7 @@ def run(
     # output csv: ID,status,superkingdom,phylum,class,order,family,genus,species,strain
     Taxonomy = {}
     UniqueTax = []
-    sourmashTSV = os.path.join(workdir, "sourmash.csv")
+    sourmashTSV = str(Path(workdir, "sourmash.csv"))
     with open(sourmashTSV, "w") as sour_out:
         for line in execute(sour_classify, workdir):
             sour_out.write(line)
@@ -144,9 +145,9 @@ def run(
 
     # drop contigs from taxonomy before calculating coverage
     status(f"Dropping {len(Tax2Drop)} contigs from taxonomy screen")
-    sourTax = os.path.join(workdir, "sourmashed-tax-screen.fasta")
+    sourTax = str(Path(workdir, "sourmashed-tax-screen.fasta"))
     with open(sourTax, "w") as sourtax_out:
-        with open(os.path.join(workdir, assembly_working)) as infile:
+        with open(str(Path(workdir, assembly_working))) as infile:
             for record in SeqIO.parse(infile, "fasta"):
                 if record.id not in Tax2Drop:
                     SeqIO.write(record, sourtax_out, "fasta")
@@ -155,9 +156,9 @@ def run(
     Contigs2Drop = []  # this will be empty if no reads given to gather by coverage
     if forReads:
         # check if BAM present, if so skip running
-        if not os.path.isfile(os.path.join(workdir, blobBAM)):
+        if not Path(workdir, blobBAM).is_file():
             # index
-            bwa_index = ["bwa", "index", os.path.basename(sourTax)]
+            bwa_index = ["bwa", "index", Path(sourTax).name]
             status("Building BWA index")
             printCMD(bwa_index)
             subprocess.run(bwa_index, cwd=workdir, stderr=subprocess.DEVNULL)
@@ -167,7 +168,7 @@ def run(
                 "mem",
                 "-t",
                 str(cpus),
-                os.path.basename(sourTax),  # assembly index base
+                Path(sourTax).name,  # assembly index base
                 forReads,
             ]
             if revReads:
@@ -179,25 +180,25 @@ def run(
             p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             if get_samtools_version() >= Version("1.3"):
                 # Modern samtools sort reads SAM directly from stdin
-                sort_cmd = samtools_sort_cmd("-", os.path.join(workdir, blobBAM), bamthreads)
+                sort_cmd = samtools_sort_cmd("-", str(Path(workdir, blobBAM)), bamthreads)
                 printCMD(sort_cmd)
                 p2 = subprocess.Popen(sort_cmd, stdin=p1.stdout, stderr=subprocess.DEVNULL)
                 p1.stdout.close()
                 p2.communicate()
             else:
                 # Older samtools: convert SAM→BAM first, then sort
-                unsortBAM = os.path.join(workdir, "unsorted.bam")
+                unsortBAM = str(Path(workdir, "unsorted.bam"))
                 p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsortBAM, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
                 p1.stdout.close()
                 p2.communicate()
-                subprocess.run(samtools_sort_cmd(unsortBAM, os.path.join(workdir, blobBAM), bamthreads), stderr=subprocess.DEVNULL)
+                subprocess.run(samtools_sort_cmd(unsortBAM, str(Path(workdir, blobBAM)), bamthreads), stderr=subprocess.DEVNULL)
                 SafeRemove(unsortBAM)
 
-            subprocess.run(["samtools", "index", os.path.join(workdir, blobBAM)], stderr=subprocess.DEVNULL)
+            subprocess.run(["samtools", "index", str(Path(workdir, blobBAM))], stderr=subprocess.DEVNULL)
 
         # now calculate coverage from BAM file
         status("Calculating read coverage per contig")
-        FastaBed = os.path.join(workdir, "assembly.bed")
+        FastaBed = str(Path(workdir, "assembly.bed"))
         lengths = []
         with open(FastaBed, "w") as bedout:
             with open(sourTax) as SeqIn:
@@ -207,8 +208,8 @@ def run(
 
         N50 = calcN50(lengths)
         Coverage = {}
-        coverageBed = os.path.join(workdir, "coverage.bed")
-        cov_cmd = ["samtools", "bedcov", os.path.basename(FastaBed), blobBAM]
+        coverageBed = str(Path(workdir, "coverage.bed"))
+        cov_cmd = ["samtools", "bedcov", Path(FastaBed).name, blobBAM]
         printCMD(cov_cmd)
         with open(coverageBed, "w") as bed_out:
             for line in execute(cov_cmd, workdir):
@@ -263,12 +264,12 @@ def run(
         nextOut = outfile + ".rmdup.fasta"
 
     if checkfile(sourmashTSV):
-        baseinput = os.path.basename(input)
-        basedir = os.path.dirname(input)
+        baseinput = Path(input).name
+        basedir = str(Path(input).parent)
         if "." in baseinput:
             baseinput = baseinput.rsplit(".", 1)[0]
 
-        shutil.copy(sourmashTSV, os.path.join(basedir, baseinput + ".sourmash-taxonomy.csv"))
+        shutil.copy(sourmashTSV, str(Path(basedir, baseinput + ".sourmash-taxonomy.csv")))
 
     if not debug:
         SafeRemove(workdir)

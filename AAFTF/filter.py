@@ -11,6 +11,7 @@ import subprocess
 import sys
 import urllib.request
 import uuid
+from pathlib import Path
 
 from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
 from AAFTF.utility import SafeRemove, bam_read_count, countfastq, getRAM, printCMD, samtools_sort_cmd, samtools_view_bam_cmd, status
@@ -38,8 +39,8 @@ def run(
     if not workdir:
         custom_workdir = 0
         workdir = "aaftf-filter_" + str(uuid.uuid4())[:8]
-    if not os.path.exists(workdir):
-        os.mkdir(workdir)
+    if not Path(workdir).exists():
+        Path(workdir).mkdir()
 
     # parse database locations
     DB = None
@@ -63,68 +64,68 @@ def run(
     # db of contaminant (PhiX)
     for urls in Contaminant_Accessions.values():
         for url in urls:
-            acc = os.path.basename(url)
+            acc = Path(url).name
             if DB:
-                acc_file = os.path.join(DB, acc)
+                acc_file = str(Path(DB, acc))
             else:
-                acc_file = os.path.join(workdir, acc)
+                acc_file = str(Path(workdir, acc))
             contam_filenames.append(acc_file)
-        if not os.path.exists(acc_file):
+        if not Path(acc_file).exists():
             try:
                 urllib.request.urlretrieve(url, acc_file)
             except Exception as e:
                 status(f"error with url {url} {acc_file}: {e}")
-            if earliest_file_age < 0 or earliest_file_age < os.path.getctime(acc_file):
-                earliest_file_age = os.path.getctime(acc_file)
+            if earliest_file_age < 0 or earliest_file_age < Path(acc_file).stat().st_ctime:
+                earliest_file_age = Path(acc_file).stat().st_ctime
 
     # download univec
     for url in DB_Links["UniVec"]:
         # take first file for now, could combine in future
-        acc = os.path.basename(url)
+        acc = Path(url).name
         if DB:
-            acc_file = os.path.join(DB, acc)
+            acc_file = str(Path(DB, acc))
         else:
-            acc_file = os.path.join(workdir, acc)
+            acc_file = str(Path(workdir, acc))
         contam_filenames.append(acc_file)
-        if not os.path.exists(acc_file):
+        if not Path(acc_file).exists():
             urllib.request.urlretrieve(url, acc_file)
-            if earliest_file_age < 0 or earliest_file_age < os.path.getctime(acc_file):
-                earliest_file_age = os.path.getctime(acc_file)
+            if earliest_file_age < 0 or earliest_file_age < Path(acc_file).stat().st_ctime:
+                earliest_file_age = Path(acc_file).stat().st_ctime
 
     if screen_accessions:
         for acc in screen_accessions:
             if DB:
-                acc_file = os.path.join(DB, acc + ".fna")
-                if not os.path.exists(acc_file):
-                    acc_file = os.path.join(workdir, acc + ".fna")
+                acc_file = str(Path(DB, acc + ".fna"))
+                if not Path(acc_file).exists():
+                    acc_file = str(Path(workdir, acc + ".fna"))
             else:
-                acc_file = os.path.join(workdir, acc + ".fna")
+                acc_file = str(Path(workdir, acc + ".fna"))
             contam_filenames.append(acc_file)
-            if not os.path.exists(acc_file):
+            if not Path(acc_file).exists():
                 url = SeqDBs["nucleotide"] % (acc)
                 urllib.request.urlretrieve(url, acc_file)
-            if earliest_file_age < 0 or earliest_file_age < os.path.getctime(acc_file):
-                earliest_file_age = os.path.getctime(acc_file)
+            if earliest_file_age < 0 or earliest_file_age < Path(acc_file).stat().st_ctime:
+                earliest_file_age = Path(acc_file).stat().st_ctime
 
     if screen_urls:
         for url in screen_urls:
-            url_file = os.path.join(workdir, os.path.basename(url))
+            url_file = str(Path(workdir, Path(url).name))
             contam_filenames.append(url_file)
-            if not os.path.exists(url_file):
+            if not Path(url_file).exists():
                 urllib.request.urlretrieve(url, url_file)
-            if earliest_file_age < 0 or earliest_file_age < os.path.getctime(url_file):
-                earliest_file_age = os.path.getctime(url_file)
+            if earliest_file_age < 0 or earliest_file_age < Path(url_file).stat().st_ctime:
+                earliest_file_age = Path(url_file).stat().st_ctime
 
     if screen_local:
         for f in screen_local:
-            contam_filenames.append(os.path.abspath(f))
+            contam_filenames.append(str(Path(f).resolve()))
 
     # concat vector db
 
-    contamdb = os.path.join(workdir, "contamdb.fa")
+    contamdb = str(Path(workdir, "contamdb.fa"))
     filelist = "\n".join(contam_filenames)
     status(f"Generating combined contamination database {contamdb} from:\n{filelist}")
-    if not os.path.exists(contamdb) or (os.path.getctime(contamdb) < earliest_file_age):
+    if not Path(contamdb).exists() or (Path(contamdb).stat().st_ctime < earliest_file_age):
         with open(contamdb, "wb") as wfd:
             for fname in contam_filenames:
                 if fname.endswith(".gz"):
@@ -137,9 +138,9 @@ def run(
     # find reads
     forReads, revReads = (None,) * 2
     if left:
-        forReads = os.path.abspath(left)
+        forReads = str(Path(left).resolve())
     if right:
-        revReads = os.path.abspath(right)
+        revReads = str(Path(right).resolve())
     if not forReads:
         status("Must provide --left, unable to locate FASTQ reads")
         sys.exit(1)
@@ -150,17 +151,17 @@ def run(
 
     # seems like this needs to be stripping trailing extension?
     if not basename:
-        if "_" in os.path.basename(forReads):
-            basename = os.path.basename(forReads).split("_")[0]
-        elif "." in os.path.basename(forReads):
-            basename = os.path.basename(forReads).split(".")[0]
+        if "_" in Path(forReads).name:
+            basename = Path(forReads).name.split("_")[0]
+        elif "." in Path(forReads).name:
+            basename = Path(forReads).name.split(".")[0]
         else:
-            basename = os.path.basename(forReads)
+            basename = Path(forReads).name
 
     # logger.info('Loading {:,} FASTQ reads'.format(countfastq(forReads)))
 
-    alignBAM = os.path.join(workdir, basename + "_contam_db.bam")
-    unsorted_bam = os.path.join(workdir, basename + "_contam.unsorted.bam")
+    alignBAM = str(Path(workdir, basename + "_contam_db.bam"))
+    unsorted_bam = str(Path(workdir, basename + "_contam.unsorted.bam"))
     clean_reads = basename + "_filtered"
     refmatch_bbduk = [contamdb, "phix", "artifacts", "lambda"]
     if aligner == "bbduk":
@@ -177,8 +178,8 @@ def run(
             # instead of erroring loudly. Feed it an INTERLEAVED single file
             # instead (bbduk's single-end reader handles the full file
             # correctly), then de-interleave the cleaned output.
-            interleaved_in = os.path.join(workdir, f"{basename}_ivl.fq.gz")
-            interleaved_out = os.path.join(workdir, f"{basename}_ivl.clean.fq.gz")
+            interleaved_in = str(Path(workdir, f"{basename}_ivl.fq.gz"))
+            interleaved_out = str(Path(workdir, f"{basename}_ivl.clean.fq.gz"))
             shuffle_cmd = ["shuffle.sh", f"in1={forReads}", f"in2={revReads}", f"out={interleaved_in}"]
             printCMD(shuffle_cmd)
             if debug:
@@ -235,16 +236,16 @@ def run(
 
     elif aligner == "bowtie2":
         # likely not used and less accurate than bbmap?
-        if not os.path.isfile(alignBAM):
+        if not Path(alignBAM).is_file():
             status("Aligning reads to contamination database using bowtie2")
-            if not os.path.exists(contamdb + ".1.bt2") or os.path.getctime(contamdb + ".1.bt2") < os.path.getctime(contamdb):
+            if not Path(contamdb + ".1.bt2").exists() or Path(contamdb + ".1.bt2").stat().st_ctime < Path(contamdb).stat().st_ctime:
                 # (re)build index if no index or index is older than
                 # the db
                 bowtie_index = ["bowtie2-build", contamdb, contamdb]
                 printCMD(bowtie_index)
                 subprocess.run(bowtie_index, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
 
-            bowtie_cmd = ["bowtie2", "-x", os.path.basename(contamdb), "-p", str(cpus), "--very-sensitive"]
+            bowtie_cmd = ["bowtie2", "-x", Path(contamdb).name, "-p", str(cpus), "--very-sensitive"]
             if forReads and revReads:
                 bowtie_cmd = bowtie_cmd + ["-1", forReads, "-2", revReads]
             elif forReads:
@@ -262,14 +263,14 @@ def run(
 
     elif aligner == "bwa":
         # likely less accurate than bbduk so may not be used
-        if not os.path.isfile(alignBAM):
+        if not Path(alignBAM).is_file():
             status("Aligning reads to contamination database using BWA")
-            if not os.path.exists(contamdb + ".amb") or os.path.getctime(contamdb + ".amb") < os.path.getctime(contamdb):
+            if not Path(contamdb + ".amb").exists() or Path(contamdb + ".amb").stat().st_ctime < Path(contamdb).stat().st_ctime:
                 bwa_index = ["bwa", "index", contamdb]
                 printCMD(bwa_index)
                 subprocess.run(bwa_index, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
 
-            bwa_cmd = ["bwa", "mem", "-t", str(cpus), os.path.basename(contamdb), forReads]
+            bwa_cmd = ["bwa", "mem", "-t", str(cpus), Path(contamdb).name, forReads]
             if revReads:
                 bwa_cmd.append(revReads)
 
@@ -284,10 +285,10 @@ def run(
 
     elif aligner == "minimap2":
         # likely not used but may be useful for pacbio/nanopore?
-        if not os.path.isfile(alignBAM):
+        if not Path(alignBAM).is_file():
             status("Aligning reads to contamination database using minimap2")
 
-            minimap2_cmd = ["minimap2", "-ax", "sr", "-t", str(cpus), os.path.basename(contamdb), forReads]
+            minimap2_cmd = ["minimap2", "-ax", "sr", "-t", str(cpus), Path(contamdb).name, forReads]
             if revReads:
                 minimap2_cmd.append(revReads)
 
@@ -302,7 +303,7 @@ def run(
     else:
         status("Must specify bowtie2, bwa, or minimap2 for filtering")
 
-    if os.path.isfile(alignBAM):
+    if Path(alignBAM).is_file():
         # display mapping stats in terminal
         subprocess.run(["samtools", "index", alignBAM])
         mapped, unmapped = bam_read_count(alignBAM)

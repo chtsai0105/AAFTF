@@ -8,7 +8,7 @@ trimmomatic. Expects adaptor sequence files to be in trimmomatic installed folde
 import os
 import subprocess
 import sys
-from os.path import dirname
+from pathlib import Path
 
 from AAFTF.utility import Fzip_inplace, SafeRemove, countfastq, getRAM, printCMD, status, which_path
 
@@ -28,7 +28,7 @@ def find_trimmomatic():
     """Finds the trimmomatic jar file."""
     trim_path = which_path("trimmomatic")
     if trim_path:
-        with open(os.path.abspath(trim_path)) as trim_shell:
+        with open(str(Path(trim_path).resolve())) as trim_shell:
             firstLine = trim_shell.readline()
             if "#!/bin/bash" in firstLine:  # homebrew get jar location
                 for line in trim_shell:
@@ -38,8 +38,8 @@ def find_trimmomatic():
                             if x.endswith(".jar"):
                                 return x
             elif "#!/usr/bin/env python" in firstLine:
-                trimjardir = os.path.dirname(os.path.realpath(trim_path))
-                return os.path.join(trimjardir, "trimmomatic.jar")
+                trimjardir = Path(trim_path).resolve().parent
+                return str(trimjardir / "trimmomatic.jar")
             else:
                 return False
     else:
@@ -73,12 +73,12 @@ def run(
 ):
     """Run command for the module subtool of AAFTF."""
     if not basename:
-        if "_" in os.path.basename(left):
-            basename = os.path.basename(left).split("_")[0]
-        elif "." in os.path.basename(left):
-            basename = os.path.basename(left).split(".")[0]
+        if "_" in Path(left).name:
+            basename = Path(left).name.split("_")[0]
+        elif "." in Path(left).name:
+            basename = Path(left).name.split(".")[0]
         else:
-            basename = os.path.basename(left)
+            basename = Path(left).name
 
     total = countfastq(left)
     if right:
@@ -195,28 +195,28 @@ def run(
             quality = trimmomatic_quality
             quality = f"-{quality}"  # add leading dash
 
-            if not os.path.exists(path_to_adaptors):
+            if not Path(path_to_adaptors).exists():
                 if right:
-                    path_to_adaptors = os.path.join(dirname(jarfile), TRIMMOMATIC_TRUSEQPE)
+                    path_to_adaptors = str(Path(jarfile).parent / TRIMMOMATIC_TRUSEQPE)
                 else:
-                    path_to_adaptors = os.path.join(dirname(jarfile), TRIMMOMATIC_TRUSEQSE)
+                    path_to_adaptors = str(Path(jarfile).parent / TRIMMOMATIC_TRUSEQSE)
 
-                if not os.path.exists(path_to_adaptors):
-                    findpath = dirname(jarfile)
+                if not Path(path_to_adaptors).exists():
+                    findpath = Path(jarfile).parent
                     path_to_adaptors = ""
-                    while findpath:
-                        if os.path.exists(findpath + "/share"):
+                    while True:
+                        if Path(str(findpath) + "/share").exists():
                             if right:
-                                path_to_adaptors = os.path.join(findpath, "/share/trimmomatic", TRIMMOMATIC_TRUSEQPE)
+                                path_to_adaptors = str(Path(findpath, "/share/trimmomatic", TRIMMOMATIC_TRUSEQPE))
                             else:
-                                path_to_adaptors = os.path.join(findpath, "/share/trimmomatic", TRIMMOMATIC_TRUSEQSE)
+                                path_to_adaptors = str(Path(findpath, "/share/trimmomatic", TRIMMOMATIC_TRUSEQSE))
                             break
-                        new_path = dirname(findpath)
+                        new_path = findpath.parent
                         if new_path == findpath:  # reached filesystem root
                             break
                         findpath = new_path
 
-                if not os.path.exists(path_to_adaptors):
+                if not Path(path_to_adaptors).exists():
                     status("Cannot find adaptors file please specify manually")
                     return
 
