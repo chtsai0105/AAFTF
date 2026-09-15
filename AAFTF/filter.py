@@ -17,6 +17,43 @@ from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
 from AAFTF.utility import SafeRemove, bam_read_count, countfastq, getRAM, printCMD, samtools_sort_cmd, samtools_view_bam_cmd, status
 
 
+def _stderr_for(debug):
+    """Return the stderr= value to use for a subprocess call: inherited when debugging, else silenced."""
+    return None if debug else subprocess.DEVNULL
+
+
+def _run(cmd, debug, suppress_stdout=False):
+    """Print then run a command, showing stderr (and optionally stdout) only in debug mode."""
+    printCMD(cmd)
+    stdout = subprocess.DEVNULL if (suppress_stdout and not debug) else None
+    subprocess.run(cmd, stderr=_stderr_for(debug), stdout=stdout)
+
+
+def _rebuild_index_if_stale(marker_file, contamdb, build_cmd, debug):
+    """(Re)build an aligner index if its marker file is missing or older than contamdb."""
+    marker = Path(marker_file)
+    if not marker.exists() or marker.stat().st_ctime < Path(contamdb).stat().st_ctime:
+        _run(build_cmd, debug, suppress_stdout=True)
+
+
+def _align_and_sort(align_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug):
+    """Pipe an aligner's SAM output through samtools view/sort into a sorted alignBAM."""
+    printCMD(align_cmd)
+    stderr = _stderr_for(debug)
+    p1 = subprocess.Popen(align_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=stderr)
+    p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), stdin=p1.stdout, stderr=stderr)
+    p1.stdout.close()
+    p2.communicate()
+    subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=stderr)
+    SafeRemove(unsorted_bam)
+
+
+def _cleanup_workdir(workdir, debug, custom_workdir):
+    """Remove the auto-generated workdir, unless debugging or the caller supplied their own."""
+    if not debug and not custom_workdir:
+        SafeRemove(workdir)
+
+
 # flake8: noqa: C901
 def run(
     left,
@@ -181,40 +218,23 @@ def run(
             interleaved_in = str(Path(workdir, f"{basename}_ivl.fq.gz"))
             interleaved_out = str(Path(workdir, f"{basename}_ivl.clean.fq.gz"))
             shuffle_cmd = ["shuffle.sh", f"in1={forReads}", f"in2={revReads}", f"out={interleaved_in}"]
-            printCMD(shuffle_cmd)
-            if debug:
-                subprocess.run(shuffle_cmd)
-            else:
-                subprocess.run(shuffle_cmd, stderr=subprocess.DEVNULL)
+            _run(shuffle_cmd, debug)
 
             cmd = ["bbduk.sh", MEM, f"t={cpus}", "hdist=1", "k=27", "overwrite=true", f"in={interleaved_in}", "interleaved=true", f"out={interleaved_out}"]
-            cmd.extend(["ref={}".format(",".join(refmatch_bbduk))])
-            printCMD(cmd)
-            if debug:
-                subprocess.run(cmd)
-            else:
-                subprocess.run(cmd, stderr=subprocess.DEVNULL)
+            cmd.extend([f"ref={','.join(refmatch_bbduk)}"])
+            _run(cmd, debug)
 
             reformat_cmd = ["reformat.sh", f"in={interleaved_out}", f"out1={clean_reads}_1.fastq.gz", f"out2={clean_reads}_2.fastq.gz"]
-            printCMD(reformat_cmd)
-            if debug:
-                subprocess.run(reformat_cmd)
-            else:
-                subprocess.run(reformat_cmd, stderr=subprocess.DEVNULL)
+            _run(reformat_cmd, debug)
         else:
             cmd = ["bbduk.sh", MEM, f"t={cpus}", "hdist=1", "k=27", "overwrite=true"]
             cmd.extend([f"in={forReads}", f"out={clean_reads}_U.fastq.gz"])
             leftcleanfname = f"{clean_reads}_U.fastq.gz"
-            cmd.extend(["ref={}".format(",".join(refmatch_bbduk))])
+            cmd.extend([f"ref={','.join(refmatch_bbduk)}"])
             # cmd.extend(['prealloc','qhdist=1'])
-            printCMD(cmd)
-            if debug:
-                subprocess.run(cmd)
-            else:
-                subprocess.run(cmd, stderr=subprocess.DEVNULL)
+            _run(cmd, debug)
 
-        if not debug and not custom_workdir:
-            SafeRemove(workdir)
+        _cleanup_workdir(workdir, debug, custom_workdir)
 
         clean = countfastq(leftcleanfname)
         if revReads:
@@ -223,14 +243,14 @@ def run(
         status(f"{clean:,} reads unmapped and writing to file")
 
         if revReads:
-            status("Filtering complete:\n\tFor: {:}\n\tRev: {:}".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz"))
+            status(f"Filtering complete:\n\tFor: {clean_reads}_1.fastq.gz\n\tRev: {clean_reads}_2.fastq.gz")
             if not pipe:
-                status("Your next command might be:\n\tAAFTF assemble -l {:} -r {:} -c {:} -o {:}\n".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz", cpus, basename + ".spades.fasta"))
+                status(f"Your next command might be:\n\tAAFTF assemble -l {clean_reads}_1.fastq.gz -r {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
 
         else:
-            status("Filtering complete:\n\tSingle: {:}".format(clean_reads + "_U.fastq.gz"))
+            status(f"Filtering complete:\n\tSingle: {clean_reads}_U.fastq.gz")
             if not pipe:
-                status("Your next command might be:\n\tAAFTF assemble --merged {:} -c {:} -o {:}\n".format(clean_reads + "_U.fastq.gz", cpus, basename + ".spades.fasta"))
+                status(f"Your next command might be:\n\tAAFTF assemble --merged {clean_reads}_U.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
 
         return
 
@@ -238,12 +258,7 @@ def run(
         # likely not used and less accurate than bbmap?
         if not Path(alignBAM).is_file():
             status("Aligning reads to contamination database using bowtie2")
-            if not Path(contamdb + ".1.bt2").exists() or Path(contamdb + ".1.bt2").stat().st_ctime < Path(contamdb).stat().st_ctime:
-                # (re)build index if no index or index is older than
-                # the db
-                bowtie_index = ["bowtie2-build", contamdb, contamdb]
-                printCMD(bowtie_index)
-                subprocess.run(bowtie_index, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            _rebuild_index_if_stale(contamdb + ".1.bt2", contamdb, ["bowtie2-build", contamdb, contamdb], debug)
 
             bowtie_cmd = ["bowtie2", "-x", Path(contamdb).name, "-p", str(cpus), "--very-sensitive"]
             if forReads and revReads:
@@ -251,37 +266,19 @@ def run(
             elif forReads:
                 bowtie_cmd = bowtie_cmd + ["-U", forReads]
 
-            # now run and write to BAM sorted
-            printCMD(bowtie_cmd)
-
-            p1 = subprocess.Popen(bowtie_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
-            p1.stdout.close()
-            p2.communicate()
-            subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=subprocess.DEVNULL)
-            SafeRemove(unsorted_bam)
+            _align_and_sort(bowtie_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug)
 
     elif aligner == "bwa":
         # likely less accurate than bbduk so may not be used
         if not Path(alignBAM).is_file():
             status("Aligning reads to contamination database using BWA")
-            if not Path(contamdb + ".amb").exists() or Path(contamdb + ".amb").stat().st_ctime < Path(contamdb).stat().st_ctime:
-                bwa_index = ["bwa", "index", contamdb]
-                printCMD(bwa_index)
-                subprocess.run(bwa_index, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            _rebuild_index_if_stale(contamdb + ".amb", contamdb, ["bwa", "index", contamdb], debug)
 
             bwa_cmd = ["bwa", "mem", "-t", str(cpus), Path(contamdb).name, forReads]
             if revReads:
                 bwa_cmd.append(revReads)
 
-            # now run and write to BAM sorted
-            printCMD(bwa_cmd)
-            p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
-            p1.stdout.close()
-            p2.communicate()
-            subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=subprocess.DEVNULL)
-            SafeRemove(unsorted_bam)
+            _align_and_sort(bwa_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug)
 
     elif aligner == "minimap2":
         # likely not used but may be useful for pacbio/nanopore?
@@ -292,20 +289,13 @@ def run(
             if revReads:
                 minimap2_cmd.append(revReads)
 
-            # now run and write to BAM sorted
-            printCMD(minimap2_cmd)
-            p1 = subprocess.Popen(minimap2_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
-            p1.stdout.close()
-            p2.communicate()
-            subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=subprocess.DEVNULL)
-            SafeRemove(unsorted_bam)
+            _align_and_sort(minimap2_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug)
     else:
         status("Must specify bowtie2, bwa, or minimap2 for filtering")
 
     if Path(alignBAM).is_file():
         # display mapping stats in terminal
-        subprocess.run(["samtools", "index", alignBAM])
+        _run(["samtools", "index", alignBAM], debug)
         mapped, unmapped = bam_read_count(alignBAM)
         status(f"{mapped:,} reads mapped to contamination database")
         status(f"{unmapped:,} reads unmapped and writing to file")
@@ -315,15 +305,14 @@ def run(
             samtools_cmd = ["samtools", "fastq", "-f", "12", "-1", clean_reads + "_1.fastq.gz", "-2", clean_reads + "_2.fastq.gz", alignBAM]
         elif forReads:
             samtools_cmd = ["samtools", "fastq", "-f", "4", "-1", clean_reads + ".fastq.gz", alignBAM]
-        subprocess.run(samtools_cmd, stderr=subprocess.DEVNULL)
-        if not debug:
-            SafeRemove(workdir)
+        _run(samtools_cmd, debug)
+        _cleanup_workdir(workdir, debug, custom_workdir)
 
         if revReads:
-            status("Filtering complete:\n\tFor: {:}\n\tRev: {:}".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz"))
+            status(f"Filtering complete:\n\tFor: {clean_reads}_1.fastq.gz\n\tRev: {clean_reads}_2.fastq.gz")
             if not pipe:
-                status("Your next command might be:\n\tAAFTF assemble -l {:} -r {:} -c {:} -o {:}\n".format(clean_reads + "_1.fastq.gz", clean_reads + "_2.fastq.gz", cpus, basename + ".spades.fasta"))
+                status(f"Your next command might be:\n\tAAFTF assemble -l {clean_reads}_1.fastq.gz -r {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
         else:
-            status("Filtering complete:\n\tSingle: {:}".format(clean_reads + ".fastq.gz"))
+            status(f"Filtering complete:\n\tSingle: {clean_reads}.fastq.gz")
             if not pipe:
-                status("Your next command might be:\n\tAAFTF assemble -l {:} -c {:} -o {:}\n".format(clean_reads + ".fastq.gz", cpus, basename + ".spades.fasta"))
+                status(f"Your next command might be:\n\tAAFTF assemble -l {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
