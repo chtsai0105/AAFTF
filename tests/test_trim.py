@@ -390,7 +390,7 @@ class TestTrimRunTrimmomatic:
 
         from AAFTF.trim import run
 
-        with patch("AAFTF.trim.find_trimmomatic", return_value=False):
+        with patch("AAFTF.trim._find_trimmomatic", return_value=False):
             with patch("AAFTF.trim.countfastq", return_value=100):
                 with pytest.raises(SystemExit):
                     run(**vars(args))
@@ -409,7 +409,7 @@ class TestTrimRunTrimmomatic:
             trimmomatic_adaptors=fake_adaptor,
         )
         cmds = []
-        with patch("AAFTF.trim.find_trimmomatic", return_value=fake_jar):
+        with patch("AAFTF.trim._find_trimmomatic", return_value=fake_jar):
             with patch("AAFTF.trim.countfastq", return_value=100):
                 with patch("AAFTF.trim.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
                     with patch("AAFTF.trim.Fzip_inplace"):

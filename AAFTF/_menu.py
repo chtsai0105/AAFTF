@@ -122,22 +122,17 @@ def trim_menu(subparsers):
         help="left/forward reads of paired-end FASTQ or single-end FASTQ.",
     )
 
-    optional.add_argument(
-        "-r", "--right", type=str, metavar="FASTQ", required=False, help="right/reverse reads of paired-end FASTQ."
-    )
+    optional.add_argument("-r", "--right", type=str, metavar="FASTQ", help="right/reverse reads of paired-end FASTQ.")
 
     optional.add_argument(
         "-o",
         "--out",
         type=str,
-        required=False,
         dest="basename",
         help="Output basename, default to base name of --left reads",
     )
 
-    optional.add_argument(
-        "-ml", "--minlen", type=int, metavar="INT", default=75, required=False, help="Minimum read length after trimming"
-    )
+    optional.add_argument("-ml", "--minlen", type=int, metavar="INT", default=75, help="Minimum read length after trimming")
 
     optional.add_argument(
         "-aq",
@@ -145,54 +140,30 @@ def trim_menu(subparsers):
         type=int,
         metavar="INT",
         default=10,
-        required=False,
         help="Average Quality of reads must be > than this",
-    )
-
-    optional.add_argument(
-        "--dedup",
-        action="store_true",
-        required=False,
-        help="Run fastp deuplication of fastq reads (default uses ~4gb mem)" + " default: false",
     )
 
     optional.add_argument(
         "--cutfront",
         action="store_true",
-        required=False,
-        help="Run fastp 5' trimming based on quality. "
-        + "default: false. \n"
-        + "WARNING: this operation will interfere deduplication for SE data",
+        help="Run fastp 5' trimming based on quality. " + "WARNING: this operation will interfere deduplication for SE data",
     )
 
     optional.add_argument(
         "--cuttail",
         action="store_true",
-        required=False,
-        help="Run fastp 3' trimming based on quality. "
-        + "default: false.\n"
-        + "WARNING: this operation will interfere deduplication for SE data",
+        help="Run fastp 3' trimming based on quality. " + "WARNING: this operation will interfere deduplication for SE data",
     )
 
     optional.add_argument(
         "--cutright",
         action="store_true",
-        required=False,
-        help="Run fastp move a sliding window from front to tail, "
-        + "if meet one window with mean quality < threshold. \n"
-        + "default: false.\n"
-        + "WARNING: this operation will interfere deduplication for SE data",
+        help="Run fastp move a sliding window from front to tail, " + "if meet one window with mean quality < threshold. \n" + "WARNING: this operation will interfere deduplication for SE data",
     )
 
-    optional.add_argument(
-        "--method", default="bbduk", choices=["bbduk", "trimmomatic", "fastp"], help="Program to use for adapter trimming"
-    )
+    optional.add_argument("--method", default="bbduk", choices=["bbduk", "trimmomatic", "fastp"], help="Program to use for adapter trimming")
 
-    optional.add_argument("--merge", action="store_true", help="Merge paired end reads when running fastp")
-
-    optional.add_argument(
-        "-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use."
-    )
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use.")
     optional.add_argument("-m", "--memory", type=int, dest="memory", required=False, help="Max Memory (in GB)")
     menu_common_args(optional)
 
@@ -202,13 +173,9 @@ def trim_menu(subparsers):
 
     trimmomatic_group.add_argument("--trimmomatic_clip", type=str, default="2:30:10", help="Trimmomatic ILLUMINACLIP argument")
 
-    trimmomatic_group.add_argument(
-        "--trimmomatic_leadingwindow", type=int, default="3", help="Trimmomatic window processing arguments"
-    )
+    trimmomatic_group.add_argument("--trimmomatic_leadingwindow", type=int, default="3", help="Trimmomatic window processing arguments")
 
-    trimmomatic_group.add_argument(
-        "--trimmomatic_trailingwindow", type=int, default="3", help="Trimmomatic window processing arguments"
-    )
+    trimmomatic_group.add_argument("--trimmomatic_trailingwindow", type=int, default="3", help="Trimmomatic window processing arguments")
 
     trimmomatic_group.add_argument(
         "--trimmomatic_slidingwindow",
@@ -217,9 +184,17 @@ def trim_menu(subparsers):
         help="Trimmomatic window processing arguments",
     )
 
-    trimmomatic_group.add_argument(
-        "--trimmomatic_quality", default="phred33", help="Trimmomatic quality encoding -phred33 or phred64"
+    trimmomatic_group.add_argument("--trimmomatic_quality", default="phred33", help="Trimmomatic quality encoding -phred33 or phred64")
+
+    fastp_group = parser_trim.add_argument_group(title="Fastp options")
+
+    fastp_group.add_argument(
+        "--dedup",
+        action="store_true",
+        help="Run fastp deuplication of fastq reads (default uses ~4gb mem)",
     )
+
+    fastp_group.add_argument("--merge", action="store_true", help="Merge paired end reads")
 
     parser_trim.set_defaults(func=trim.run)
     return parser_trim
@@ -258,9 +233,7 @@ def mito_menu(subparsers):
 
     optional.add_argument("--maxlen", default=100000, type=int, help="Maximum expected genome size")
 
-    optional.add_argument(
-        "-s", "--seed", required=False, help="Seed sequence, ie related mitochondrial genome." + "default: A. nidulans"
-    )
+    optional.add_argument("-s", "--seed", required=False, help="Seed sequence, ie related mitochondrial genome." + "default: A. nidulans")
 
     optional.add_argument("--starting", required=False, help="FASTA file of start sequence, rotate genome to, default COB")
 
@@ -287,9 +260,7 @@ def filter_menu(subparsers):
 
     required.add_argument("-l", "--left", required=True, help="Left (Forward) reads")
 
-    optional.add_argument(
-        "-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use."
-    )
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use.")
 
     optional.add_argument("--AAFTF_DB", type=str, required=False, help="Path to AAFTF resources, defaults to $AAFTF_DB")
 
@@ -305,9 +276,7 @@ def filter_menu(subparsers):
 
     optional.add_argument("-o", "--out", dest="basename", type=str, required=False, help="Output basename")
 
-    optional.add_argument(
-        "-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads."
-    )
+    optional.add_argument("-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads.")
 
     optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URLs to download and screen out initial reads.")
 
@@ -351,9 +320,7 @@ def assemble_menu(subparsers):
         help="Output assembly FASTA",
     )
 
-    optional.add_argument(
-        "-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use."
-    )
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use.")
 
     optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="assembly output directory")
 
@@ -380,9 +347,7 @@ def assemble_menu(subparsers):
 
     optional.add_argument("-r", "--right", required=False, help="Right (Reverse) reads")
     optional.add_argument("-lr", "--longreads", required=False, help="Long Read fastq (pacbio or ONT)")
-    optional.add_argument(
-        "--single", "--merged", required=False, dest="merged", help="Merged reads from flash or fastp or just single end reads"
-    )
+    optional.add_argument("--single", "--merged", required=False, dest="merged", help="Merged reads from flash or fastp or just single end reads")
 
     optional.add_argument(
         "--careful",
@@ -403,9 +368,7 @@ def assemble_menu(subparsers):
 
     optional.add_argument("--assembler_args", action="append", required=False, help="Additional SPAdes/Megahit arguments")
 
-    optional.add_argument(
-        "--haplocontigs", dest="haplocontigs", default=False, action="store_true", help="For dipSPAdes take the haplocontigs file"
-    )
+    optional.add_argument("--haplocontigs", dest="haplocontigs", default=False, action="store_true", help="For dipSPAdes take the haplocontigs file")
 
     menu_common_args(optional)
 
@@ -426,9 +389,7 @@ def vecscreen_menu(subparsers):
     required = parser_vecscreen.add_argument_group("required arguments")
     optional = parser_vecscreen.add_argument_group("optional arguments")
 
-    required.add_argument(
-        "-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input contigs or scaffold assembly"
-    )
+    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input contigs or scaffold assembly")
 
     required.add_argument("-o", "--outfile", type=str, required=True, help="Output vector screened and cleaned assembly")
 
@@ -446,15 +407,11 @@ def vecscreen_menu(subparsers):
         help="Temporary directory to store datafiles and processes in",
     )
 
-    optional.add_argument(
-        "-pid", "--percent_id", type=int, required=False, help="Percent Identity cutoff for vecscreen adaptor matches"
-    )
+    optional.add_argument("-pid", "--percent_id", type=int, required=False, help="Percent Identity cutoff for vecscreen adaptor matches")
 
     optional.add_argument("--prefix", type=str, required=False, help="Prefix for tempfiles")
 
-    optional.add_argument(
-        "-s", "--stringency", default="high", choices=["high", "low"], help="Stringency to filter VecScreen hits"
-    )
+    optional.add_argument("-s", "--stringency", default="high", choices=["high", "low"], help="Stringency to filter VecScreen hits")
 
     menu_common_args(optional)
 
@@ -475,9 +432,7 @@ def fcs_screen_menu(subparsers):
     required = parser_fcs_screen.add_argument_group("required arguments")
     optional = parser_fcs_screen.add_argument_group("optional arguments")
 
-    required.add_argument(
-        "-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input contigs or scaffold assembly"
-    )
+    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input contigs or scaffold assembly")
 
     required.add_argument("-o", "--outfile", type=str, required=True, help="Output vector screened and cleaned assembly")
 
@@ -509,9 +464,7 @@ def fcs_screen_menu(subparsers):
 
     optional.add_argument("--euk", action="store_true", help="Run in Eukaryote matching mode (Default)")
 
-    optional.add_argument(
-        "--fcs_script", type=str, required=False, help="location of the run_fcsadaptor.sh script (or will download automatically)"
-    )
+    optional.add_argument("--fcs_script", type=str, required=False, help="location of the run_fcsadaptor.sh script (or will download automatically)")
 
     menu_common_args(optional)
 
@@ -622,9 +575,7 @@ def sourpurge_menu(subparsers):
 
     optional.add_argument("--sourdb", required=False, help="SourMash LCA taxonomy database (defaults to k-31)")
 
-    optional.add_argument(
-        "-k", "--kmer", required=False, default="31", help="SourMash LCA kmersize when taxonomy database was built"
-    )
+    optional.add_argument("-k", "--kmer", required=False, default="31", help="SourMash LCA kmersize when taxonomy database was built")
 
     optional.add_argument("-mc", "--mincovpct", default=5, type=int, help="Minimum percent of N50 coverage to remove")
 
@@ -667,9 +618,7 @@ def rmdup_menu(subparsers):
         help="Output new version of assembly with " + "duplicated contigs/scaffolds removed",
     )
 
-    optional.add_argument(
-        "-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use."
-    )
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", required=False, default=1, help="Number of CPUs/threads to use.")
 
     optional.add_argument(
         "-w",
@@ -701,9 +650,7 @@ def rmdup_menu(subparsers):
         help="Coverage of contig used to decide if it is redundant",
     )
 
-    optional.add_argument(
-        "-ml", "--minlen", type=int, required=False, default=500, help="Minimum contig length to keep, shorter ones are dropped"
-    )
+    optional.add_argument("-ml", "--minlen", type=int, required=False, default=500, help="Minimum contig length to keep, shorter ones are dropped")
 
     optional.add_argument(
         "--exhaustive",
@@ -730,9 +677,7 @@ def polish_menu(subparsers):
     required = parser_polish.add_argument_group("required arguments")
     optional = parser_polish.add_argument_group("optional arguments")
 
-    required.add_argument(
-        "-i", "--infile", "--input", type=str, dest="infile", required=True, help="Input contigs or scaffold assembly"
-    )
+    required.add_argument("-i", "--infile", "--input", type=str, dest="infile", required=True, help="Input contigs or scaffold assembly")
 
     optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
 
@@ -814,9 +759,7 @@ def sort_menu(subparsers):
 
     required.add_argument("-o", "--out", "--output", required=True, dest="out", help="Output genome assembly FASTA")
 
-    optional.add_argument(
-        "-ml", "--minlen", type=int, required=False, default=0, help="Minimum contig length to keep, shorter ones are dropped"
-    )
+    optional.add_argument("-ml", "--minlen", type=int, required=False, default=0, help="Minimum contig length to keep, shorter ones are dropped")
 
     optional.add_argument("-n", "--name", "--basename", default="scaffold", dest="name", help="Basename to rename FASTA headers")
 
@@ -847,17 +790,13 @@ def assess_menu(subparsers):
         help="Input genome assembly to test completeness and " + "provide summary statistics",
     )
 
-    optional.add_argument(
-        "-r", "--report", type=str, help="Filename to save report information otherwise " + "will print to stdout"
-    )
+    optional.add_argument("-r", "--report", type=str, help="Filename to save report information otherwise " + "will print to stdout")
 
     optional.add_argument("-t", "--telomere_monomer", type=str, help="Telomere repeat monomer to search for.", default="TAA[C]+")
 
     optional.add_argument("-n", "--telomere_n_repeat", type=int, default=2, help="Telomere minimum number of monomer repeats.")
 
-    optional.add_argument(
-        "--telomere_window", type=int, default=200, help="Number of bp to scan at each end for telomere repeats."
-    )
+    optional.add_argument("--telomere_window", type=int, default=200, help="Number of bp to scan at each end for telomere repeats.")
 
     menu_common_args(optional)
 
@@ -878,9 +817,7 @@ def fix_tbl_menu(subparsers):
     required = parser_fix.add_argument_group("required arguments")
     optional = parser_fix.add_argument_group("optional arguments")
 
-    required.add_argument(
-        "-t", "--table", "--infile", type=ap.FileType("rt"), required=True, help="Table format of annotation (NCBL tbl)"
-    )
+    required.add_argument("-t", "--table", "--infile", type=ap.FileType("rt"), required=True, help="Table format of annotation (NCBL tbl)")
 
     required.add_argument("-r", "--report", type=ap.FileType("rt"), required=True, help="FCS report (5 column CSV)")
 
@@ -897,13 +834,7 @@ def depth_menu(subparsers):
     parser_depth = subparsers.add_parser(
         "depth",
         aliases=["coverage", "cov"],
-        description=(
-            "Calculate depth of coverage by mapping Illumina and/or long reads "
-            "to a genome assembly with minimap2 (or bwa), then running mosdepth "
-            "to compute per-contig depth statistics.  Contigs with mean depth "
-            "> assembly_mean + 3*SD are flagged as possible contaminants or "
-            "organellar sequences."
-        ),
+        description=("Calculate depth of coverage by mapping Illumina and/or long reads " "to a genome assembly with minimap2 (or bwa), then running mosdepth " "to compute per-contig depth statistics.  Contigs with mean depth " "> assembly_mean + 3*SD are flagged as possible contaminants or " "organellar sequences."),
         help="Calculate read depth of coverage for genome assembly",
         formatter_class=CustomHelpFormatter,
     )
@@ -1020,9 +951,7 @@ def depth_menu(subparsers):
         default=None,
         dest="quantize_labels",
         metavar="LABELS",
-        help="Comma-separated labels for quantize bins "
-        "(default: NO_COVERAGE,LOW_COVERAGE,CALLABLE,HIGH_COVERAGE,VERY_HIGH_COVERAGE "
-        "for the default bins)",
+        help="Comma-separated labels for quantize bins " "(default: NO_COVERAGE,LOW_COVERAGE,CALLABLE,HIGH_COVERAGE,VERY_HIGH_COVERAGE " "for the default bins)",
     )
 
     menu_common_args(optional)
@@ -1043,13 +972,9 @@ def pipeline_menu(subparsers):
     required = parser_pipeline.add_argument_group("required arguments")
     optional = parser_pipeline.add_argument_group("optional arguments")
 
-    required.add_argument(
-        "-l", "--left", type=str, required=True, help="left/forward reads of paired-end FASTQ or " + "single-end FASTQ."
-    )
+    required.add_argument("-l", "--left", type=str, required=True, help="left/forward reads of paired-end FASTQ or " + "single-end FASTQ.")
 
-    required.add_argument(
-        "-o", "--out", type=str, required=True, dest="basename", help="Output basename, default to base name of --left reads"
-    )
+    required.add_argument("-o", "--out", type=str, required=True, dest="basename", help="Output basename, default to base name of --left reads")
 
     required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or Phyla to keep matches, i.e. Ascomycota")
 
@@ -1059,29 +984,21 @@ def pipeline_menu(subparsers):
 
     optional.add_argument("--tmpdir", type=str, required=False, help="Assembler temporary dir")
     optional.add_argument("--assembler_args", action="append", required=False, help="Additional SPAdes/Megahit arguments")
-    optional.add_argument(
-        "--method", type=str, required=False, default="spades", help="Assembly method: spades, dipspades, megahit"
-    )
+    optional.add_argument("--method", type=str, required=False, default="spades", help="Assembly method: spades, dipspades, megahit")
 
     optional.add_argument("-r", "--right", type=str, required=False, help="right/reverse reads of paired-end FASTQ.")
 
-    optional.add_argument(
-        "-m", "--memory", type=str, dest="memory", required=False, help="Memory (in GB) setting for SPAdes. Default is Auto"
-    )
+    optional.add_argument("-m", "--memory", type=str, dest="memory", required=False, help="Memory (in GB) setting for SPAdes. Default is Auto")
 
     optional.add_argument("-ml", "--minlen", type=int, default=75, required=False, help="Minimum read length after trimming")
 
-    optional.add_argument(
-        "-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads."
-    )
+    optional.add_argument("-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads.")
 
     optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URLs to download and screen out initial reads.")
 
     optional.add_argument("-it", "--iterations", type=int, default=5, help="Number of Pilon Polishing iterations to run")
 
-    optional.add_argument(
-        "-mc", "--mincontiglen", type=int, default=500, required=False, help="Minimum length of contigs to keep"
-    )
+    optional.add_argument("-mc", "--mincontiglen", type=int, default=500, required=False, help="Minimum length of contigs to keep")
 
     optional.add_argument("-w", "--workdir", type=str, help="temp directory")
 
