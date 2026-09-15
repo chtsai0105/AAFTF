@@ -834,7 +834,7 @@ def depth_menu(subparsers):
     parser_depth = subparsers.add_parser(
         "depth",
         aliases=["coverage", "cov"],
-        description=("Calculate depth of coverage by mapping Illumina and/or long reads " "to a genome assembly with minimap2 (or bwa), then running mosdepth " "to compute per-contig depth statistics.  Contigs with mean depth " "> assembly_mean + 3*SD are flagged as possible contaminants or " "organellar sequences."),
+        description=("Calculate depth of coverage by mapping Illumina and/or long reads to a genome assembly with minimap2 (or bwa), then running mosdepth to compute per-contig depth statistics.  Contigs with mean depth > assembly_mean + 3*SD are flagged as possible contaminants or organellar sequences."),
         help="Calculate read depth of coverage for genome assembly",
         formatter_class=CustomHelpFormatter,
     )
@@ -951,7 +951,7 @@ def depth_menu(subparsers):
         default=None,
         dest="quantize_labels",
         metavar="LABELS",
-        help="Comma-separated labels for quantize bins " "(default: NO_COVERAGE,LOW_COVERAGE,CALLABLE,HIGH_COVERAGE,VERY_HIGH_COVERAGE " "for the default bins)",
+        help="Comma-separated labels for quantize bins (default: NO_COVERAGE,LOW_COVERAGE,CALLABLE,HIGH_COVERAGE,VERY_HIGH_COVERAGE for the default bins)",
     )
 
     menu_common_args(optional)
