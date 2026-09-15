@@ -87,11 +87,12 @@ ENV PATH="${PIXI_HOME}/bin:${PATH}"
 
 # ---------------------------------------------------------------------------
 # 3. Copy repository into the image
-#    pixi.toml + pixi.lock are copied first so dependency installation is
-#    cached independently of source-code changes.
+#    pyproject.toml (pixi config lives under [tool.pixi.*]) + pixi.lock are
+#    copied first so dependency installation is cached independently of
+#    source-code changes.
 # ---------------------------------------------------------------------------
 WORKDIR /opt/AAFTF
-COPY pixi.toml pixi.lock ./
+COPY pyproject.toml pixi.lock ./
 
 # Copy rest of the source (needed before pixi install because the default
 # environment installs AAFTF as an editable PyPI package from ".")

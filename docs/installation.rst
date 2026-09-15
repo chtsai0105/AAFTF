@@ -13,10 +13,10 @@ Option 1: conda environment
 
 .. code-block:: bash
 
-    conda create -n aaftf -c bioconda -c conda-forge "python>=3.9" \
+    conda create -n aaftf -c bioconda -c conda-forge "python>=3.10,<3.15" \
         bbmap trimmomatic bowtie2 bwa pilon sourmash blast minimap2 \
-        spades megahit novoplasty biopython fastp masurca unicycler \
-        mosdepth matplotlib "samtools>=1.23"
+        spades megahit novoplasty "biopython>=1.88" fastp masurca unicycler \
+        mosdepth "matplotlib>=3" "samtools>=1.23"
 
     conda activate aaftf
     pip install AAFTF
@@ -34,7 +34,7 @@ Option 1: conda environment
 Option 2: pixi (recommended for reproducible/locked environments)
 ====================================================================
 
-The repository ships a ``pixi.toml`` / ``pixi.lock`` pinning every dependency (this is what the
+The repository ships a ``pyproject.toml`` (``[tool.pixi.*]`` tables) / ``pixi.lock`` pinning every dependency (this is what the
 Docker and Singularity images are built from). From a checkout of the repository:
 
 .. code-block:: bash
@@ -48,7 +48,7 @@ Docker and Singularity images are built from). From a checkout of the repository
     AAFTF --version
 
 To install a specific tagged release instead of an editable checkout, use the ``release``
-environment (tracks the ``aaftf`` package pinned in ``pixi.toml``):
+environment (tracks the ``aaftf`` package pinned in ``pyproject.toml`` (``[tool.pixi.*]`` tables)):
 
 .. code-block:: bash
 
