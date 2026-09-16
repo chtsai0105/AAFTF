@@ -120,3 +120,4 @@ venv.bak/
 # large unreferenced test reads (kept local only)
 tests/Rmic_NRRL_5546_R1.fq.gz
 tests/Rmic_NRRL_5546_R2.fq.gz
+example/*
