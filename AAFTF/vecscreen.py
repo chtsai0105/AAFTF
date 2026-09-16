@@ -48,160 +48,6 @@ Any segment of fewer than 50 bases between two vector matches
 """
 
 
-def group(lst, n):
-    """This groups sets by a size."""
-    for i in range(0, len(lst), n):
-        val = lst[i : i + n]
-        if len(val) == n:
-            yield tuple(val)
-
-
-# flake8: noqa: C901
-def parse_clean_blastn(fastafile, prefix, blastn, stringent, contigs_to_remove=None):
-    """Parse the BLASTN report to get the hits from vector searching.
-
-    The Input file will have format:
-     Blast header rows:
-      qaccver saccver pident length mismatch gapopen qstart qend
-      sstart send evalue score qlen
-    """
-    cleaned = prefix + ".clean.fsa"
-    #    logging = prefix + ".parse.log"
-
-    if contigs_to_remove is None:
-        contigs_to_remove = {}
-    VecHits = {}
-    found_vector_seq = 0
-    with open(blastn) as vectab:
-        rdr = csv.reader(vectab, delimiter="\t")
-        for row in rdr:
-            (qaccver, saccver, pid, length, mismatch, gapopen, qstart, qend, sstart, send, evalue, bitscore, score, qlen) = row
-            if qaccver in contigs_to_remove:
-                continue
-            # vecscreen
-            # https://www.ncbi.nlm.nih.gov/tools/vecscreen/about/#Moderate
-            # says to use score here (I'm interpret as score not bitscore)
-            # need to determine if match is terminal or if internal
-            loc = [int(qstart), int(qend)]
-            if loc[0] > loc[1]:
-                loc = [loc[1], loc[0]]
-            # check for location
-            terminal = False
-            position = None
-            if loc[0] <= 25:
-                terminal = True
-                position = "5"
-            if (int(qlen) - loc[1]) <= 25:
-                terminal = True
-                position = "3"
-            Match = 0  # weak=0, moderate=1, strong=2
-            score = int(score)
-            if terminal:
-                if score >= 19:
-                    Match = 1
-                if score >= 24:
-                    Match = 2
-            else:
-                if score >= 25:
-                    Match = 1
-                if score >= 30:
-                    Match = 2
-            if Match == 0:
-                continue
-            if stringent == "high":
-                if Match > 0:
-                    found_vector_seq += 1
-                    if qaccver not in VecHits:
-                        VecHits[qaccver] = [(saccver, int(qlen), loc, int(score), terminal, position)]
-                    else:
-                        VecHits[qaccver].append((saccver, int(qlen), loc, int(score), terminal, position))
-            else:
-                if Match > 1:
-                    found_vector_seq += 1
-                    if qaccver not in VecHits:
-                        VecHits[qaccver] = [(saccver, int(qlen), loc, int(score), terminal, position)]
-                    else:
-                        VecHits[qaccver].append((saccver, int(qlen), loc, int(score), terminal, position))
-
-    with open(cleaned, "w") as output_handle:
-        # no logging so this is removed
-        # open(logging, "w") as log:
-        for record in SeqIO.parse(fastafile, "fasta"):
-            FiveEnd = 0
-            ThreeEnd = len(record.seq)
-            internals = []
-            slicer = []
-            sInt = []
-            Seq = str(record.seq)
-            if record.id not in VecHits:
-                if len(record.seq) >= 200:
-                    output_handle.write(f">{record.id}\n{softwrap(Seq)}\n")
-            else:
-                # VecHits contains list of tuples of information,
-                # if terminal, then just truncate
-                # off the closest side. Also, need to check if
-                # multiple intervals are within 50
-                # bp of each other, that whole interval is removed.
-                # should be able to accomplish above with the
-                # several rounds that it runs with,
-                # so split on internal and trim terminal. done.
-                for hit in VecHits[record.id]:
-                    ID, length, loc, score, terminal, pos = hit
-                    if terminal and pos == "5":
-                        if loc[1] > FiveEnd:
-                            FiveEnd = loc[1]
-                    elif terminal and pos == "3":
-                        # loc[0] (qstart) is 1-based; the slice end must be
-                        # one less so the first vector/contaminant base isn't kept.
-                        if loc[0] - 1 < ThreeEnd:
-                            ThreeEnd = loc[0] - 1
-                    else:  # internal hits to add to list
-                        if loc not in internals:
-                            internals.append(loc)
-                # now sort intervals
-                sInt = sorted(internals, key=lambda x: int(x[0]))
-                # now construct slicing list
-                if len(sInt) < 1:
-                    slicer = [FiveEnd, ThreeEnd]
-                else:
-                    slicer = [FiveEnd]
-                    for x in sInt:
-                        # x[0] (qstart) is 1-based and used as a slice end below,
-                        # so shift by one to avoid retaining the first hit base.
-                        # x[1] (qend) is used as the following slice start, which
-                        # is already correct as-is.
-                        slicer = slicer + [x[0] - 1, x[1]]
-                    slicer.append(ThreeEnd)
-                paired_slicer = list(group(slicer, 2))
-                if len(paired_slicer) < 2:
-                    status(f"Terminal trimming {record.id} to {paired_slicer}")
-                    newSeq = Seq[paired_slicer[0][0] : paired_slicer[0][1]]
-                    if len(newSeq) >= 200:
-                        output_handle.write(f">{record.id}\n{softwrap(newSeq)}\n")
-                else:
-                    status(f"Splitting contig {record.id} into {paired_slicer}")
-                    for num, y in enumerate(paired_slicer):
-                        newSeq = Seq[y[0] : y[1]]
-                        if len(newSeq) >= 200:
-                            output_handle.write(f">split{num + 1}_{record.id}\n{softwrap(newSeq)}\n")
-
-    return (found_vector_seq, cleaned)
-
-
-def make_blastdb(type, file, name):
-    """Create the BLASTN database for the vecscreen vector search."""
-    idxfile = name
-    if type == "nucl":
-        idxfile += ".nin"
-    else:
-        idxfile += ".pin"
-    idxexists = Path(idxfile).exists()
-    if not idxexists or Path(idxfile).stat().st_ctime < Path(file).stat().st_ctime:
-        cmd = ["makeblastdb", "-dbtype", type, "-in", file, "-out", name]
-        printCMD(cmd)
-        call(cmd, stdout=DEVNULL, stderr=DEVNULL)
-
-
 # flake8: noqa: C901
 def run(
     infile,
@@ -423,3 +269,157 @@ def run(
 
     if not debug:
         SafeRemove(workdir)
+
+
+def group(lst, n):
+    """This groups sets by a size."""
+    for i in range(0, len(lst), n):
+        val = lst[i : i + n]
+        if len(val) == n:
+            yield tuple(val)
+
+
+# flake8: noqa: C901
+def parse_clean_blastn(fastafile, prefix, blastn, stringent, contigs_to_remove=None):
+    """Parse the BLASTN report to get the hits from vector searching.
+
+    The Input file will have format:
+     Blast header rows:
+      qaccver saccver pident length mismatch gapopen qstart qend
+      sstart send evalue score qlen
+    """
+    cleaned = prefix + ".clean.fsa"
+    #    logging = prefix + ".parse.log"
+
+    if contigs_to_remove is None:
+        contigs_to_remove = {}
+    VecHits = {}
+    found_vector_seq = 0
+    with open(blastn) as vectab:
+        rdr = csv.reader(vectab, delimiter="\t")
+        for row in rdr:
+            (qaccver, saccver, pid, length, mismatch, gapopen, qstart, qend, sstart, send, evalue, bitscore, score, qlen) = row
+            if qaccver in contigs_to_remove:
+                continue
+            # vecscreen
+            # https://www.ncbi.nlm.nih.gov/tools/vecscreen/about/#Moderate
+            # says to use score here (I'm interpret as score not bitscore)
+            # need to determine if match is terminal or if internal
+            loc = [int(qstart), int(qend)]
+            if loc[0] > loc[1]:
+                loc = [loc[1], loc[0]]
+            # check for location
+            terminal = False
+            position = None
+            if loc[0] <= 25:
+                terminal = True
+                position = "5"
+            if (int(qlen) - loc[1]) <= 25:
+                terminal = True
+                position = "3"
+            Match = 0  # weak=0, moderate=1, strong=2
+            score = int(score)
+            if terminal:
+                if score >= 19:
+                    Match = 1
+                if score >= 24:
+                    Match = 2
+            else:
+                if score >= 25:
+                    Match = 1
+                if score >= 30:
+                    Match = 2
+            if Match == 0:
+                continue
+            if stringent == "high":
+                if Match > 0:
+                    found_vector_seq += 1
+                    if qaccver not in VecHits:
+                        VecHits[qaccver] = [(saccver, int(qlen), loc, int(score), terminal, position)]
+                    else:
+                        VecHits[qaccver].append((saccver, int(qlen), loc, int(score), terminal, position))
+            else:
+                if Match > 1:
+                    found_vector_seq += 1
+                    if qaccver not in VecHits:
+                        VecHits[qaccver] = [(saccver, int(qlen), loc, int(score), terminal, position)]
+                    else:
+                        VecHits[qaccver].append((saccver, int(qlen), loc, int(score), terminal, position))
+
+    with open(cleaned, "w") as output_handle:
+        # no logging so this is removed
+        # open(logging, "w") as log:
+        for record in SeqIO.parse(fastafile, "fasta"):
+            FiveEnd = 0
+            ThreeEnd = len(record.seq)
+            internals = []
+            slicer = []
+            sInt = []
+            Seq = str(record.seq)
+            if record.id not in VecHits:
+                if len(record.seq) >= 200:
+                    output_handle.write(f">{record.id}\n{softwrap(Seq)}\n")
+            else:
+                # VecHits contains list of tuples of information,
+                # if terminal, then just truncate
+                # off the closest side. Also, need to check if
+                # multiple intervals are within 50
+                # bp of each other, that whole interval is removed.
+                # should be able to accomplish above with the
+                # several rounds that it runs with,
+                # so split on internal and trim terminal. done.
+                for hit in VecHits[record.id]:
+                    ID, length, loc, score, terminal, pos = hit
+                    if terminal and pos == "5":
+                        if loc[1] > FiveEnd:
+                            FiveEnd = loc[1]
+                    elif terminal and pos == "3":
+                        # loc[0] (qstart) is 1-based; the slice end must be
+                        # one less so the first vector/contaminant base isn't kept.
+                        if loc[0] - 1 < ThreeEnd:
+                            ThreeEnd = loc[0] - 1
+                    else:  # internal hits to add to list
+                        if loc not in internals:
+                            internals.append(loc)
+                # now sort intervals
+                sInt = sorted(internals, key=lambda x: int(x[0]))
+                # now construct slicing list
+                if len(sInt) < 1:
+                    slicer = [FiveEnd, ThreeEnd]
+                else:
+                    slicer = [FiveEnd]
+                    for x in sInt:
+                        # x[0] (qstart) is 1-based and used as a slice end below,
+                        # so shift by one to avoid retaining the first hit base.
+                        # x[1] (qend) is used as the following slice start, which
+                        # is already correct as-is.
+                        slicer = slicer + [x[0] - 1, x[1]]
+                    slicer.append(ThreeEnd)
+                paired_slicer = list(group(slicer, 2))
+                if len(paired_slicer) < 2:
+                    status(f"Terminal trimming {record.id} to {paired_slicer}")
+                    newSeq = Seq[paired_slicer[0][0] : paired_slicer[0][1]]
+                    if len(newSeq) >= 200:
+                        output_handle.write(f">{record.id}\n{softwrap(newSeq)}\n")
+                else:
+                    status(f"Splitting contig {record.id} into {paired_slicer}")
+                    for num, y in enumerate(paired_slicer):
+                        newSeq = Seq[y[0] : y[1]]
+                        if len(newSeq) >= 200:
+                            output_handle.write(f">split{num + 1}_{record.id}\n{softwrap(newSeq)}\n")
+
+    return (found_vector_seq, cleaned)
+
+
+def make_blastdb(type, file, name):
+    """Create the BLASTN database for the vecscreen vector search."""
+    idxfile = name
+    if type == "nucl":
+        idxfile += ".nin"
+    else:
+        idxfile += ".pin"
+    idxexists = Path(idxfile).exists()
+    if not idxexists or Path(idxfile).stat().st_ctime < Path(file).stat().st_ctime:
+        cmd = ["makeblastdb", "-dbtype", type, "-in", file, "-out", name]
+        printCMD(cmd)
+        call(cmd, stdout=DEVNULL, stderr=DEVNULL)

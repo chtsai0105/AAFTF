@@ -11,6 +11,11 @@ import sys
 from AAFTF.utility import status
 
 
+def run(table, report, output, **kwargs):
+    """Run the fix_tbl subcommand."""
+    fix_tbl(table, report, output)
+
+
 def parse_tbl(tbl_file_handle):
     """Parse ncbi .tbl format file into a dictionary of lists."""
     features = {}
@@ -129,8 +134,3 @@ def fix_tbl(tbl_fh, adjustment_fh, output_handle):
                         fend = adj["trim_right"]
                         # status(f'Feature at {seqid}:{feature[0]}..{feature[1]} overlaps with right trim {adj["trim_right"]}')
             print("\t".join(feature), file=output_handle)
-
-
-def run(table, report, output, **kwargs):
-    """Run the fix_tbl subcommand."""
-    fix_tbl(table, report, output)

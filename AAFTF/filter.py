@@ -17,43 +17,6 @@ from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
 from AAFTF.utility import SafeRemove, bam_read_count, countfastq, getRAM, printCMD, samtools_sort_cmd, samtools_view_bam_cmd, status
 
 
-def _stderr_for(debug):
-    """Return the stderr= value to use for a subprocess call: inherited when debugging, else silenced."""
-    return None if debug else subprocess.DEVNULL
-
-
-def _run(cmd, debug, suppress_stdout=False):
-    """Print then run a command, showing stderr (and optionally stdout) only in debug mode."""
-    printCMD(cmd)
-    stdout = subprocess.DEVNULL if (suppress_stdout and not debug) else None
-    subprocess.run(cmd, stderr=_stderr_for(debug), stdout=stdout)
-
-
-def _rebuild_index_if_stale(marker_file, contamdb, build_cmd, debug):
-    """(Re)build an aligner index if its marker file is missing or older than contamdb."""
-    marker = Path(marker_file)
-    if not marker.exists() or marker.stat().st_ctime < Path(contamdb).stat().st_ctime:
-        _run(build_cmd, debug, suppress_stdout=True)
-
-
-def _align_and_sort(align_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug):
-    """Pipe an aligner's SAM output through samtools view/sort into a sorted alignBAM."""
-    printCMD(align_cmd)
-    stderr = _stderr_for(debug)
-    p1 = subprocess.Popen(align_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=stderr)
-    p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), stdin=p1.stdout, stderr=stderr)
-    p1.stdout.close()
-    p2.communicate()
-    subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=stderr)
-    SafeRemove(unsorted_bam)
-
-
-def _cleanup_workdir(workdir, debug, custom_workdir):
-    """Remove the auto-generated workdir, unless debugging or the caller supplied their own."""
-    if not debug and not custom_workdir:
-        SafeRemove(workdir)
-
-
 # flake8: noqa: C901
 def run(
     left,
@@ -316,3 +279,40 @@ def run(
             status(f"Filtering complete:\n\tSingle: {clean_reads}.fastq.gz")
             if not pipe:
                 status(f"Your next command might be:\n\tAAFTF assemble -l {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
+
+
+def _stderr_for(debug):
+    """Return the stderr= value to use for a subprocess call: inherited when debugging, else silenced."""
+    return None if debug else subprocess.DEVNULL
+
+
+def _run(cmd, debug, suppress_stdout=False):
+    """Print then run a command, showing stderr (and optionally stdout) only in debug mode."""
+    printCMD(cmd)
+    stdout = subprocess.DEVNULL if (suppress_stdout and not debug) else None
+    subprocess.run(cmd, stderr=_stderr_for(debug), stdout=stdout)
+
+
+def _rebuild_index_if_stale(marker_file, contamdb, build_cmd, debug):
+    """(Re)build an aligner index if its marker file is missing or older than contamdb."""
+    marker = Path(marker_file)
+    if not marker.exists() or marker.stat().st_ctime < Path(contamdb).stat().st_ctime:
+        _run(build_cmd, debug, suppress_stdout=True)
+
+
+def _align_and_sort(align_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug):
+    """Pipe an aligner's SAM output through samtools view/sort into a sorted alignBAM."""
+    printCMD(align_cmd)
+    stderr = _stderr_for(debug)
+    p1 = subprocess.Popen(align_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=stderr)
+    p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), stdin=p1.stdout, stderr=stderr)
+    p1.stdout.close()
+    p2.communicate()
+    subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=stderr)
+    SafeRemove(unsorted_bam)
+
+
+def _cleanup_workdir(workdir, debug, custom_workdir):
+    """Remove the auto-generated workdir, unless debugging or the caller supplied their own."""
+    if not debug and not custom_workdir:
+        SafeRemove(workdir)

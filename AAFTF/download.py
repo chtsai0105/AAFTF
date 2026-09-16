@@ -38,6 +38,63 @@ class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_Redirect308Handler())
 
 
+def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourdb_type="all", **kwargs):
+    """Execute the ``download`` subcommand.
+
+    Downloads reference databases to the ``AAFTF_DB`` directory so that
+    later AAFTF commands do not need to fetch them on-the-fly.
+    """
+    # Resolve database directory
+    db_dir = None
+    if AAFTF_DB:
+        db_dir = AAFTF_DB
+    elif "AAFTF_DB" in os.environ:
+        db_dir = os.environ["AAFTF_DB"]
+    else:
+        status("ERROR: No database directory specified.\n" "  Set the AAFTF_DB environment variable or pass --AAFTF_DB.\n" "  Example:\n" "    export AAFTF_DB=/path/to/aaftf_db\n" "    AAFTF download")
+        sys.exit(1)
+
+    db_dir = str(Path(db_dir).resolve())
+    Path(db_dir).mkdir(parents=True, exist_ok=True)
+    status(f"AAFTF database directory: {db_dir}")
+
+    errors = []
+
+    # Core databases (always downloaded unless --skip-core)
+    if not skip_core:
+        try:
+            _download_contaminants(db_dir, force=force)
+        except Exception as e:
+            errors.append(f"Contaminant accessions: {e}")
+        try:
+            _download_db_links(db_dir, force=force)
+        except Exception as e:
+            errors.append(f"DB_Links: {e}")
+
+    # Sourmash taxonomy databases (optional)
+    if not skip_sourmash:
+        try:
+            _download_sourmash(db_dir, sourdb_type=sourdb_type, force=force)
+        except Exception as e:
+            errors.append(f"Sourmash DB: {e}")
+
+    # NCBI FCS-adaptor resources (optional)
+    if not skip_fcs:
+        try:
+            _download_fcs(db_dir, force=force)
+        except Exception as e:
+            errors.append(f"FCS resources: {e}")
+
+    if errors:
+        status("\nSome downloads failed:")
+        for err in errors:
+            status(f"  - {err}")
+        status("\nYou can re-run 'AAFTF download' later; already-downloaded " "files will be skipped unless you pass --force.")
+        sys.exit(1)
+
+    status("Setup complete. Future AAFTF runs will use cached files from " f"{db_dir}")
+
+
 def _download(url, dest, force=False):
     """Download ``url`` to ``dest`` if it does not already exist.
 
@@ -180,60 +237,3 @@ def _download_fcs(db_dir, force=False):
     else:
         image_url = str(Path(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]))
         _download(image_url, image_dest, force=force)
-
-
-def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourdb_type="all", **kwargs):
-    """Execute the ``download`` subcommand.
-
-    Downloads reference databases to the ``AAFTF_DB`` directory so that
-    later AAFTF commands do not need to fetch them on-the-fly.
-    """
-    # Resolve database directory
-    db_dir = None
-    if AAFTF_DB:
-        db_dir = AAFTF_DB
-    elif "AAFTF_DB" in os.environ:
-        db_dir = os.environ["AAFTF_DB"]
-    else:
-        status("ERROR: No database directory specified.\n" "  Set the AAFTF_DB environment variable or pass --AAFTF_DB.\n" "  Example:\n" "    export AAFTF_DB=/path/to/aaftf_db\n" "    AAFTF download")
-        sys.exit(1)
-
-    db_dir = str(Path(db_dir).resolve())
-    Path(db_dir).mkdir(parents=True, exist_ok=True)
-    status(f"AAFTF database directory: {db_dir}")
-
-    errors = []
-
-    # Core databases (always downloaded unless --skip-core)
-    if not skip_core:
-        try:
-            _download_contaminants(db_dir, force=force)
-        except Exception as e:
-            errors.append(f"Contaminant accessions: {e}")
-        try:
-            _download_db_links(db_dir, force=force)
-        except Exception as e:
-            errors.append(f"DB_Links: {e}")
-
-    # Sourmash taxonomy databases (optional)
-    if not skip_sourmash:
-        try:
-            _download_sourmash(db_dir, sourdb_type=sourdb_type, force=force)
-        except Exception as e:
-            errors.append(f"Sourmash DB: {e}")
-
-    # NCBI FCS-adaptor resources (optional)
-    if not skip_fcs:
-        try:
-            _download_fcs(db_dir, force=force)
-        except Exception as e:
-            errors.append(f"FCS resources: {e}")
-
-    if errors:
-        status("\nSome downloads failed:")
-        for err in errors:
-            status(f"  - {err}")
-        status("\nYou can re-run 'AAFTF download' later; already-downloaded " "files will be skipped unless you pass --force.")
-        sys.exit(1)
-
-    status("Setup complete. Future AAFTF runs will use cached files from " f"{db_dir}")

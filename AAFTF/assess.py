@@ -13,6 +13,21 @@ from Bio import SeqIO
 from AAFTF.utility import status
 
 
+def run(input, report=None, telomere_monomer="TAA[C]+", telomere_n_repeat=2, telomere_window=200, **kwargs):
+    """This is the general run command to calculate the genome statistics.
+
+    This function will also attempt to find the telomere repeats and count these.
+    """
+    if not Path(input).exists():
+        status(f"Inputfile {input} was not readable, check parameters")
+
+    output_handle = None
+
+    if report:
+        output_handle = open(report, "w")
+    genome_asm_stats(input, output_handle, telomere_monomer, telomere_n_repeat, telomere_window)
+
+
 def genome_asm_stats(fasta_file, output_handle, telomere_repeat, n_minimum, telomere_window=200):
     """Calculate genome assembly statistics."""
     lengths = []
@@ -134,18 +149,3 @@ def findTelomere(seq, monomer, n, window=200):
         reverse = True
 
     return forward, reverse
-
-
-def run(input, report=None, telomere_monomer="TAA[C]+", telomere_n_repeat=2, telomere_window=200, **kwargs):
-    """This is the general run command to calculate the genome statistics.
-
-    This function will also attempt to find the telomere repeats and count these.
-    """
-    if not Path(input).exists():
-        status(f"Inputfile {input} was not readable, check parameters")
-
-    output_handle = None
-
-    if report:
-        output_handle = open(report, "w")
-    genome_asm_stats(input, output_handle, telomere_monomer, telomere_n_repeat, telomere_window)

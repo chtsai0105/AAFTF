@@ -45,6 +45,34 @@ REQUIRED_PYTHON_PACKAGES = {
 }
 
 
+def run(**kwargs):
+    """Check whether AAFTF's external tool and Python package dependencies are installed."""
+    missing_required = _print_tool_table("Checking required external tools...", _check_tools(REQUIRED_TOOLS))
+    print()
+    missing_optional = _print_tool_table("Checking optional external tools...", _check_tools(OPTIONAL_TOOLS))
+
+    print()
+    status("Checking required Python packages...")
+    missing_packages = []
+    for dist_name, found in _check_python_packages(REQUIRED_PYTHON_PACKAGES):
+        if found:
+            print(f"  [OK]      {dist_name}")
+        else:
+            print(f"  [MISSING] {dist_name}")
+            missing_packages.append(dist_name)
+
+    print()
+    if missing_required or missing_packages:
+        status(f"ERROR: {len(missing_required)} required tool(s) and {len(missing_packages)} required package(s) missing.")
+        if missing_optional:
+            status(f"NOTE: {len(missing_optional)} optional tool(s) also missing (only needed for specific subcommands).")
+        sys.exit(1)
+    else:
+        status("All required dependencies are installed.")
+        if missing_optional:
+            status(f"NOTE: {len(missing_optional)} optional tool(s) missing (only needed for specific subcommands).")
+
+
 def _check_tools(tools):
     results = []
     for tool, used_by in sorted(tools.items()):
@@ -74,31 +102,3 @@ def _print_tool_table(title, results):
             print(f"  [MISSING] {tool:<20} required by: {used_by}")
             missing.append(tool)
     return missing
-
-
-def run(**kwargs):
-    """Check whether AAFTF's external tool and Python package dependencies are installed."""
-    missing_required = _print_tool_table("Checking required external tools...", _check_tools(REQUIRED_TOOLS))
-    print()
-    missing_optional = _print_tool_table("Checking optional external tools...", _check_tools(OPTIONAL_TOOLS))
-
-    print()
-    status("Checking required Python packages...")
-    missing_packages = []
-    for dist_name, found in _check_python_packages(REQUIRED_PYTHON_PACKAGES):
-        if found:
-            print(f"  [OK]      {dist_name}")
-        else:
-            print(f"  [MISSING] {dist_name}")
-            missing_packages.append(dist_name)
-
-    print()
-    if missing_required or missing_packages:
-        status(f"ERROR: {len(missing_required)} required tool(s) and {len(missing_packages)} required package(s) missing.")
-        if missing_optional:
-            status(f"NOTE: {len(missing_optional)} optional tool(s) also missing (only needed for specific subcommands).")
-        sys.exit(1)
-    else:
-        status("All required dependencies are installed.")
-        if missing_optional:
-            status(f"NOTE: {len(missing_optional)} optional tool(s) missing (only needed for specific subcommands).")

@@ -63,6 +63,297 @@ _FALLBACK_COLOURS = ["#313695", "#74add1", "#ffffbf", "#f46d43", "#a50026", "#76
 _SCAFFOLDS_PER_PAGE = 50
 
 # ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
+
+def run(
+    input,
+    out="coverage_stats.txt",
+    left=None,
+    right=None,
+    longreads=None,
+    illumina_preset="sr",
+    longread_preset="map-ont",
+    aligner="minimap2",
+    cpus=1,
+    workdir=None,
+    debug=False,
+    pipe=False,
+    min_contig_len=500,
+    no_plot=False,
+    plot_format="pdf",
+    quantize=_DEFAULT_QUANTIZE,
+    quantize_labels=None,
+    **kwargs,
+):
+    """Execute depth-of-coverage analysis for a genome assembly.
+
+    Maps Illumina and/or long reads to the assembly, computes per-contig
+    and whole-assembly depth via mosdepth, and writes a coverage report.
+    Contigs with mean depth > (assembly_mean + 3 * SD) are flagged as
+    possible contaminants or organellar sequences.
+
+    When plotting is not disabled (--no-plot), mosdepth is run in quantized
+    mode and three coverage plots are produced alongside the text report.
+    """
+    # ------------------------------------------------------------------
+    # Validate inputs
+    # ------------------------------------------------------------------
+    if not left and not longreads:
+        status("ERROR: provide at least --left (Illumina) or --longreads")
+        sys.exit(1)
+
+    if not checkfile(input):
+        status(f"ERROR: assembly file not found or empty: {input}")
+        sys.exit(1)
+
+    genome = str(Path(input).resolve())
+    reads_left = str(Path(left).resolve()) if left else None
+    reads_right = str(Path(right).resolve()) if right else None
+    longreads = str(Path(longreads).resolve()) if longreads else None
+
+    for label, fpath in [("--left", reads_left), ("--right", reads_right), ("--longreads", longreads)]:
+        if fpath and not checkfile(fpath):
+            status(f"ERROR: read file not found or empty ({label}): {fpath}")
+            sys.exit(1)
+
+    # ------------------------------------------------------------------
+    # Check required tools
+    # ------------------------------------------------------------------
+    required = {"samtools", "mosdepth"}
+    if reads_left:
+        required.add(aligner)
+    if longreads:
+        required.add("minimap2")
+    for tool in sorted(required):
+        if not which(tool):
+            status(f"ERROR: required tool '{tool}' not found in PATH. " f"Install via conda: conda install -c bioconda {tool}")
+            sys.exit(1)
+
+    quantize_str = quantize
+    quantize_labels_str = quantize_labels
+
+    if not no_plot and not HAS_MATPLOTLIB:
+        status("WARNING: matplotlib not available — coverage plots will be skipped.")
+        status("         Install with: conda install -c conda-forge matplotlib")
+        no_plot = True
+
+    # ------------------------------------------------------------------
+    # Working directory
+    # ------------------------------------------------------------------
+    custom_workdir = bool(workdir)
+    if not workdir:
+        workdir = f"aaftf-depth_{str(uuid.uuid4())[:8]}"
+    workdir = str(Path(workdir).resolve())
+    if not Path(workdir).exists():
+        os.mkdir(workdir)
+
+    report_file = out
+
+    # ------------------------------------------------------------------
+    # Count input reads
+    # ------------------------------------------------------------------
+    status("Counting input reads...")
+    illumina_counts = {}
+    if reads_left:
+        status(f"  Counting reads in {Path(reads_left).name}")
+        illumina_counts["left"] = count_fastq_reads(reads_left)
+    if reads_right:
+        status(f"  Counting reads in {Path(reads_right).name}")
+        illumina_counts["right"] = count_fastq_reads(reads_right)
+    lr_count = 0
+    if longreads:
+        status(f"  Counting reads in {Path(longreads).name}")
+        lr_count = count_fastq_reads(longreads)
+
+    # ------------------------------------------------------------------
+    # Map reads
+    # ------------------------------------------------------------------
+    status("Mapping reads to assembly...")
+    bam_illumina, bam_longreads, bam_combined = map_reads(
+        genome,
+        reads_left,
+        reads_right,
+        longreads,
+        workdir,
+        cpus,
+        illumina_preset,
+        longread_preset,
+        aligner,
+        debug,
+    )
+
+    if not bam_combined or not Path(bam_combined).exists():
+        status("ERROR: mapping produced no BAM file")
+        sys.exit(1)
+
+    # ------------------------------------------------------------------
+    # samtools flagstat
+    # ------------------------------------------------------------------
+    status("Running samtools flagstat...")
+    flagstat_illumina = run_flagstat(bam_illumina) if bam_illumina else None
+    flagstat_longreads = run_flagstat(bam_longreads) if bam_longreads else None
+
+    # ------------------------------------------------------------------
+    # mosdepth (quantized when plotting is enabled, standard otherwise)
+    # ------------------------------------------------------------------
+    status("Running mosdepth...")
+    quantized_bed = None
+    labels = None
+    colours = None
+    if not no_plot:
+        labels, env_dict = _parse_quantize_bins(quantize_str, quantize_labels_str)
+        colours = _cov_colours_for_labels(labels)
+        summary_file, quantized_bed = run_mosdepth_quantized(
+            bam_combined,
+            workdir,
+            cpus,
+            quantize_str,
+            env_dict,
+            debug=debug,
+        )
+    else:
+        summary_file = run_mosdepth(
+            bam_combined,
+            workdir,
+            cpus,
+            debug=debug,
+        )
+
+    if not Path(summary_file).exists():
+        status(f"ERROR: mosdepth summary not produced: {summary_file}")
+        sys.exit(1)
+
+    total_row, contig_rows = parse_mosdepth_summary(summary_file)
+
+    dist_file = summary_file.replace(".mosdepth.summary.txt", ".mosdepth.global.dist.txt")
+    coverage_breadth = _coverage_breadth_from_dist(dist_file)
+
+    # ------------------------------------------------------------------
+    # Statistics for outlier detection
+    # ------------------------------------------------------------------
+    analysis_rows = [c for c in contig_rows if c.get("length", 0) >= min_contig_len]
+    # mosdepth global mean: bases covered / assembly length (length-weighted)
+    mosdepth_mean_depth = total_row["mean"] if total_row else None
+    if analysis_rows:
+        depths = [c["mean"] for c in analysis_rows]
+        # Per-contig arithmetic mean (unweighted)
+        contig_arith_mean = sum(depths) / len(depths)
+        # Use mosdepth global mean for outlier threshold when available; it is
+        # the more accurate estimate because it weights by contig length.
+        mean_depth = mosdepth_mean_depth if mosdepth_mean_depth is not None else contig_arith_mean
+        # Population SD is intentional: the contigs ARE the full assembly
+        # (not a sample). Sample SD would systematically push the threshold
+        # above any single outlier, defeating outlier detection on small sets.
+        sd_depth = math.sqrt(sum((d - mean_depth) ** 2 for d in depths) / len(depths))
+        threshold_2sd = mean_depth + 2.0 * sd_depth
+        threshold_3sd = mean_depth + 3.0 * sd_depth
+    else:
+        contig_arith_mean = mosdepth_mean_depth if mosdepth_mean_depth is not None else 0.0
+        mean_depth = contig_arith_mean
+        sd_depth = 0.0
+        threshold_2sd = 0.0
+        threshold_3sd = 0.0
+
+    contig_rows_sorted = sorted(contig_rows, key=lambda x: x["mean"], reverse=True)
+    n_outliers_2sd = sum(1 for c in contig_rows if threshold_2sd < c["mean"] <= threshold_3sd)
+    n_outliers_3sd = sum(1 for c in contig_rows if c["mean"] > threshold_3sd)
+
+    # ------------------------------------------------------------------
+    # Write report
+    # ------------------------------------------------------------------
+    status(f"Writing coverage report to {report_file}")
+    with open(report_file, "w") as fout:
+        sep = "=" * 65
+        fout.write(sep + "\n")
+        fout.write("AAFTF Coverage Statistics Report\n")
+        fout.write(sep + "\n")
+        fout.write(f"Assembly: {genome}\n\n")
+
+        # --- Section 1: Read Input Summary ---
+        fout.write("=== 1. Read Input Summary ===\n")
+        if reads_left:
+            n = illumina_counts.get("left", -1)
+            fout.write(f"  Illumina left reads:  {reads_left}\n")
+            fout.write(f"    Read count:         {n:,}\n" if n >= 0 else "    Read count:         unknown\n")
+        if reads_right:
+            n = illumina_counts.get("right", -1)
+            fout.write(f"  Illumina right reads: {reads_right}\n")
+            fout.write(f"    Read count:         {n:,}\n" if n >= 0 else "    Read count:         unknown\n")
+        if longreads:
+            fout.write(f"  Long reads:           {longreads}\n")
+            fout.write(f"    Read count:         {lr_count:,}\n" if lr_count >= 0 else "    Read count:         unknown\n")
+
+        if flagstat_illumina:
+            fout.write("\n  Illumina alignment (samtools flagstat):\n")
+            for line in flagstat_illumina.splitlines():
+                fout.write(f"    {line}\n")
+        if flagstat_longreads:
+            fout.write("\n  Long-read alignment (samtools flagstat):\n")
+            for line in flagstat_longreads.splitlines():
+                fout.write(f"    {line}\n")
+        fout.write("\n")
+
+        # --- Section 2: Whole-Assembly Coverage ---
+        fout.write("=== 2. Whole-Assembly Coverage ===\n")
+        if total_row:
+            fout.write(f"  Mean depth (mosdepth global, length-weighted): {mosdepth_mean_depth:.2f}x\n")
+            fout.write(f"  Mean depth (per-contig arithmetic mean):        {contig_arith_mean:.2f}x\n")
+            fout.write(f"  Total assembly length: {total_row['length']:,} bp\n")
+            if coverage_breadth is not None:
+                fout.write(f"  Bases covered (>=1x):  {coverage_breadth * 100:.2f}%\n")
+        else:
+            fout.write(f"  Mean depth (per-contig arithmetic mean): {contig_arith_mean:.2f}x\n")
+        fout.write("\n")
+
+        # --- Section 3: Per-Contig Coverage ---
+        fout.write("=== 3. Per-Contig Coverage (sorted by depth, descending) ===\n")
+        fout.write(f"  Assembly mean: {mean_depth:.2f}x   SD: {sd_depth:.2f}x\n")
+        fout.write(f"  Elevated threshold  (mean + 2*SD): {threshold_2sd:.2f}x  ({n_outliers_2sd} contigs)\n")
+        fout.write(f"  Outlier threshold   (mean + 3*SD): {threshold_3sd:.2f}x  ({n_outliers_3sd} contigs)\n")
+        fout.write("  OUTLIER contigs are likely contaminants or organellar sequences.\n")
+        fout.write("  ELEVATED contigs are candidates worth inspecting (2–3 SD above mean).\n\n")
+
+        cw = (40, 14, 12)
+        header = f"  {'Contig':<{cw[0]}} " f"{'Length (bp)':>{cw[1]}} " f"{'Mean Depth':>{cw[2]}}  Flag\n"
+        fout.write(header)
+        fout.write("  " + "-" * (sum(cw) + 10) + "\n")
+        for c in contig_rows_sorted:
+            depth = c["mean"]
+            if depth > threshold_3sd:
+                flag = "** OUTLIER (possible contaminant/organelle)"
+            elif depth > threshold_2sd:
+                flag = "   ELEVATED (inspect — 2–3 SD above mean)"
+            else:
+                flag = ""
+            fout.write(f"  {c['chrom']:<{cw[0]}} " f"{c['length']:>{cw[1]},} " f"{c['mean']:>{cw[2]}.2f}  {flag}\n")
+
+    status(f"Coverage report written to: {report_file}")
+
+    # ------------------------------------------------------------------
+    # Coverage plots
+    # ------------------------------------------------------------------
+    if quantized_bed and Path(quantized_bed).exists():
+        status("Reading quantized coverage BED...")
+        contig_data = _read_quantized_bed(quantized_bed)
+        plot_prefix = _get_plot_prefix(input, out)
+        status("Generating coverage plots...")
+        _plot_coverage_heatmap(contig_data, contig_rows_sorted, labels, colours, plot_prefix, plot_format)
+        _plot_coverage_barplot(contig_data, contig_rows_sorted, labels, colours, plot_prefix, plot_format)
+        _plot_depth_histogram(contig_rows, mean_depth, plot_prefix, plot_format)
+
+    # ------------------------------------------------------------------
+    # Cleanup
+    # ------------------------------------------------------------------
+    if not debug and not custom_workdir:
+        SafeRemove(workdir)
+
+    if not pipe:
+        status(f"Your next command might be:\n" f"\tAAFTF assess -i {input}\n")
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -177,7 +468,6 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
         map_cmd = ["minimap2", "-ax", longread_preset, "-t", str(cpus), genome, longreads]
         _map_and_sort(map_cmd, bam_longreads)
         subprocess.run(["samtools", "index", bam_longreads], stderr=stderr_dest)
-
 
     # --- Combine ---
     if bam_illumina and bam_longreads:
@@ -659,294 +949,3 @@ def _plot_depth_histogram(contig_rows, mean_depth, plot_prefix, plot_format):
     path = f"{plot_prefix}.depth_histogram.{plot_format}"
     _save_figure(fig, path, plot_format)
     status(f"Depth histogram written to: {path}")
-
-
-# ---------------------------------------------------------------------------
-# Main entry point
-# ---------------------------------------------------------------------------
-
-
-def run(
-    input,
-    out="coverage_stats.txt",
-    left=None,
-    right=None,
-    longreads=None,
-    illumina_preset="sr",
-    longread_preset="map-ont",
-    aligner="minimap2",
-    cpus=1,
-    workdir=None,
-    debug=False,
-    pipe=False,
-    min_contig_len=500,
-    no_plot=False,
-    plot_format="pdf",
-    quantize=_DEFAULT_QUANTIZE,
-    quantize_labels=None,
-    **kwargs,
-):
-    """Execute depth-of-coverage analysis for a genome assembly.
-
-    Maps Illumina and/or long reads to the assembly, computes per-contig
-    and whole-assembly depth via mosdepth, and writes a coverage report.
-    Contigs with mean depth > (assembly_mean + 3 * SD) are flagged as
-    possible contaminants or organellar sequences.
-
-    When plotting is not disabled (--no-plot), mosdepth is run in quantized
-    mode and three coverage plots are produced alongside the text report.
-    """
-    # ------------------------------------------------------------------
-    # Validate inputs
-    # ------------------------------------------------------------------
-    if not left and not longreads:
-        status("ERROR: provide at least --left (Illumina) or --longreads")
-        sys.exit(1)
-
-    if not checkfile(input):
-        status(f"ERROR: assembly file not found or empty: {input}")
-        sys.exit(1)
-
-    genome = str(Path(input).resolve())
-    reads_left = str(Path(left).resolve()) if left else None
-    reads_right = str(Path(right).resolve()) if right else None
-    longreads = str(Path(longreads).resolve()) if longreads else None
-
-    for label, fpath in [("--left", reads_left), ("--right", reads_right), ("--longreads", longreads)]:
-        if fpath and not checkfile(fpath):
-            status(f"ERROR: read file not found or empty ({label}): {fpath}")
-            sys.exit(1)
-
-    # ------------------------------------------------------------------
-    # Check required tools
-    # ------------------------------------------------------------------
-    required = {"samtools", "mosdepth"}
-    if reads_left:
-        required.add(aligner)
-    if longreads:
-        required.add("minimap2")
-    for tool in sorted(required):
-        if not which(tool):
-            status(f"ERROR: required tool '{tool}' not found in PATH. " f"Install via conda: conda install -c bioconda {tool}")
-            sys.exit(1)
-
-    quantize_str = quantize
-    quantize_labels_str = quantize_labels
-
-    if not no_plot and not HAS_MATPLOTLIB:
-        status("WARNING: matplotlib not available — coverage plots will be skipped.")
-        status("         Install with: conda install -c conda-forge matplotlib")
-        no_plot = True
-
-    # ------------------------------------------------------------------
-    # Working directory
-    # ------------------------------------------------------------------
-    custom_workdir = bool(workdir)
-    if not workdir:
-        workdir = f"aaftf-depth_{str(uuid.uuid4())[:8]}"
-    workdir = str(Path(workdir).resolve())
-    if not Path(workdir).exists():
-        os.mkdir(workdir)
-
-    report_file = out
-
-    # ------------------------------------------------------------------
-    # Count input reads
-    # ------------------------------------------------------------------
-    status("Counting input reads...")
-    illumina_counts = {}
-    if reads_left:
-        status(f"  Counting reads in {Path(reads_left).name}")
-        illumina_counts["left"] = count_fastq_reads(reads_left)
-    if reads_right:
-        status(f"  Counting reads in {Path(reads_right).name}")
-        illumina_counts["right"] = count_fastq_reads(reads_right)
-    lr_count = 0
-    if longreads:
-        status(f"  Counting reads in {Path(longreads).name}")
-        lr_count = count_fastq_reads(longreads)
-
-    # ------------------------------------------------------------------
-    # Map reads
-    # ------------------------------------------------------------------
-    status("Mapping reads to assembly...")
-    bam_illumina, bam_longreads, bam_combined = map_reads(
-        genome,
-        reads_left,
-        reads_right,
-        longreads,
-        workdir,
-        cpus,
-        illumina_preset,
-        longread_preset,
-        aligner,
-        debug,
-    )
-
-    if not bam_combined or not Path(bam_combined).exists():
-        status("ERROR: mapping produced no BAM file")
-        sys.exit(1)
-
-    # ------------------------------------------------------------------
-    # samtools flagstat
-    # ------------------------------------------------------------------
-    status("Running samtools flagstat...")
-    flagstat_illumina = run_flagstat(bam_illumina) if bam_illumina else None
-    flagstat_longreads = run_flagstat(bam_longreads) if bam_longreads else None
-
-    # ------------------------------------------------------------------
-    # mosdepth (quantized when plotting is enabled, standard otherwise)
-    # ------------------------------------------------------------------
-    status("Running mosdepth...")
-    quantized_bed = None
-    labels = None
-    colours = None
-    if not no_plot:
-        labels, env_dict = _parse_quantize_bins(quantize_str, quantize_labels_str)
-        colours = _cov_colours_for_labels(labels)
-        summary_file, quantized_bed = run_mosdepth_quantized(
-            bam_combined,
-            workdir,
-            cpus,
-            quantize_str,
-            env_dict,
-            debug=debug,
-        )
-    else:
-        summary_file = run_mosdepth(
-            bam_combined,
-            workdir,
-            cpus,
-            debug=debug,
-        )
-
-    if not Path(summary_file).exists():
-        status(f"ERROR: mosdepth summary not produced: {summary_file}")
-        sys.exit(1)
-
-    total_row, contig_rows = parse_mosdepth_summary(summary_file)
-
-    dist_file = summary_file.replace(".mosdepth.summary.txt", ".mosdepth.global.dist.txt")
-    coverage_breadth = _coverage_breadth_from_dist(dist_file)
-
-    # ------------------------------------------------------------------
-    # Statistics for outlier detection
-    # ------------------------------------------------------------------
-    analysis_rows = [c for c in contig_rows if c.get("length", 0) >= min_contig_len]
-    # mosdepth global mean: bases covered / assembly length (length-weighted)
-    mosdepth_mean_depth = total_row["mean"] if total_row else None
-    if analysis_rows:
-        depths = [c["mean"] for c in analysis_rows]
-        # Per-contig arithmetic mean (unweighted)
-        contig_arith_mean = sum(depths) / len(depths)
-        # Use mosdepth global mean for outlier threshold when available; it is
-        # the more accurate estimate because it weights by contig length.
-        mean_depth = mosdepth_mean_depth if mosdepth_mean_depth is not None else contig_arith_mean
-        # Population SD is intentional: the contigs ARE the full assembly
-        # (not a sample). Sample SD would systematically push the threshold
-        # above any single outlier, defeating outlier detection on small sets.
-        sd_depth = math.sqrt(sum((d - mean_depth) ** 2 for d in depths) / len(depths))
-        threshold_2sd = mean_depth + 2.0 * sd_depth
-        threshold_3sd = mean_depth + 3.0 * sd_depth
-    else:
-        contig_arith_mean = mosdepth_mean_depth if mosdepth_mean_depth is not None else 0.0
-        mean_depth = contig_arith_mean
-        sd_depth = 0.0
-        threshold_2sd = 0.0
-        threshold_3sd = 0.0
-
-    contig_rows_sorted = sorted(contig_rows, key=lambda x: x["mean"], reverse=True)
-    n_outliers_2sd = sum(1 for c in contig_rows if threshold_2sd < c["mean"] <= threshold_3sd)
-    n_outliers_3sd = sum(1 for c in contig_rows if c["mean"] > threshold_3sd)
-
-    # ------------------------------------------------------------------
-    # Write report
-    # ------------------------------------------------------------------
-    status(f"Writing coverage report to {report_file}")
-    with open(report_file, "w") as fout:
-        sep = "=" * 65
-        fout.write(sep + "\n")
-        fout.write("AAFTF Coverage Statistics Report\n")
-        fout.write(sep + "\n")
-        fout.write(f"Assembly: {genome}\n\n")
-
-        # --- Section 1: Read Input Summary ---
-        fout.write("=== 1. Read Input Summary ===\n")
-        if reads_left:
-            n = illumina_counts.get("left", -1)
-            fout.write(f"  Illumina left reads:  {reads_left}\n")
-            fout.write(f"    Read count:         {n:,}\n" if n >= 0 else "    Read count:         unknown\n")
-        if reads_right:
-            n = illumina_counts.get("right", -1)
-            fout.write(f"  Illumina right reads: {reads_right}\n")
-            fout.write(f"    Read count:         {n:,}\n" if n >= 0 else "    Read count:         unknown\n")
-        if longreads:
-            fout.write(f"  Long reads:           {longreads}\n")
-            fout.write(f"    Read count:         {lr_count:,}\n" if lr_count >= 0 else "    Read count:         unknown\n")
-
-        if flagstat_illumina:
-            fout.write("\n  Illumina alignment (samtools flagstat):\n")
-            for line in flagstat_illumina.splitlines():
-                fout.write(f"    {line}\n")
-        if flagstat_longreads:
-            fout.write("\n  Long-read alignment (samtools flagstat):\n")
-            for line in flagstat_longreads.splitlines():
-                fout.write(f"    {line}\n")
-        fout.write("\n")
-
-        # --- Section 2: Whole-Assembly Coverage ---
-        fout.write("=== 2. Whole-Assembly Coverage ===\n")
-        if total_row:
-            fout.write(f"  Mean depth (mosdepth global, length-weighted): {mosdepth_mean_depth:.2f}x\n")
-            fout.write(f"  Mean depth (per-contig arithmetic mean):        {contig_arith_mean:.2f}x\n")
-            fout.write(f"  Total assembly length: {total_row['length']:,} bp\n")
-            if coverage_breadth is not None:
-                fout.write(f"  Bases covered (>=1x):  {coverage_breadth * 100:.2f}%\n")
-        else:
-            fout.write(f"  Mean depth (per-contig arithmetic mean): {contig_arith_mean:.2f}x\n")
-        fout.write("\n")
-
-        # --- Section 3: Per-Contig Coverage ---
-        fout.write("=== 3. Per-Contig Coverage (sorted by depth, descending) ===\n")
-        fout.write(f"  Assembly mean: {mean_depth:.2f}x   SD: {sd_depth:.2f}x\n")
-        fout.write(f"  Elevated threshold  (mean + 2*SD): {threshold_2sd:.2f}x  ({n_outliers_2sd} contigs)\n")
-        fout.write(f"  Outlier threshold   (mean + 3*SD): {threshold_3sd:.2f}x  ({n_outliers_3sd} contigs)\n")
-        fout.write("  OUTLIER contigs are likely contaminants or organellar sequences.\n")
-        fout.write("  ELEVATED contigs are candidates worth inspecting (2–3 SD above mean).\n\n")
-
-        cw = (40, 14, 12)
-        header = f"  {'Contig':<{cw[0]}} " f"{'Length (bp)':>{cw[1]}} " f"{'Mean Depth':>{cw[2]}}  Flag\n"
-        fout.write(header)
-        fout.write("  " + "-" * (sum(cw) + 10) + "\n")
-        for c in contig_rows_sorted:
-            depth = c["mean"]
-            if depth > threshold_3sd:
-                flag = "** OUTLIER (possible contaminant/organelle)"
-            elif depth > threshold_2sd:
-                flag = "   ELEVATED (inspect — 2–3 SD above mean)"
-            else:
-                flag = ""
-            fout.write(f"  {c['chrom']:<{cw[0]}} " f"{c['length']:>{cw[1]},} " f"{c['mean']:>{cw[2]}.2f}  {flag}\n")
-
-    status(f"Coverage report written to: {report_file}")
-
-    # ------------------------------------------------------------------
-    # Coverage plots
-    # ------------------------------------------------------------------
-    if quantized_bed and Path(quantized_bed).exists():
-        status("Reading quantized coverage BED...")
-        contig_data = _read_quantized_bed(quantized_bed)
-        plot_prefix = _get_plot_prefix(input, out)
-        status("Generating coverage plots...")
-        _plot_coverage_heatmap(contig_data, contig_rows_sorted, labels, colours, plot_prefix, plot_format)
-        _plot_coverage_barplot(contig_data, contig_rows_sorted, labels, colours, plot_prefix, plot_format)
-        _plot_depth_histogram(contig_rows, mean_depth, plot_prefix, plot_format)
-
-    # ------------------------------------------------------------------
-    # Cleanup
-    # ------------------------------------------------------------------
-    if not debug and not custom_workdir:
-        SafeRemove(workdir)
-
-    if not pipe:
-        status(f"Your next command might be:\n" f"\tAAFTF assess -i {input}\n")

@@ -17,8 +17,43 @@ from pathlib import Path
 from AAFTF.utility import fastastats, printCMD, status
 
 
-def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, assembler_args=None,
-               tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
+def run(
+    out,
+    method="spades",
+    workdir=None,
+    cpus=1,
+    memory="32",
+    isolate=False,
+    careful=True,
+    assembler_args=None,
+    tmpdir=None,
+    left=None,
+    right=None,
+    longreads=None,
+    merged=None,
+    haplocontigs=False,
+    debug=False,
+    pipe=False,
+    **kwargs,
+):
+    """General run command for this subcommand module where parameters are consumed."""
+    if method == "spades":
+        run_spades(workdir=workdir, cpus=cpus, memory=memory, isolate=isolate, careful=careful, assembler_args=assembler_args, tmpdir=tmpdir, left=left, right=right, merged=merged, out=out, debug=debug, pipe=pipe)
+    elif method == "dipspades":
+        run_dipspades(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, haplocontigs=haplocontigs, tmpdir=tmpdir, left=left, right=right, merged=merged, out=out, debug=debug, pipe=pipe)
+    elif method == "megahit":
+        run_megahit(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, tmpdir=tmpdir, left=left, right=right, out=out, debug=debug, pipe=pipe)
+    elif method == "masurca":
+        status("Masurca assembly is not yet implemented in AAFTF")
+    elif method == "nextdenovo":
+        status("NextDenovo assembly is not yet implemented in AAFTF")
+    elif method == "unicycler":
+        run_unicycler(workdir=workdir, cpus=cpus, left=left, right=right, longreads=longreads, merged=merged, out=out, debug=debug, pipe=pipe)
+    else:
+        status(f"Unknown assembler method {method}")
+
+
+def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, assembler_args=None, tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
     """Run SPAdes assembhler."""
     if not workdir:
         workdir = "spades_" + str(uuid.uuid4())[:8]
@@ -92,8 +127,7 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, a
         status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")
 
 
-def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haplocontigs=False,
-                   tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
+def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haplocontigs=False, tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
     """Run dipSPAdes for diploid assembly support, only on older version of SPAdes."""
     if not workdir:
         workdir = "dipspades_" + str(os.getpid())
@@ -164,8 +198,7 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
         status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")
 
 
-def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=None,
-                left=None, right=None, out=None, debug=False, pipe=False, **kwargs):
+def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=None, left=None, right=None, out=None, debug=False, pipe=False, **kwargs):
     """Run megahit assembler. This is faster but maybe less accurate."""
     if not workdir:
         workdir = "megahit_" + str(os.getpid())
@@ -228,8 +261,7 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
         status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")
 
 
-def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, merged=None,
-                   out=None, debug=False, pipe=False, **kwargs):
+def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
     """Run Unicycler assembhler."""
     if not workdir:
         workdir = "unicycler_" + str(uuid.uuid4())[:8]
@@ -297,45 +329,3 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
 
     if not pipe:
         status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")
-
-
-def run(
-    out,
-    method="spades",
-    workdir=None,
-    cpus=1,
-    memory="32",
-    isolate=False,
-    careful=True,
-    assembler_args=None,
-    tmpdir=None,
-    left=None,
-    right=None,
-    longreads=None,
-    merged=None,
-    haplocontigs=False,
-    debug=False,
-    pipe=False,
-    **kwargs,
-):
-    """General run command for this subcommand module where parameters are consumed."""
-    if method == "spades":
-        run_spades(workdir=workdir, cpus=cpus, memory=memory, isolate=isolate, careful=careful,
-                   assembler_args=assembler_args, tmpdir=tmpdir, left=left, right=right, merged=merged,
-                   out=out, debug=debug, pipe=pipe)
-    elif method == "dipspades":
-        run_dipspades(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args,
-                       haplocontigs=haplocontigs, tmpdir=tmpdir, left=left, right=right, merged=merged,
-                       out=out, debug=debug, pipe=pipe)
-    elif method == "megahit":
-        run_megahit(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args,
-                    tmpdir=tmpdir, left=left, right=right, out=out, debug=debug, pipe=pipe)
-    elif method == "masurca":
-        status("Masurca assembly is not yet implemented in AAFTF")
-    elif method == "nextdenovo":
-        status("NextDenovo assembly is not yet implemented in AAFTF")
-    elif method == "unicycler":
-        run_unicycler(workdir=workdir, cpus=cpus, left=left, right=right, longreads=longreads,
-                      merged=merged, out=out, debug=debug, pipe=pipe)
-    else:
-        status(f"Unknown assembler method {method}")
