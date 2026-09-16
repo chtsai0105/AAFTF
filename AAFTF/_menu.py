@@ -258,9 +258,9 @@ def filter_menu(subparsers):
 
     required.add_argument("-l", "--left", required=True, help="Left (Forward) reads")
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    optional.add_argument("-r", "--right", help="Right (Reverse) reads")
 
-    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
+    optional.add_argument("-o", "--out", dest="basename", type=str, help="Output basename")
 
     optional.add_argument(
         "-w",
@@ -271,7 +271,14 @@ def filter_menu(subparsers):
         help="Temporary directory to store datafiles and processes in",
     )
 
-    optional.add_argument("-o", "--out", dest="basename", type=str, help="Output basename")
+    optional.add_argument(
+        "--aligner",
+        default="bbduk",
+        choices=["bbduk", "bowtie2", "bwa", "minimap2"],
+        help="Aligner to use to map reads to contamination database",
+    )
+
+    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
 
     optional.add_argument("-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads.")
 
@@ -279,14 +286,7 @@ def filter_menu(subparsers):
 
     optional.add_argument("-s", "--screen_local", type=str, nargs="+", help="Local FASTA file(s) to use contamination screen")
 
-    optional.add_argument("-r", "--right", help="Right (Reverse) reads")
-
-    optional.add_argument(
-        "--aligner",
-        default="bbduk",
-        choices=["bbduk", "bowtie2", "bwa", "minimap2"],
-        help="Aligner to use to map reads to contamination database",
-    )
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
 
     optional.add_argument("-m", "--memory", type=int, dest="memory", help="Max Memory (in GB)")
 
@@ -310,6 +310,13 @@ def assemble_menu(subparsers):
     optional = parser_asm.add_argument_group("optional arguments")
 
     required.add_argument(
+        "-l",
+        "--left",
+        required=True,  # every implemented --method (spades/dipspades/megahit/unicycler) requires this
+        help="Left (Forward) reads",
+    )
+
+    required.add_argument(
         "-o",
         "--out",
         type=str,
@@ -317,7 +324,7 @@ def assemble_menu(subparsers):
         help="Output assembly FASTA",
     )
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    optional.add_argument("-r", "--right", help="Right (Reverse) reads")
 
     optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="assembly output directory")
 
@@ -329,6 +336,10 @@ def assemble_menu(subparsers):
         help="Assembly method: spades, dipspades, megahit, unicycler",
     )
 
+    optional.add_argument("--merged", dest="merged", help="Merged reads from flash or fastp or just single end reads")
+    optional.add_argument("--tmpdir", type=str, help="Assembler temporary dir")
+    optional.add_argument("--assembler_args", action="append", help="Additional SPAdes/Megahit arguments")
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
     optional.add_argument(
         "-m",
         "--memory",
@@ -338,33 +349,33 @@ def assemble_menu(subparsers):
         help="Memory (in GB) setting for SPAdes",
     )
 
-    optional.add_argument("-l", "--left", help="Left (Forward) reads")
+    menu_common_args(optional)
 
-    optional.add_argument("-r", "--right", help="Right (Reverse) reads")
-    optional.add_argument("-lr", "--longreads", help="Long Read fastq (pacbio or ONT)")
-    optional.add_argument("--single", "--merged", dest="merged", help="Merged reads from flash or fastp or just single end reads")
+    spades_group = parser_asm.add_argument_group(title="SPAdes options")
 
-    optional.add_argument(
-        "--careful",
-        action="store_true",
+    spades_group.add_argument(
+        "--no-careful",
+        action="store_false",
         default=True,
-        help="Run --careful mode in spades (Default)",
         dest="careful",
+        help="Disable --careful mode in spades (Default: --careful is on)",
     )
 
-    optional.add_argument("--no-careful", action="store_false", default=True, dest="careful")
+    spades_group.add_argument(
+        "--no-isolate",
+        action="store_false",
+        default=True,
+        dest="isolate",
+        help="Disable --isolate mode in spades (Default: --isolate is on)",
+    )
 
-    optional.add_argument("--isolate", action="store_true", dest="isolate", help="Run in isolate mode (default)")
+    dipspades_group = parser_asm.add_argument_group(title="dipSPAdes options")
 
-    optional.add_argument("--no-isolate", action="store_false", dest="isolate", help="Don't run --isolate mode")
+    dipspades_group.add_argument("--haplocontigs", dest="haplocontigs", default=False, action="store_true", help="For dipSPAdes take the haplocontigs file")
 
-    optional.add_argument("--tmpdir", type=str, help="Assembler temporary dir")
+    unicycler_group = parser_asm.add_argument_group(title="Unicycler options")
 
-    optional.add_argument("--assembler_args", action="append", help="Additional SPAdes/Megahit arguments")
-
-    optional.add_argument("--haplocontigs", dest="haplocontigs", default=False, action="store_true", help="For dipSPAdes take the haplocontigs file")
-
-    menu_common_args(optional)
+    unicycler_group.add_argument("-lr", "--longreads", help="Long Read fastq (pacbio or ONT)")
 
     parser_asm.set_defaults(func=assemble.run)
     return parser_asm

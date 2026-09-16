@@ -23,7 +23,7 @@ def run(
     workdir=None,
     cpus=1,
     memory="32",
-    isolate=False,
+    isolate=True,
     careful=True,
     assembler_args=None,
     tmpdir=None,
@@ -53,7 +53,7 @@ def run(
         status(f"Unknown assembler method {method}")
 
 
-def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, assembler_args=None, tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
+def run_spades(workdir=None, cpus=1, memory="32", isolate=True, careful=True, assembler_args=None, tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
     """Run SPAdes assembhler."""
     if not workdir:
         workdir = "spades_" + str(uuid.uuid4())[:8]
@@ -74,15 +74,7 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, a
     if tmpdir:
         runcmd.extend(["--tmp-dir", tmpdir])
 
-    # find reads -- use --left/right or look for cleaned in tmpdir
-    forReads, revReads = (None,) * 2
-    if left:
-        forReads = str(Path(left).resolve())
-    if right:
-        revReads = str(Path(right).resolve())
-    if not forReads:
-        status("Unable to located FASTQ raw reads, provide --left")
-        sys.exit(1)
+    forReads, revReads = _resolve_reads(left, right)
 
     if not revReads:
         runcmd.extend(["--s1", forReads])
@@ -97,34 +89,11 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=False, careful=True, a
     if Path(workdir).is_dir():
         runcmd = ["spades.py", "-o", workdir, "--threads", str(cpus), "--mem", memory, "--restart-from last"]
 
-    # now run the spades job
     status("Assembling FASTQ data using Spades")
-    printCMD(runcmd)
-    if debug:
-        subprocess.run(runcmd)
-    else:
-        subprocess.run(runcmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _run_assembler(runcmd, debug)
 
-    # pull out assembly
-    if out:
-        finalOut = out
-    else:
-        prefix = Path(forReads).name
-        m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
-        if m:
-            prefix = m.group(1)
-        finalOut = prefix + ".spades.fasta"
-
-    if Path(workdir, "scaffolds.fasta").is_file():
-        shutil.copyfile(str(Path(workdir, "scaffolds.fasta")), finalOut)
-        status(f"Spades assembly finished: {finalOut}")
-        numSeqs, assemblySize = fastastats(finalOut)
-        status(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
-    else:
-        status("Spades assembly output missing -- check Spades logfile.")
-
-    if not pipe:
-        status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")
+    finalOut = _derive_finalOut(out, forReads, ".spades.fasta")
+    _finish_assembly(Path(workdir, "scaffolds.fasta"), finalOut, "Spades", cpus, pipe)
 
 
 def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haplocontigs=False, tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
@@ -143,15 +112,7 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
     if tmpdir:
         runcmd.extend(["--tmp-dir", tmpdir])
 
-    # find reads -- use --left/right or look for cleaned in tmpdir
-    forReads, revReads = (None,) * 2
-    if left:
-        forReads = str(Path(left).resolve())
-    if right:
-        revReads = str(Path(right).resolve())
-    if not forReads:
-        status("Unable to located FASTQ raw reads, provide --left")
-        sys.exit(1)
+    forReads, revReads = _resolve_reads(left, right)
 
     if not revReads:
         runcmd.extend(["-s", forReads])
@@ -164,38 +125,19 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
     if Path(workdir).is_dir():
         runcmd = ["dipspades.py", "-o", workdir, "--continue"]
 
-    # now run the spades job
     status("Assembling FASTQ data using Spades")
+    _run_assembler(runcmd, debug)
 
-    printCMD(runcmd)
-    if debug:
-        subprocess.run(runcmd)
-    else:
-        subprocess.run(runcmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    # pull out assembly file
-    if out:
-        finalOut = out
-    else:
-        prefix = Path(forReads).name
-        m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
-        if m:
-            prefix = m.group(1)
-        finalOut = prefix + ".dipspades.fasta"
+    finalOut = _derive_finalOut(out, forReads, ".dipspades.fasta")
+    prefix = Path(finalOut).name.removesuffix(".dipspades.fasta")
 
     if Path(workdir, "consensus_contigs.fasta").is_file():
-        shutil.copyfile(str(Path(workdir, "consensus_contigs.fasta")), finalOut)
         shutil.copyfile(str(Path(workdir, "dipspades", "paired_consensus_contigs.fasta")), prefix + ".dipspades_consensus_paired.fasta")
         shutil.copyfile(str(Path(workdir, "dipspades", "paired_consensus_contigs.fasta")), prefix + ".dipspades_consensus_unpaired.fasta")
-        status(f"Dipspades assembly finished: {finalOut}")
         status("Dipspades assembly copied over: {:}".format(prefix + ".dipspades_consensus_unpaired.fasta"), prefix + ".dipspades_consensus_paired.fasta")
-        numSeqs, assemblySize = fastastats(finalOut)
-        status(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
-    else:
-        status("Spades assembly output missing -- check Dipspades logfile in {:}.".format(str(Path(workdir, "dipspades", "dipspades.log"))))
 
-    if not pipe:
-        status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")
+    missing_msg = "Spades assembly output missing -- check Dipspades logfile in {:}.".format(str(Path(workdir, "dipspades", "dipspades.log")))
+    _finish_assembly(Path(workdir, "consensus_contigs.fasta"), finalOut, "Dipspades", cpus, pipe, missing_msg=missing_msg)
 
 
 def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=None, left=None, right=None, out=None, debug=False, pipe=False, **kwargs):
@@ -214,15 +156,7 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
     if tmpdir:
         runcmd.extend(["--tmp-dir", tmpdir])
 
-    # find reads -- use --left/right or look for cleaned in tmpdir
-    forReads, revReads = (None,) * 2
-    if left:
-        forReads = str(Path(left).resolve())
-    if right:
-        revReads = str(Path(right).resolve())
-    if not forReads:
-        status("Unable to located FASTQ raw reads, provide --left")
-        sys.exit(1)
+    forReads, revReads = _resolve_reads(left, right)
 
     if not revReads:
         runcmd.extend(["-r", forReads])
@@ -232,33 +166,11 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
     if Path(workdir).is_dir():
         status(f"Cannot re-run with existing folder {workdir}")
 
-    # now run the spades job
     status("Assembling FASTQ data using megahit")
-    printCMD(runcmd)
-    if debug:
-        subprocess.run(runcmd)
-    else:
-        subprocess.run(runcmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    # pull out assembly
-    if out:
-        finalOut = out
-    else:
-        prefix = Path(forReads).name
-        m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
-        if m:
-            prefix = m.group(1)
-        finalOut = prefix + ".megahit.fasta"
+    _run_assembler(runcmd, debug)
 
-    if Path(workdir, "final.contigs.fa").is_file():
-        shutil.copyfile(str(Path(workdir, "final.contigs.fa")), finalOut)
-        status(f"Megahit assembly finished: {finalOut}")
-        numSeqs, assemblySize = fastastats(finalOut)
-        status(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
-    else:
-        status("Megahit assembly output missing -- check megahit logfile.")
-
-    if not pipe:
-        status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")
+    finalOut = _derive_finalOut(out, forReads, ".megahit.fasta")
+    _finish_assembly(Path(workdir, "final.contigs.fa"), finalOut, "Megahit", cpus, pipe)
 
 
 def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
@@ -271,15 +183,7 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     # if memory:
     #    runcmd.extend(['--spades_options', f'-m {memory}'])
 
-    # find reads -- use --left/right or look for cleaned in tmpdir
-    forReads, revReads = (None,) * 2
-    if left:
-        forReads = str(Path(left).resolve())
-    if right:
-        revReads = str(Path(right).resolve())
-    if not forReads:
-        status("Unable to located FASTQ raw reads, provide --left")
-        sys.exit(1)
+    forReads, revReads = _resolve_reads(left, right)
 
     if longreads:
         runcmd.extend(["--long", longreads])
@@ -301,31 +205,52 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     #            '--mem', memory,
     #            '--restart-from last']
 
-    # now run the spades job
     status("Assembling FASTQ data using Unicycler")
+    _run_assembler(runcmd, debug)
+
+    finalOut = _derive_finalOut(out, forReads, ".unicycler.fasta")
+    _finish_assembly(Path(workdir, "assembly.fasta"), finalOut, "Unicycler", cpus, pipe)
+
+
+def _resolve_reads(left, right):
+    """Resolve absolute paths for forward/reverse reads; exit if forward reads are missing."""
+    forReads = str(Path(left).resolve()) if left else None
+    revReads = str(Path(right).resolve()) if right else None
+    if not forReads:
+        status("Unable to located FASTQ raw reads, provide --left")
+        sys.exit(1)
+    return forReads, revReads
+
+
+def _run_assembler(runcmd, debug):
+    """Print then run an assembler command, suppressing output unless debugging."""
     printCMD(runcmd)
     if debug:
         subprocess.run(runcmd)
     else:
         subprocess.run(runcmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    # pull out assembly
-    if out:
-        finalOut = out
-    else:
-        prefix = Path(forReads).name
-        m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
-        if m:
-            prefix = m.group(1)
-        finalOut = prefix + ".unicycler.fasta"
 
-    if Path(workdir, "assembly.fasta").is_file():
-        shutil.copyfile(str(Path(workdir, "assembly.fasta")), finalOut)
-        status(f"Unicycler assembly finished: {finalOut}")
+def _derive_finalOut(out, forReads, suffix):
+    """Derive the assembly output FASTA filename from --out, or from the input read filename."""
+    if out:
+        return out
+    prefix = Path(forReads).name
+    m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
+    if m:
+        prefix = m.group(1)
+    return prefix + suffix
+
+
+def _finish_assembly(src, finalOut, tool_name, cpus, pipe, missing_msg=None):
+    """Copy the assembler's raw output to finalOut, report stats, and print the next-step hint."""
+    if Path(src).is_file():
+        shutil.copyfile(str(src), finalOut)
+        status(f"{tool_name} assembly finished: {finalOut}")
         numSeqs, assemblySize = fastastats(finalOut)
         status(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
     else:
-        status("Unicycler assembly output missing -- check Unicycler logfile.")
+        status(missing_msg or f"{tool_name} assembly output missing -- check {tool_name} logfile.")
 
     if not pipe:
         status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")

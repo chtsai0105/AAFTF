@@ -65,7 +65,7 @@ def _make_asm_args(tmp_path, method="spades", left=_UNSET, right=None, **overrid
         cpus=1,
         memory="16",
         careful=True,
-        isolate=False,
+        isolate=True,
         assembler_args=None,
         tmpdir=None,
         haplocontigs=False,
@@ -135,9 +135,13 @@ class TestAssembleParser:
         args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "--no-careful"])
         assert args.careful is False
 
-    def test_isolate_flag_sets_true(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "--isolate"])
+    def test_isolate_true_by_default(self):
+        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
         assert args.isolate is True
+
+    def test_no_isolate_flag(self):
+        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "--no-isolate"])
+        assert args.isolate is False
 
     def test_parses_left_reads(self):
         args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
