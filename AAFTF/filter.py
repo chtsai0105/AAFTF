@@ -23,7 +23,6 @@ def run(
     right=None,
     workdir=None,
     cpus=1,
-    AAFTF_DB=None,
     screen_accessions=None,
     screen_urls=None,
     screen_local=None,
@@ -42,18 +41,8 @@ def run(
     if not Path(workdir).exists():
         Path(workdir).mkdir()
 
-    # parse database locations
-    DB = None
-    if not AAFTF_DB:
-        try:
-            DB = os.environ["AAFTF_DB"]
-        except KeyError:
-            if AAFTF_DB:
-                DB = AAFTF_DB
-            else:
-                pass
-    else:
-        DB = AAFTF_DB
+    # parse database location
+    DB = os.environ.get("AAFTF_DB")
 
     bamthreads = 4
     if cpus < 4:

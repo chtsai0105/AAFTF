@@ -22,7 +22,6 @@ def run(
     phylum,
     right=None,
     cpus=1,
-    AAFTF_DB=None,
     tmpdir=None,
     assembler_args=None,
     method="spades",
@@ -88,7 +87,7 @@ def run(
 
     # run filtering with bbduk
     if not checkfile(basename + "_filtered_1.fastq.gz"):
-        filterOpts = ["screen_accessions", "screen_urls", "basename", "cpus", "debug", "memory", "AAFTF_DB", "workdir"]
+        filterOpts = ["screen_accessions", "screen_urls", "basename", "cpus", "debug", "memory", "workdir"]
         filter_args = create_namespace(
             filterOpts,
             required_args={
@@ -132,7 +131,7 @@ def run(
     # run vecscreen
     vecscreen_file = basename + ".vecscreen.fasta"
     if not checkfile(vecscreen_file):
-        vecOpts = ["cpus", "debug", "workdir", "AAFTF_DB"]
+        vecOpts = ["cpus", "debug", "workdir"]
         vec_args = create_namespace(vecOpts, required_args={"percent_id": False, "stringency": "high", "infile": assembly_file, "outfile": vecscreen_file, "pipe": True})
         vecscreen.run(**vars(vec_args))
     else:
@@ -142,7 +141,7 @@ def run(
     # run sourmash purge
     sourpurge_file = basename + ".sourpurge.fasta"
     if not checkfile(sourpurge_file):
-        sourOpts = ["cpus", "debug", "workdir", "AAFTF_DB", "phylum", "sourdb", "mincovpct"]
+        sourOpts = ["cpus", "debug", "workdir", "phylum", "sourdb", "mincovpct"]
         sour_args = create_namespace(
             sourOpts,
             required_args={

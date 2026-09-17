@@ -26,7 +26,6 @@ def run(
     cpus=1,
     left=None,
     right=None,
-    AAFTF_DB=None,
     sourdb=None,
     sourdb_type="gbk",
     kmer="31",
@@ -58,39 +57,27 @@ def run(
 
     # parse database locations
     if not sourdb:
-        dbindex = "sourmash_genbank"
-        if sourdb_type.lower() == "gtdb":
-            dbindex = "sourmash_gtdb"
-        elif sourdb_type.lower() == "gtdbrep" or sourdb_type.lower() == "gtdb_rep":
-            dbindex = "sourmash_gtdbrep"
-        elif sourdb_type.lower() == "gbk" or sourdb_type.lower() == "genbank":
-            dbindex = "sourmash_gbk"
-        else:
-            status("Unknown sourdb_type value {:} use one of {}".format(sourdb_type, ["gtdb", "gtdbrep", "gbk"]))
-            sys.exit(1)
+        # --sourdb_type is restricted to these values by the "sourpurge" menu
+        # in _menu.py (choices=["gbk", "gtdbrep", "gtdb"]).
+        dbindex = {"gbk": "sourmash_gbk", "gtdbrep": "sourmash_gtdbrep", "gtdb": "sourmash_gtdb"}[sourdb_type]
 
         dburl = DB_Links[dbindex][0]["url"]
         dbfile = DB_Links[dbindex][0]["filename"]
 
-        try:
-            DB = os.environ["AAFTF_DB"]
-        except KeyError:
-            if AAFTF_DB:
-                DB = AAFTF_DB
-            else:
-                status(f"$AAFTF_DB/{dbfile} not found, pass --sourdb")
-                sys.exit(1)
-        AAFTF_DB = DB
+        DB = os.environ.get("AAFTF_DB")
+        if not DB:
+            status(f"$AAFTF_DB/{dbfile} not found, pass --sourdb")
+            sys.exit(1)
         SOUR = str(Path(DB, dbfile))
         if not Path(SOUR).is_file():
             try:
-                status(f"{SOUR} sourmash database not found, downloading from {dburl} and renaming to {AAFTF_DB}/{dbfile}")
+                status(f"{SOUR} sourmash database not found, downloading from {dburl} and renaming to {DB}/{dbfile}")
                 urllib.request.urlretrieve(dburl, SOUR)
             except urllib.error.HTTPError as error:
                 status(f"Error downloading from {dburl}: {error}")
                 sys.exit(1)
         if not Path(SOUR).is_file():
-            status(f"{SOUR} sourmash database download of {dburl} failed. Manually download and rename to {AAFTF_DB}/{dbfile}")
+            status(f"{SOUR} sourmash database download of {dburl} failed. Manually download and rename to {DB}/{dbfile}")
             sys.exit(1)
     else:
         SOUR = str(Path(sourdb).resolve())

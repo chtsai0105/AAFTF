@@ -52,7 +52,6 @@ def run(
     infile,
     outfile,
     workdir=None,
-    AAFTF_DB=None,
     cpus=1,
     percent_id=None,
     stringency="high",
@@ -68,7 +67,7 @@ def run(
     assembly and a separate mitochondrial-contigs FASTA.
     """
     workdir = _resolve_workdir(workdir)
-    DB = _resolve_db_dir(AAFTF_DB)
+    DB = _resolve_db_dir()
     percentid_cutoff = percent_id or BlastPercent_ID_ContamMatch
 
     # final_outfile/outdir/prefix are derived from the user's --outfile once,
@@ -117,10 +116,8 @@ def _resolve_workdir(workdir):
     return workdir
 
 
-def _resolve_db_dir(AAFTF_DB):
-    """Resolve the AAFTF resource DB directory from the argument or $AAFTF_DB."""
-    if AAFTF_DB:
-        return AAFTF_DB
+def _resolve_db_dir():
+    """Resolve the AAFTF resource DB directory from $AAFTF_DB."""
     return os.environ.get("AAFTF_DB")
 
 

@@ -38,15 +38,11 @@ class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_Redirect308Handler())
 
 
-def _resolve_db_dir(AAFTF_DB):
-    """Resolve the AAFTF_DB directory from the argument or $AAFTF_DB, exiting with an error if neither is set."""
-    db_dir = None
-    if AAFTF_DB:
-        db_dir = AAFTF_DB
-    elif "AAFTF_DB" in os.environ:
-        db_dir = os.environ["AAFTF_DB"]
-    else:
-        status("ERROR: No database directory specified.\n" "  Set the AAFTF_DB environment variable or pass --AAFTF_DB.\n" "  Example:\n" "    export AAFTF_DB=/path/to/aaftf_db\n" "    AAFTF download")
+def _resolve_db_dir():
+    """Resolve the AAFTF_DB directory from $AAFTF_DB, exiting with an error if it isn't set."""
+    db_dir = os.environ.get("AAFTF_DB")
+    if not db_dir:
+        status("ERROR: No database directory specified.\n" "  Set the AAFTF_DB environment variable.\n" "  Example:\n" "    export AAFTF_DB=/path/to/aaftf_db\n" "    AAFTF download")
         sys.exit(1)
     return str(Path(db_dir).resolve())
 
@@ -127,7 +123,7 @@ def _list_db(db_dir):
     print(f"  {'Not yet downloaded (estimated)':<40} {pending_label:>10}")
 
 
-def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourdb_type="all", list_db=False, **kwargs):
+def run(force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourdb_type="all", list_db=False, **kwargs):
     """Execute the ``download`` subcommand.
 
     Downloads reference databases to the ``AAFTF_DB`` directory so that
@@ -135,7 +131,7 @@ def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_f
     ``list_db`` is set, lists the existing database files (and their sizes)
     instead of downloading anything.
     """
-    db_dir = _resolve_db_dir(AAFTF_DB)
+    db_dir = _resolve_db_dir()
 
     if list_db:
         _list_db(db_dir)

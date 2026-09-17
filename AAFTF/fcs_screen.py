@@ -25,7 +25,6 @@ from AAFTF.utility import SafeRemove, printCMD, status
 def run(
     infile,
     outfile,
-    AAFTF_DB=None,
     container_engine="singularity",
     workdir=None,
     image=None,
@@ -35,12 +34,9 @@ def run(
     **kwargs,
 ):
     """Perform vector trimming via the fcs screening tool."""
-    if AAFTF_DB:
-        DB = AAFTF_DB
-    elif "AAFTF_DB" in os.environ:
-        DB = os.environ["AAFTF_DB"]
-    else:
-        status("ERROR: AAFTF_DB not set. Provide --AAFTF_DB or set the $AAFTF_DB environment variable.")
+    DB = os.environ.get("AAFTF_DB")
+    if not DB:
+        status("ERROR: AAFTF_DB not set. Set the $AAFTF_DB environment variable.")
         sys.exit(1)
 
     containerengine = container_engine

@@ -27,7 +27,6 @@ def _make_pipeline_args(**kwargs):
         "tmpdir": None,
         "screen_accessions": None,
         "screen_urls": None,
-        "AAFTF_DB": None,
         "phylum": ["Ascomycota"],
         "sourdb": None,
         "mincovpct": 5,

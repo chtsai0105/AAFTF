@@ -59,7 +59,6 @@ def _make_filter_args(tmp_path, left=_UNSET, right=None, aligner="bbduk", **over
         left=left,
         right=right,
         basename=None,
-        AAFTF_DB=None,
         aligner=aligner,
         screen_accessions=None,
         screen_urls=None,
@@ -152,10 +151,6 @@ class TestFilterParser:
     def test_screen_local_none_by_default(self):
         args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
         assert args.screen_local is None
-
-    def test_AAFTF_DB_none_by_default(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
-        assert args.AAFTF_DB is None
 
     def test_parses_left_reads(self):
         args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])

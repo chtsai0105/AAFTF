@@ -62,11 +62,6 @@ def download_menu(subparsers):
     )
     optional = parser_download.add_argument_group("optional arguments")
     optional.add_argument(
-        "--AAFTF_DB",
-        type=str,
-        help="Path to AAFTF database directory. Defaults to $AAFTF_DB environment variable.",
-    )
-    optional.add_argument(
         "--force",
         action="store_true",
         help="Re-download files even if they already exist",
@@ -284,8 +279,6 @@ def filter_menu(subparsers):
         help="Aligner to use to map reads to contamination database",
     )
 
-    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
-
     optional.add_argument("-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads.")
 
     optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URLs to download and screen out initial reads.")
@@ -413,8 +406,6 @@ def vecscreen_menu(subparsers):
         help="Temporary directory to store datafiles and processes in",
     )
 
-    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
-
     optional.add_argument("-pid", "--percent_id", type=int, help="Percent Identity cutoff for vecscreen adaptor matches")
 
     optional.add_argument("-s", "--stringency", default="high", choices=["high", "low"], help="Stringency to filter VecScreen hits")
@@ -452,8 +443,6 @@ def fcs_screen_menu(subparsers):
         dest="workdir",
         help="Temporary directory to store datafiles and processes in",
     )
-
-    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
 
     optional.add_argument("--image", type=str, help="Container file (or will download and look in AAFTF_DB)")
 
@@ -548,10 +537,6 @@ def sourpurge_menu(subparsers):
 
     required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or Phyla to keep matches, i.e. Ascomycota")
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
-
-    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
-
     optional.add_argument(
         "-w",
         "--workdir",
@@ -579,6 +564,7 @@ def sourpurge_menu(subparsers):
     )
 
     optional.add_argument("--just-show-taxonomy", dest="taxonomy", action="store_true", help="Show taxonomy information and exit")
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
 
     menu_common_args(optional)
 
@@ -959,8 +945,6 @@ def pipeline_menu(subparsers):
     required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or Phyla to keep matches, i.e. Ascomycota")
 
     optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
-
-    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
 
     optional.add_argument("--tmpdir", type=str, help="Assembler temporary dir")
     optional.add_argument("--assembler_args", action="append", help="Additional SPAdes/Megahit arguments")
