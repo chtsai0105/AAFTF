@@ -398,10 +398,6 @@ def vecscreen_menu(subparsers):
 
     required.add_argument("-o", "--outfile", type=str, required=True, help="Output vector screened and cleaned assembly")
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
-
-    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
-
     optional.add_argument(
         "-w",
         "--workdir",
@@ -411,11 +407,13 @@ def vecscreen_menu(subparsers):
         help="Temporary directory to store datafiles and processes in",
     )
 
+    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
+
     optional.add_argument("-pid", "--percent_id", type=int, help="Percent Identity cutoff for vecscreen adaptor matches")
 
-    optional.add_argument("--prefix", type=str, help="Prefix for tempfiles")
-
     optional.add_argument("-s", "--stringency", default="high", choices=["high", "low"], help="Stringency to filter VecScreen hits")
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
 
     menu_common_args(optional)
 
