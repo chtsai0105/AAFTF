@@ -84,7 +84,7 @@ def download_menu(subparsers):
     optional.add_argument(
         "--sourdb-type",
         type=str,
-        default="all",
+        default="gbk",
         choices=["gbk", "gtdb", "gtdbrep", "all"],
         dest="sourdb_type",
         help="Which sourmash database(s) to download",
@@ -93,6 +93,12 @@ def download_menu(subparsers):
         "--skip-fcs",
         action="store_true",
         help="Skip downloading NCBI FCS-adaptor resources",
+    )
+    optional.add_argument(
+        "--list",
+        action="store_true",
+        dest="list_db",
+        help="List database files already present in AAFTF_DB (with sizes) instead of downloading",
     )
     menu_common_args(optional)
     parser_download.set_defaults(func=download.run)

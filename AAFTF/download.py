@@ -38,13 +38,8 @@ class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_Redirect308Handler())
 
 
-def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourdb_type="all", **kwargs):
-    """Execute the ``download`` subcommand.
-
-    Downloads reference databases to the ``AAFTF_DB`` directory so that
-    later AAFTF commands do not need to fetch them on-the-fly.
-    """
-    # Resolve database directory
+def _resolve_db_dir(AAFTF_DB):
+    """Resolve the AAFTF_DB directory from the argument or $AAFTF_DB, exiting with an error if neither is set."""
     db_dir = None
     if AAFTF_DB:
         db_dir = AAFTF_DB
@@ -53,8 +48,99 @@ def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_f
     else:
         status("ERROR: No database directory specified.\n" "  Set the AAFTF_DB environment variable or pass --AAFTF_DB.\n" "  Example:\n" "    export AAFTF_DB=/path/to/aaftf_db\n" "    AAFTF download")
         sys.exit(1)
+    return str(Path(db_dir).resolve())
 
-    db_dir = str(Path(db_dir).resolve())
+
+def _human_size(num_bytes):
+    """Format a byte count as a human-readable string (e.g. ``1.2 GB``)."""
+    size = float(num_bytes)
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size < 1024 or unit == "TB":
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"  # pragma: no cover - unreachable, but keeps a return for every path
+
+
+def _expected_db_entries():
+    """Return [(filename, url), ...] for every database ``download`` would fetch."""
+    entries = []
+    for urls in Contaminant_Accessions.values():
+        for url in urls:
+            entries.append((Path(url).name, url))
+    for key, urls in DB_Links.items():
+        for url_or_meta in urls:
+            if isinstance(url_or_meta, dict):
+                entries.append((url_or_meta["filename"], url_or_meta["url"]))
+            else:
+                entries.append((Path(url_or_meta).name, url_or_meta))
+    entries.append(("run_fcsadaptor.sh", FCSADAPTOR["EXEURL"] % FCSADAPTOR["VERSION"]))
+    entries.append((FCSADAPTOR["SIFLOCAL"] % FCSADAPTOR["VERSION"], str(Path(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]))))
+    return entries
+
+
+def _remote_size(url):
+    """Return the remote file size in bytes via an HTTP HEAD request, or ``None`` if unavailable."""
+    try:
+        req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "AAFTF/1.0"})
+        with _opener.open(req, timeout=10) as response:
+            length = response.headers.get("Content-Length")
+            return int(length) if length is not None else None
+    except Exception:
+        return None
+
+
+def _list_db(db_dir):
+    """List every database ``download`` would fetch: local size if already downloaded, else the remote size."""
+    db_path = Path(db_dir)
+
+    status(f"Database files in {db_dir}:")
+    downloaded_total = 0
+    pending_total = 0
+    pending_unknown = False
+    for filename, url in _expected_db_entries():
+        local_path = db_path / filename
+        if local_path.is_file():
+            size = local_path.stat().st_size
+            downloaded_total += size
+            print(f"  {filename:<40} {_human_size(size):>10}  (downloaded)")
+        else:
+            size = _remote_size(url)
+            if size is None:
+                pending_unknown = True
+                print(f"  {filename:<40} {'unknown':>10}  (not downloaded)")
+            else:
+                pending_total += size
+                print(f"  {filename:<40} {_human_size(size):>10}  (not downloaded)")
+
+    # Any other files present that aren't part of the expected set (e.g. leftover reports)
+    expected_names = {filename for filename, _ in _expected_db_entries()}
+    if db_path.is_dir():
+        extras = sorted(f for f in db_path.rglob("*") if f.is_file() and f.name not in expected_names)
+        for f in extras:
+            size = f.stat().st_size
+            downloaded_total += size
+            print(f"  {str(f.relative_to(db_path)):<40} {_human_size(size):>10}  (other)")
+
+    print("-" * 68)
+    print(f"  {'Downloaded':<40} {_human_size(downloaded_total):>10}")
+    pending_label = _human_size(pending_total) + ("+" if pending_unknown else "")
+    print(f"  {'Not yet downloaded (estimated)':<40} {pending_label:>10}")
+
+
+def run(AAFTF_DB=None, force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourdb_type="all", list_db=False, **kwargs):
+    """Execute the ``download`` subcommand.
+
+    Downloads reference databases to the ``AAFTF_DB`` directory so that
+    later AAFTF commands do not need to fetch them on-the-fly. If
+    ``list_db`` is set, lists the existing database files (and their sizes)
+    instead of downloading anything.
+    """
+    db_dir = _resolve_db_dir(AAFTF_DB)
+
+    if list_db:
+        _list_db(db_dir)
+        return
+
     Path(db_dir).mkdir(parents=True, exist_ok=True)
     status(f"AAFTF database directory: {db_dir}")
 
