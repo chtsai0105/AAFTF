@@ -438,8 +438,6 @@ def fcs_screen_menu(subparsers):
 
     required.add_argument("-o", "--outfile", type=str, required=True, help="Output vector screened and cleaned assembly")
 
-    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
-
     optional.add_argument(
         "-w",
         "--workdir",
@@ -449,7 +447,9 @@ def fcs_screen_menu(subparsers):
         help="Temporary directory to store datafiles and processes in",
     )
 
-    optional.add_argument("--prefix", type=str, help="Prefix for tempfiles")
+    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
+
+    optional.add_argument("--image", type=str, help="Container file (or will download and look in AAFTF_DB)")
 
     optional.add_argument(
         "--container_engine",
@@ -459,11 +459,7 @@ def fcs_screen_menu(subparsers):
         help="Container engine used to run fcs-adaptor",
     )
 
-    optional.add_argument("--image", type=str, help="Container file (or will download and look in AAFTF_DB)")
-
     optional.add_argument("--prok", action="store_true", help="Run in Prokaryote matching mode")
-
-    optional.add_argument("--euk", action="store_true", help="Run in Eukaryote matching mode (Default)")
 
     optional.add_argument("--fcs_script", type=str, help="location of the run_fcsadaptor.sh script (or will download automatically)")
 
@@ -496,10 +492,6 @@ def fcs_gx_purge_menu(subparsers):
         help="Output fcs_gx cleaned assembly",
     )
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
-
-    optional.add_argument("--AAFTF_DB", type=str, help="Path to AAFTF resources, defaults to $AAFTF_DB")
-
     optional.add_argument(
         "-w",
         "--workdir",
@@ -508,8 +500,6 @@ def fcs_gx_purge_menu(subparsers):
         dest="workdir",
         help="Temporary directory to store datafiles and processes in",
     )
-
-    optional.add_argument("--prefix", type=str, help="Prefix for tempfiles")
 
     optional.add_argument(
         "-t",
@@ -568,8 +558,6 @@ def sourpurge_menu(subparsers):
     optional.add_argument("-l", "--left", help="Left (Forward) reads")
 
     optional.add_argument("-r", "--right", help="Right (Reverse) reads")
-
-    optional.add_argument("--prefix", type=str, help="Prefix for tempfiles")
 
     optional.add_argument("--sourdb", help="SourMash LCA taxonomy database (defaults to k-31)")
 
@@ -717,8 +705,6 @@ def polish_menu(subparsers):
     )
 
     optional.add_argument("-lr", "--longreads", help="Long Read FASTQ (PacBio or ONT)")
-
-    optional.add_argument("--prefix", type=str, help="Prefix for readfiles")
 
     optional.add_argument("--diploid", action="store_true", help="Run pilon in diploid mode - affects heterozygous SNP calling")
 

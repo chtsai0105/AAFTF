@@ -67,7 +67,7 @@ def run(
             if debug:
                 status(f"url {url} download to {fcsexe}")
             urllib.request.urlretrieve(url, fcsexe)
-            os.chmod(fcsexe, 0o444)
+            Path(fcsexe).chmod(0o444)
 
     if containerengine == "singularity":
         # local SIF file: download once and cache under AAFTF_DB
@@ -105,14 +105,14 @@ def run(
     cleanresult = str(Path(workdir, "cleaned_sequences", infilename))
     if debug:
         status(f"copy from: {cleanresult} -> {outfile}")
-    os.rename(cleanresult, outfile)
+    Path(cleanresult).rename(outfile)
     fcsreport = str(Path(workdir, "fcs_adaptor_report.txt"))
     with open(fcsreport) as fh:
         status("FCS report:")
         for line in fh:
             print(line, end="")
     # make a copy of the report to show
-    os.rename(fcsreport, outfile + ".fcs_adaptor_report.txt")
+    Path(fcsreport).rename(outfile + ".fcs_adaptor_report.txt")
     # cleanup after running
     if not debug and not custom_workdir:
         SafeRemove(workdir)
