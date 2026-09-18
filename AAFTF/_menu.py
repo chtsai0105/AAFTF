@@ -55,7 +55,6 @@ def download_menu(subparsers):
     """Add the download subcommand parser."""
     parser_download = subparsers.add_parser(
         "download",
-        aliases=["configure", "install", "download_db", "setup"],
         formatter_class=CustomHelpFormatter,
         description="Download reference databases to a persistent directory.",
         help="Download AAFTF reference databases",
@@ -104,7 +103,6 @@ def trim_menu(subparsers):
     """Add the trim subcommand parser."""
     parser_trim = subparsers.add_parser(
         "trim",
-        aliases=["trim_reads", "read_trim"],
         formatter_class=CustomHelpFormatter,
         description="This command trims reads in FASTQ format to remove low quality reads and trim adaptor sequences",
         help="Trim FASTQ input reads",
@@ -204,7 +202,6 @@ def mito_menu(subparsers):
     """Add the mito subcommand parser."""
     parser_mito = subparsers.add_parser(
         "mito",
-        aliases=["mito_asm", "mitochondria"],
         description="De novo assembly of mitochondrial genome using NOVOplasty, takes PE Illumina adapter trimmed data.",
         help="De novo assembly of mitochondrial genome",
         formatter_class=CustomHelpFormatter,
@@ -248,7 +245,6 @@ def filter_menu(subparsers):
     """Add the filter subcommand parser."""
     parser_filter = subparsers.add_parser(
         "filter",
-        aliases=["filter_reads", "read_filter"],
         description="Filter reads which match contaminant databases such as phiX",
         help="Filter contaminanting reads",
         formatter_class=CustomHelpFormatter,
@@ -299,7 +295,6 @@ def assemble_menu(subparsers):
     """Add the assemble subcommand parser."""
     parser_asm = subparsers.add_parser(
         "assemble",
-        aliases=["asm", "spades"],
         description="Run assembler on cleaned reads",
         help="Assemble reads",
         formatter_class=CustomHelpFormatter,
@@ -384,7 +379,6 @@ def vecscreen_menu(subparsers):
     """Add the vecscreen subcommand parser."""
     parser_vecscreen = subparsers.add_parser(
         "vecscreen",
-        aliases=["vectorscreen", "vector_blast"],
         description="Screen contigs for vector and common contaminantion",
         help="BLASTN Vector and Contaminant Screening of contigs",
         formatter_class=CustomHelpFormatter,
@@ -422,7 +416,6 @@ def fcs_screen_menu(subparsers):
     """Add the fcs_screen subcommand parser."""
     parser_fcs_screen = subparsers.add_parser(
         "fcs_screen",
-        aliases=["ncbi_fcs", "ncbi_fcs-screen"],
         description="Screen with NCBI fcs tool contigs for vector and common contaminantion",
         help="NCBI Foreign Contaminant Screening for Vector sequences in contigs",
         formatter_class=CustomHelpFormatter,
@@ -468,7 +461,6 @@ def fcs_gx_purge_menu(subparsers):
     """Add the fcs_gx_purge subcommand parser."""
     parser_fcsgx = subparsers.add_parser(
         "fcs_gx_purge",
-        aliases=["ncbi_fcs-gx", "ncbi_fcs_gx", "gx"],
         description="Purge contigs based on fcs_gx results",
         help="Purge contigs based on contamination search with fcs_gx",
         formatter_class=CustomHelpFormatter,
@@ -516,7 +508,6 @@ def sourpurge_menu(subparsers):
     """Add the sourpurge subcommand parser."""
     parser_sour = subparsers.add_parser(
         "sourpurge",
-        aliases=["purge"],
         description="Purge contigs based on sourmash results",
         help="Purge contigs based on sourmash results",
         formatter_class=CustomHelpFormatter,
@@ -576,7 +567,6 @@ def rmdup_menu(subparsers):
     """Add the rmdup subcommand parser."""
     parser_rmdup = subparsers.add_parser(
         "rmdup",
-        aliases=["dedup"],
         description="Remove duplicate contigs",
         help="Remove duplicate contigs",
         formatter_class=CustomHelpFormatter,
@@ -642,18 +632,28 @@ def polish_menu(subparsers):
     """Add the polish subcommand parser."""
     parser_polish = subparsers.add_parser(
         "polish",
-        aliases=["pilon", "polca"],
-        description="Polish contig sequences with Pilon, POLCA, NextPolish",
-        help="Polish contig sequences with short reads",
+        description="Polish contig sequences with pypolca, Polypolish, or NextPolish2",
+        help="Polish contig sequences with short and/or long reads",
         formatter_class=CustomHelpFormatter,
     )
 
     required = parser_polish.add_argument_group("required arguments")
-    optional = parser_polish.add_argument_group("optional arguments")
 
     required.add_argument("-i", "--infile", "--input", type=str, dest="infile", required=True, help="Input contigs or scaffold assembly")
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    shortread_group = parser_polish.add_argument_group(title="polypolish / pypolca / NextPolish2 required arguments")
+
+    shortread_group.add_argument("-l", "--left", help="Left (Forward) reads; required for short read polishing methods")
+
+    shortread_group.add_argument("-r", "--right", help="Right (Reverse) reads; required for short read polishing methods")
+
+    longread_group = parser_polish.add_argument_group(title="NextPolish2 / Racon required arguments")
+
+    longread_group.add_argument("-lr", "--longreads", help="Long Read FASTQ (PacBio or ONT/HiFi); required for NextPolish2 and Racon")
+
+    optional = parser_polish.add_argument_group("optional arguments")
+
+    optional.add_argument("-o", "--out", "--outfile", type=str, dest="outfile", help="Output a Polished assembly")
 
     optional.add_argument(
         "-w",
@@ -664,50 +664,21 @@ def polish_menu(subparsers):
         help="Temporary directory to store datafiles and processes in",
     )
 
-    optional.add_argument("-l", "--left", help="Left (Forward) reads")
-
-    optional.add_argument("-r", "--right", help="Right (Reverse) reads")
-
-    optional.add_argument("-o", "--out", "--outfile", type=str, dest="outfile", help="Output a Polished assembly")
-
-    optional.add_argument("-m", "--memory", type=int, default=16, dest="memory", help="Max Memory (in GB)")
-
-    optional.add_argument("-it", "--iterations", type=int, default=5, help="Number of Polishing iterations to run")
     optional.add_argument(
         "--method",
         type=str,
-        choices=["pilon", "polca", "nextpolish", "racon"],
-        default="pilon",
-        help="Polishing method: pilon, polca, nextpolish, racon",
+        choices=["polypolish", "pypolca", "nextpolish2", "racon"],
+        default="polypolish",
+        help="Polishing method: polypolish, pypolca, nextpolish2, racon",
     )
 
-    optional.add_argument(
-        "--polca",
-        type=str,
-        default="polca.sh",
-        help="polca exe path - provide full path to deal with samtools mismatch in masurca",
-    )
-
-    optional.add_argument(
-        "--polca_samtools",
-        type=str,
-        default=None,
-        metavar="SAMTOOLS_PATH",
-        help="Path to a samtools binary compatible with polca.sh (e.g. samtools < 1.21). polca.sh uses 'samtools sort -f' which was removed in 1.21+; set this to an older samtools when the system default is >= 1.21.",
-    )
-
-    optional.add_argument("-lr", "--longreads", help="Long Read FASTQ (PacBio or ONT)")
-
-    optional.add_argument("--diploid", action="store_true", help="Run pilon in diploid mode - affects heterozygous SNP calling")
-
-    optional.add_argument(
-        "--ploidy",
-        default=1,
-        type=int,
-        help="Run nextpolish in specific ploidy mode - affects heterozygous SNP calling",
-    )
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
 
     menu_common_args(optional)
+
+    pypolca_group = parser_polish.add_argument_group(title="pypolca options")
+
+    pypolca_group.add_argument("-m", "--memory", type=int, default=16, dest="memory", help="Max Memory (in GB)")
 
     parser_polish.set_defaults(func=polish.run)
     return parser_polish
@@ -743,7 +714,6 @@ def assess_menu(subparsers):
     """Add the assess subcommand parser."""
     parser_assess = subparsers.add_parser(
         "assess",
-        aliases=["stats"],
         description="Assess completeness of genome assembly",
         help="Assess completeness of genome assembly",
         formatter_class=CustomHelpFormatter,
@@ -778,7 +748,6 @@ def fix_tbl_menu(subparsers):
     """Add the fix_tbl subcommand parser."""
     parser_fix = subparsers.add_parser(
         "fix_tbl",
-        aliases=["fix"],
         description="Fix NCBI tbl file from a trim report from NCBI-FCS",
         help="Fix the TBL file offsets from trimmimg",
         formatter_class=CustomHelpFormatter,
@@ -803,7 +772,6 @@ def depth_menu(subparsers):
     """Add the depth subcommand parser."""
     parser_depth = subparsers.add_parser(
         "depth",
-        aliases=["coverage", "cov"],
         description=("Calculate depth of coverage by mapping Illumina and/or long reads to a genome assembly with minimap2 (or bwa), then running mosdepth to compute per-contig depth statistics.  Contigs with mean depth > assembly_mean + 3*SD are flagged as possible contaminants or organellar sequences."),
         help="Calculate read depth of coverage for genome assembly",
         formatter_class=CustomHelpFormatter,
@@ -960,8 +928,6 @@ def pipeline_menu(subparsers):
 
     optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URLs to download and screen out initial reads.")
 
-    optional.add_argument("-it", "--iterations", type=int, default=5, help="Number of Pilon Polishing iterations to run")
-
     optional.add_argument("-mc", "--mincontiglen", type=int, default=500, help="Minimum length of contigs to keep")
 
     optional.add_argument("-w", "--workdir", type=str, help="temp directory")
@@ -980,7 +946,6 @@ def check_dependencies_menu(subparsers):
     """Add the check_dependencies subcommand parser."""
     parser_check_deps = subparsers.add_parser(
         "check_dependencies",
-        aliases=["check_deps", "deps"],
         formatter_class=CustomHelpFormatter,
         description="Check whether all external tool and Python package dependencies required by AAFTF are installed.",
         help="Check that AAFTF dependencies are installed",

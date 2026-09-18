@@ -2,8 +2,6 @@
 assess
 ======
 
-**Aliases:** ``stats``
-
 Computes standard genome assembly completeness/summary statistics -- the final QC report
 describing what the pipeline produced. Pure BioPython; no external tools required.
 

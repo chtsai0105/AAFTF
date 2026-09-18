@@ -2,8 +2,6 @@
 depth
 =====
 
-**Aliases:** ``coverage``, ``cov``
-
 Maps reads back to the final assembly and reports per-contig and whole-assembly read-depth
 statistics -- both a general sequencing-success/QC summary, and a way to flag contigs whose
 coverage is anomalously high (a common signature of a residual contaminant or an

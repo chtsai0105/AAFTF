@@ -2,8 +2,6 @@
 assemble
 ========
 
-**Aliases:** ``asm``, ``spades``
-
 Runs a de novo genome assembler on cleaned (trimmed + filtered) reads.
 
 Algorithm

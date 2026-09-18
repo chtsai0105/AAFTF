@@ -2,8 +2,6 @@
 fix_tbl
 =======
 
-**Aliases:** ``fix``
-
 Adjusts feature coordinates in an NCBI ``.tbl`` annotation table after :doc:`fcs_screen` (or any
 NCBI FCS trimming step) has trimmed bases off the start/end of one or more sequences -- otherwise
 annotated feature coordinates would point past the end of, or into the wrong part of, the trimmed

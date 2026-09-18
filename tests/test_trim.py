@@ -178,14 +178,6 @@ class TestTrimParser:
         args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
         assert args.right is None
 
-    def test_trim_reads_alias(self):
-        args = _parse_trim(["AAFTF", "trim_reads", "-l", "R1.fq"])
-        assert args.left == "R1.fq"
-
-    def test_read_trim_alias(self):
-        args = _parse_trim(["AAFTF", "read_trim", "-l", "R1.fq"])
-        assert args.left == "R1.fq"
-
     def test_missing_left_exits_nonzero(self):
         with patch.object(sys, "argv", ["AAFTF", "trim"]):
             with pytest.raises(SystemExit) as exc:

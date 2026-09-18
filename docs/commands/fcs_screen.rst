@@ -2,8 +2,6 @@
 fcs_screen
 ==========
 
-**Aliases:** ``ncbi_fcs``, ``ncbi_fcs-screen``
-
 Runs NCBI's official **FCS-adaptor** tool (the same tool NCBI uses during genome submission QC)
 to detect and trim residual sequencing-adaptor/vector contamination from assembled contigs. This
 is an alternative (NCBI-authoritative) take on part of what :doc:`vecscreen` does, delegated to

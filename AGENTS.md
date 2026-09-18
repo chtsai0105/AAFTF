@@ -14,8 +14,8 @@ AAFTF is a Python-based bioinformatics toolkit for automated genome assembly, cl
 pip install -e .
 
 # Install with dependencies from conda
-conda create -n aaftf -c bioconda "python>=3.9" bbmap trimmomatic bowtie2 bwa pilon sourmash \
-    blast minimap2 spades megahit novoplasty biopython fastp masurca unicycler
+conda create -n aaftf -c bioconda "python>=3.9" bbmap trimmomatic bowtie2 bwa sourmash \
+    blast minimap2 spades megahit novoplasty biopython fastp pypolca polypolish nextpolish2 unicycler
 pip install AAFTF
 ```
 

@@ -30,7 +30,6 @@ def _make_pipeline_args(**kwargs):
         "phylum": ["Ascomycota"],
         "sourdb": None,
         "mincovpct": 5,
-        "iterations": 5,
         "pipe": False,
     }
     defaults.update(kwargs)

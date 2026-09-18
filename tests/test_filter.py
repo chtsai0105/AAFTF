@@ -164,14 +164,6 @@ class TestFilterParser:
         args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
         assert args.right is None
 
-    def test_filter_reads_alias(self):
-        args = _parse_filter(["AAFTF", "filter_reads", "-l", "R1.fq"])
-        assert args.left == "R1.fq"
-
-    def test_read_filter_alias(self):
-        args = _parse_filter(["AAFTF", "read_filter", "-l", "R1.fq"])
-        assert args.left == "R1.fq"
-
     def test_missing_left_exits_nonzero(self):
         with patch.object(sys, "argv", ["AAFTF", "filter"]):
             with pytest.raises(SystemExit) as exc:

@@ -155,14 +155,6 @@ class TestAssembleParser:
         args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
         assert args.right is None
 
-    def test_asm_alias(self):
-        args = _parse_assemble(["AAFTF", "asm", "-l", "R1.fq", "-o", "out.fa"])
-        assert args.left == "R1.fq"
-
-    def test_spades_alias(self):
-        args = _parse_assemble(["AAFTF", "spades", "-l", "R1.fq", "-o", "out.fa"])
-        assert args.left == "R1.fq"
-
     def test_assemble_help_exits_zero(self):
         with patch.object(sys, "argv", ["AAFTF", "assemble", "--help"]):
             with pytest.raises(SystemExit) as exc:

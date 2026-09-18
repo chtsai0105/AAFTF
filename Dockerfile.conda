@@ -87,11 +87,14 @@ RUN conda config --add channels conda-forge && \
     conda config --set channel_priority strict && \
     conda create -y -p "${CONDA_PREFIX}" \
         python=3.10 \
-        samtools>=1.23 \
+        samtools>=1.24 \
         biopython \
         bwa \
         minimap2 \
-        pilon \
+        freebayes \
+        yak \
+        polypolish \
+        nextpolish2 \
         blast \
         diamond \
         sourmash \
@@ -109,7 +112,7 @@ RUN conda config --add channels conda-forge && \
         mosdepth \
         matplotlib \
         bbmap>=39.80 \
-        masurca>=4.1.4 \
+        pypolca>=0.5.0 \
         pytest>=7.0 \
         pip \
         && \
@@ -124,7 +127,6 @@ COPY pyproject.toml ./
 COPY README.md ./
 COPY AAFTF/ AAFTF/
 COPY scripts/ scripts/
-COPY patches/ patches/
 
 RUN if [ "${AAFTF_INSTALL_MODE}" = "pypi" ]; then \
         pip install aaftf==${AAFTF_VERSION}; \
@@ -133,30 +135,18 @@ RUN if [ "${AAFTF_INSTALL_MODE}" = "pypi" ]; then \
     fi
 
 # ---------------------------------------------------------------------------
-# 5. Apply the patched polca.sh (compatible with newer samtools)
-# ---------------------------------------------------------------------------
-RUN POLCA_INSTALLED=$(find "${CONDA_PREFIX}" -name "polca.sh" 2>/dev/null | head -1) && \
-    if [ -n "${POLCA_INSTALLED}" ]; then \
-        echo "Replacing ${POLCA_INSTALLED} with patched version"; \
-        cp /opt/AAFTF/patches/polca.sh "${POLCA_INSTALLED}"; \
-        chmod +x "${POLCA_INSTALLED}"; \
-    else \
-        echo "WARNING: polca.sh not found — skipping polca patch"; \
-    fi
-
-# ---------------------------------------------------------------------------
-# 6. Smoke test
+# 5. Smoke test
 # ---------------------------------------------------------------------------
 RUN AAFTF --version
 
 # ---------------------------------------------------------------------------
-# 7. Cleanup build artefacts
+# 6. Cleanup build artefacts
 # ---------------------------------------------------------------------------
 RUN rm -rf /root/.cache && \
     conda clean -afy
 
 # ---------------------------------------------------------------------------
-# 8. Runtime environment
+# 7. Runtime environment
 # ---------------------------------------------------------------------------
 ENV AAFTF_DB="/opt/aaftf_db"
 

@@ -2,8 +2,6 @@
 vecscreen
 =========
 
-**Aliases:** ``vectorscreen``, ``vector_blast``
-
 Screens assembled contigs for cloning-vector/adapter contamination (replicating NCBI's VecScreen
 service) and for common eukaryotic/prokaryotic/mitochondrial contaminant sequences that slipped
 through the read-level :doc:`filter` step, using BLASTN.

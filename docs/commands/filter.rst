@@ -2,8 +2,6 @@
 filter
 ======
 
-**Aliases:** ``filter_reads``, ``read_filter``
-
 Removes reads that match known contaminant sequences (PhiX spike-in, UniVec, and any additional
 sequences you specify) from trimmed FASTQ reads, before assembly.
 

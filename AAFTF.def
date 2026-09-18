@@ -96,21 +96,7 @@ From: debian:bookworm-slim
     chmod +x /opt/aaftf_activate.sh
     pixi clean cache --yes
     # -------------------------------------------------------------------------
-    # 5. Apply polca.sh patch
-    #    Replace MaSuRCAs bundled polca.sh with the version from patches/
-    #    that is compatible with newer samtools (-o flag removed from sort).
-    # -------------------------------------------------------------------------
-    POLCA_INSTALLED=$(find .pixi/envs/default -name "polca.sh" | head -1)
-    if [ -n "$POLCA_INSTALLED" ]; then
-        echo "Replacing $POLCA_INSTALLED with patched version"
-        cp patches/polca.sh "$POLCA_INSTALLED"
-        chmod +x "$POLCA_INSTALLED"
-    else
-        echo "WARNING: polca.sh not found in installed environment"
-    fi
-
-    # -------------------------------------------------------------------------
-    # 6. Build bowtie2 from source
+    # 5. Build bowtie2 from source
     #    The conda bowtie2 falls back from AVX2 (x86-64-v3) at runtime; the
     #    source build in install_scripts/pixi_install_bowtie2.sh shadows it.
     #    Call the script directly (mirroring the funannotate Dockerfile) rather
@@ -124,7 +110,7 @@ From: debian:bookworm-slim
     test -x "$CONDA_PREFIX/bin/bowtie2-align-s-v256"
 
     # -------------------------------------------------------------------------
-    # 7. Database download (skippable via --build-arg skip_db_download=1,
+    # 6. Database download (skippable via --build-arg skip_db_download=1,
     #    used by CI where disk/time budgets don't allow baking in the DB;
     #    users then bind-mount or download AAFTF_DB separately at run time)
     # -------------------------------------------------------------------------
@@ -134,11 +120,11 @@ From: debian:bookworm-slim
     if [ "{{ skip_db_download }}" = "1" ]; then
         echo "Skipping database download (skip_db_download=1)"
     else
-        AAFTF download --AAFTF_DB $AAFTF_DB --sourdb-type gbk
+        AAFTF download --sourdb-type gbk
     fi
 
     # -------------------------------------------------------------------------
-    # 8. Make AAFTF available in LOGIN shells too.
+    # 7. Make AAFTF available in LOGIN shells too.
     #    The %environment block above only takes effect for non-login container
     #    shells (singularity run/exec). SLURM/Nextflow run task scripts via
     #    /bin/bash -l, and a login shell re-sources /etc/profile, which
@@ -157,7 +143,7 @@ EOF
     chmod +x /etc/profile.d/aaftf.sh
 
     # -------------------------------------------------------------------------
-    # 9. Cleanup build artefacts to reduce image size
+    # 8. Cleanup build artefacts to reduce image size
     # -------------------------------------------------------------------------
     AAFTF --version || true
     rm -rf /opt/pixi

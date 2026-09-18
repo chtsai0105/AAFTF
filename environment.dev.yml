@@ -5,11 +5,14 @@ channels:
   - defaults
 dependencies:
   - python=3.10
-  - samtools>=1.23,<2
+  - samtools>=1.24,<2
   - biopython
   - bwa
   - minimap2
-  - pilon
+  - freebayes
+  - yak
+  - polypolish
+  - nextpolish2
   - blast
   - diamond
   - sourmash
@@ -28,7 +31,7 @@ dependencies:
   - mosdepth
   - matplotlib
   - bbmap>=39.80,<40
-  - masurca>=4.1.4,<5
+  - pypolca>=0.5.0,<0.6
   - pytest>=7.0
   - pip
   - pip:

@@ -5,8 +5,8 @@ Installation
 AAFTF can be run three ways: a **conda/pip environment** you assemble yourself, a **pixi**-managed
 environment (the same mechanism used to build the project's own Docker/Singularity images), or
 directly from a pre-built **Docker/Singularity/Apptainer container**. All external bioinformatics
-tools (SPAdes, BBTools, BLAST+, sourmash, bwa, minimap2, Pilon, mosdepth, ...) must be reachable on
-``$PATH`` -- the three methods below differ only in *how* that PATH gets populated.
+tools (SPAdes, BBTools, BLAST+, sourmash, bwa, minimap2, pypolca, polypolish, NextPolish2, mosdepth, ...)
+must be reachable on ``$PATH`` -- the three methods below differ only in *how* that PATH gets populated.
 
 Option 1: conda environment
 ============================
@@ -14,9 +14,9 @@ Option 1: conda environment
 .. code-block:: bash
 
     conda create -n aaftf -c bioconda -c conda-forge "python>=3.10,<3.15" \
-        bbmap trimmomatic bowtie2 bwa pilon sourmash blast minimap2 \
-        spades megahit novoplasty "biopython>=1.88" fastp masurca unicycler \
-        mosdepth "matplotlib>=3" "samtools>=1.23"
+        bbmap trimmomatic bowtie2 bwa freebayes yak sourmash blast minimap2 \
+        spades megahit novoplasty "biopython>=1.88" fastp pypolca polypolish \
+        nextpolish2 racon unicycler mosdepth "matplotlib>=3" "samtools>=1.24"
 
     conda activate aaftf
     pip install AAFTF
@@ -24,12 +24,11 @@ Option 1: conda environment
     python -m pip install git+https://github.com/stajichlab/AAFTF.git
 
 .. warning::
-   Several bioconda packages (e.g. older masurca/polca builds) pull in an ancient samtools
-   (~0.2) as a transitive dependency, which conflicts with AAFTF's requirement of
-   samtools >= 1.0 (ideally >= 1.23 for best performance -- newer samtools avoids writing
-   unsorted temp BAM files to disk). Install/prefer a newer samtools in the same environment,
-   or point ``polish --polca_samtools`` at a separate compatible binary (see
-   :doc:`commands/polish`).
+   AAFTF requires samtools >= 1.0 (ideally >= 1.24 for best performance -- newer samtools
+   avoids writing unsorted temp BAM files to disk). If you assemble your own environment,
+   watch for bioconda packages that bundle an old, conflicting samtools binary of their own
+   (older MaSuRCA builds were a historical example of this) -- AAFTF's own dependency lists
+   (``pyproject.toml``, ``environment.yml``) no longer pull in any such package.
 
 Option 2: pixi (recommended for reproducible/locked environments)
 ====================================================================
@@ -58,8 +57,8 @@ environment (tracks the ``aaftf`` package pinned in ``pyproject.toml`` (``[tool.
 Option 3: Docker / Singularity / Apptainer
 ============================================
 
-Prebuilt containers bundle every dependency, including the patched ``polca.sh`` (compatible with
-modern samtools) and a source-built ``bowtie2``. Only ``fcs_screen`` additionally requires a
+Prebuilt containers bundle every dependency, including ``pypolca`` (POLCA-style polishing that
+works with modern samtools) and a source-built ``bowtie2``. Only ``fcs_screen`` additionally requires a
 *separate* container engine (singularity/apptainer or docker) at runtime, since NCBI FCS-adaptor
 itself ships as a container image invoked from inside AAFTF -- see :doc:`commands/fcs_screen`.
 

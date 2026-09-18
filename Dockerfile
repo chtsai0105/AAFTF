@@ -138,20 +138,7 @@ open('/opt/AAFTF/AAFTF/_version.py', 'w').write(f'__version__ = version = \\\"{v
 print(f'Baked version {ver} into AAFTF/_version.py')"
 
 # ---------------------------------------------------------------------------
-# 5. Apply the patched polca.sh (compatible with newer samtools)
-# ---------------------------------------------------------------------------
-RUN source /opt/aaftf_activate.sh && \
-    POLCA_INSTALLED=$(find /opt/AAFTF/.pixi/envs -name "polca.sh" | head -1) && \
-    if [ -n "$POLCA_INSTALLED" ]; then \
-        echo "Replacing $POLCA_INSTALLED with patched version"; \
-        cp /opt/AAFTF/patches/polca.sh "$POLCA_INSTALLED"; \
-        chmod +x "$POLCA_INSTALLED"; \
-    else \
-        echo "WARNING: polca.sh not found — skipping polca patch"; \
-    fi
-
-# ---------------------------------------------------------------------------
-# 6. Build bowtie2 from source (fixes the conda binary's AVX2/x86-64-v3
+# 5. Build bowtie2 from source (fixes the conda binary's AVX2/x86-64-v3
 #    runtime fallback). The conda bowtie2 2.5.5 fails to launch its v3 build
 #    ("Failed to launch x86-64-v3 version, staying with default"), silently
 #    dropping to baseline SSE2. install_scripts/pixi_install_bowtie2.sh rebuilds
@@ -166,26 +153,26 @@ RUN source /opt/aaftf_activate.sh && \
     test -x "${CONDA_PREFIX}/bin/bowtie2-align-s-v256"
 
 # ---------------------------------------------------------------------------
-# 7. Smoke test
+# 6. Smoke test
 # ---------------------------------------------------------------------------
 RUN source /opt/aaftf_activate.sh && AAFTF --version
 
 # ---------------------------------------------------------------------------
-# 8. Cleanup build artefacts to reduce image size
+# 7. Cleanup build artefacts to reduce image size
 #    Keep /opt/pixi intact — pixi manages the conda env and removing it can
 #    break activation.  Only purge the download cache.
 # ---------------------------------------------------------------------------
 RUN rm -rf /root/.cache
 
 # ---------------------------------------------------------------------------
-# 9. Entrypoint: source the activation script then exec the user command
+# 8. Entrypoint: source the activation script then exec the user command
 # ---------------------------------------------------------------------------
 RUN printf '#!/bin/bash\nset -e\nsource /opt/aaftf_activate.sh\nexec "$@"\n' \
         > /usr/local/bin/docker-entrypoint.sh && \
     chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # ---------------------------------------------------------------------------
-# 10. Bake the pixi env bin dir onto PATH (mirrors funannotate's
+# 9. Bake the pixi env bin dir onto PATH (mirrors funannotate's
 #     `ENV PATH="/venv/bin:..."`). Docker execution gets this via the
 #     ENTRYPOINT sourcing aaftf_activate.sh, but Singularity/Apptainer SIFs
 #     converted from this image do NOT run the Docker ENTRYPOINT, and login

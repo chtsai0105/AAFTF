@@ -9,7 +9,8 @@ from AAFTF.utility import status, which_path
 REQUIRED_TOOLS = {
     "samtools": "filter, sourpurge, rmdup, polish, depth",
     "bwa": "filter, sourpurge, polish, depth",
-    "minimap2": "mito, rmdup, depth",
+    "minimap2": "mito, rmdup, depth, polish (nextpolish2, racon)",
+    "racon": "polish (racon)",
     "bowtie2": "filter",
     "bowtie2-build": "filter",
     "blastn": "vecscreen",
@@ -25,9 +26,11 @@ REQUIRED_TOOLS = {
     "bbduk.sh": "trim, filter",
     "reformat.sh": "trim, filter",
     "shuffle.sh": "trim, filter",
-    "pilon": "polish",
-    "nextPolish": "polish",
-    "polca.sh": "polish (masurca)",
+    "pypolca": "polish (pypolca)",
+    "freebayes": "polish (pypolca)",
+    "polypolish": "polish (polypolish)",
+    "nextPolish2": "polish (nextpolish2)",
+    "yak": "polish (nextpolish2)",
     "NOVOPlasty.pl": "mito",
 }
 

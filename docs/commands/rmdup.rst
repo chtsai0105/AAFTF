@@ -2,8 +2,6 @@
 rmdup
 =====
 
-**Aliases:** ``dedup``
-
 Removes contigs that are wholly or largely redundant with a larger contig elsewhere in the same
 assembly -- a common artifact of assemblers producing overlapping/haplotype-divergent contigs for
 the same genomic region.

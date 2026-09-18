@@ -2,8 +2,6 @@
 sort
 ====
 
-No aliases.
-
 Sorts final assembly contigs by length (longest to shortest) and renames FASTA headers to a
 clean, consistent scheme -- typically the last cosmetic step before assessment/submission.
 

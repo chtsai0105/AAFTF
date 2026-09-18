@@ -24,11 +24,10 @@ pytestmark = pytest.mark.unit
 # Subcommand help (argparse –– no tool execution)
 # ---------------------------------------------------------------------------
 
-# Maps the subcommand/alias used in this file's test argv to the module whose
+# Maps the subcommand used in this file's test argv to the module whose
 # run() must be intercepted before it actually executes.
 _COMMAND_MODULE = {
     "depth": "AAFTF.depth",
-    "coverage": "AAFTF.depth",
     "assess": "AAFTF.assess",
     "sort": "AAFTF.sort",
     "fix_tbl": "AAFTF.fix_tbl",
@@ -146,11 +145,6 @@ class TestDepthParser:
             with pytest.raises(SystemExit) as exc:
                 main()
         assert exc.value.code != 0
-
-    def test_coverage_alias_parses(self):
-        args = _parse_with_main(["AAFTF", "coverage", "-i", "g.fa", "-l", "l.fq"])
-        # alias 'coverage' routes to depth; same Namespace structure
-        assert args.input == "g.fa"
 
     def test_default_plot_format_is_pdf(self):
         args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])

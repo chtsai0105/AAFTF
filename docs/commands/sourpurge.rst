@@ -2,8 +2,6 @@
 sourpurge
 =========
 
-**Aliases:** ``purge``
-
 Purges contaminant contigs from an assembly using two independent signals: sourmash-based
 taxonomic classification, and (if reads are provided) unusually low read coverage relative to the
 bulk of the assembly.

@@ -2,8 +2,6 @@
 mito
 ====
 
-**Aliases:** ``mito_asm``, ``mitochondria``
-
 De novo assembles the mitochondrial genome from trimmed paired-end Illumina reads, independently
 of the nuclear genome assembly, using NOVOPlasty's seed-and-extend organelle assembler.
 

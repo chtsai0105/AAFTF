@@ -29,7 +29,6 @@ def run(
     minlen=75,
     screen_accessions=None,
     screen_urls=None,
-    iterations=5,
     mincontiglen=500,
     workdir=None,
     sourdb=None,
@@ -173,19 +172,16 @@ def run(
     # run polish to error-correct
     polish_file = basename + ".polish.fasta"
     if not checkfile(polish_file):
-        polishOpts = ["cpus", "debug", "workdir", "iterations", "memory"]
+        polishOpts = ["cpus", "debug", "workdir", "memory"]
         polish_args = create_namespace(
             polishOpts,
             required_args={
-                "method": "pilon",
+                "method": "pypolca",
                 "infile": rmdup_file,
                 "outfile": polish_file,
                 "left": basename + "_filtered_1.fastq.gz",
                 "right": basename + "_filtered_2.fastq.gz" if right else None,
                 "longreads": None,
-                "diploid": False,
-                "ploidy": 1,
-                "polca": "polca.sh",
                 "pipe": True,
                 # pipeline-level --memory is str (matches assemble's spades usage);
                 # polish.py divides it by cpus expecting int (see polish.py memperthread).

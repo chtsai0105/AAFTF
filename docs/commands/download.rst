@@ -2,8 +2,6 @@
 download
 ========
 
-**Aliases:** ``configure``, ``install``, ``download_db``, ``setup``
-
 Fetches and caches every reference database AAFTF's other subcommands rely on into a persistent
 ``$AAFTF_DB`` directory, so ``filter``/``vecscreen``/``sourpurge``/``fcs_screen`` don't each
 re-download (large) files the first time they run.

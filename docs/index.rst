@@ -14,8 +14,7 @@ Every subcommand is invoked the same way::
 
 and every subcommand accepts at minimum ``-v/--debug`` (verbose logging, keep temp files) and
 ``--pipe`` (suppress "next command" hints; used internally when ``AAFTF pipeline`` chains steps
-together). Many subcommands have one or more shorter aliases (e.g. ``AAFTF asm`` for
-``AAFTF assemble``, ``AAFTF stats`` for ``AAFTF assess``) -- see each command page for its aliases.
+together).
 
 .. toctree::
    :maxdepth: 2

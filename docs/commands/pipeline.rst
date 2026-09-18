@@ -2,8 +2,6 @@
 pipeline
 ========
 
-No aliases.
-
 Runs the entire raw-reads-to-clean-assembly workflow in a single command: trim -> mito (if paired
 reads) -> filter -> assemble -> vecscreen -> sourpurge -> rmdup -> polish -> sort -> assess. See
 :doc:`../workflow` for the full diagram and per-step input/output description.
@@ -53,9 +51,6 @@ Cutoffs / defaults
    * - ``--method``
      - spades
      - Assembler method (spades / dipspades / megahit)
-   * - ``-it/--iterations``
-     - 5
-     - Pilon polishing iterations
    * - ``-mc/--mincontiglen``
      - 500
      - Minimum contig length kept by rmdup and by the final sort step

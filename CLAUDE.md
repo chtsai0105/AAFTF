@@ -4,7 +4,7 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 
 ## Key Architecture Reminders
 
-- Entry point: `AAFTF/AAFTF_main.py` — builds the top-level parser, wires up subcommands via `SUBCOMMAND_REGISTRARS` (imported from `AAFTF/_menu.py`), and dispatches by calling `args.func(**vars(args))`. There is no central dispatcher function or alias-normalization map anymore: each subcommand parser binds its own subtool's `run` directly via `parser_x.set_defaults(func=<module>.run)` inside its `<name>_menu()` function in `_menu.py`, and argparse's own `aliases=[...]` already routes every alias to that same parser object/`func`.
+- Entry point: `AAFTF/AAFTF_main.py` — builds the top-level parser, wires up subcommands via `SUBCOMMAND_REGISTRARS` (imported from `AAFTF/_menu.py`), and dispatches by calling `args.func(**vars(args))`. There is no central dispatcher function: each subcommand parser binds its own subtool's `run` directly via `parser_x.set_defaults(func=<module>.run)` inside its `<name>_menu()` function in `_menu.py`. Subcommand parsers no longer register any `aliases=[...]` — each subcommand has exactly one canonical name.
 - All argparse subcommand-parser definitions ("menus") live in one place: `AAFTF/_menu.py`. Each subcommand has a `<name>_menu(subparsers)` function there (e.g. `trim_menu`, `depth_menu`) that builds and registers that subtool's `subparsers.add_parser(...)` block and its arguments, then calls `parser_x.set_defaults(func=<module>.run)`; `AAFTF/_menu.py` also defines `menu_common_args()` and the `SUBCOMMAND_REGISTRARS` list, and imports every subcommand module (`trim`, `depth`, etc.) to reference their `run` functions. Each subcommand module itself (`trim.py`, `depth.py`, etc.) only contains the `run(**kwargs)` execution logic — no parser-building code
 - Every subcommand's `run()` function takes its CLI dest names directly as keyword arguments (not an `args`/`parser` pair) and ends its parameter list with `**kwargs` to absorb argparse's own bookkeeping attributes (`command`, `func`, and the unused `quiet`) that ride along in `vars(args)`. The function body uses those parameters directly (e.g. `left`, `workdir`) — there is no internal `args = Namespace(...)` reconstruction; a parameter that needs to change during the run (e.g. `basename` auto-derived from `left`, `workdir` defaulted when not given) is simply reassigned as a local variable. Only `assemble.py`'s internal helpers (`run_spades`, `run_dipspades`, `run_megahit`, `run_unicycler`) and `pipeline.py`'s `create_namespace()` still build/pass `Namespace`/dict objects, because they need a keyed collection to forward a subset of fields — not because they mirror the old `args.xxx` style.
 - Because `run()` no longer mutates a caller-supplied `args` object, tests must not expect derived values (e.g. `trim.run()`'s auto-derived `basename`) to show up on the `Namespace`/kwargs the test constructed — assert on the actual side effects (subprocess commands, files written) instead. See `tests/test_trim.py::_run_bbduk` for the pattern.
@@ -25,25 +25,25 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 
 "Module" below is where each subtool's `run(**kwargs)` execution logic lives; its argparse parser/menu is instead in `AAFTF/_menu.py` (as `<name>_menu()`).
 
-| Canonical name | Aliases | Module | Key external tools |
-|---|---|---|---|
-| `trim` | `trim_reads`, `read_trim` | `AAFTF/trim.py` | bbduk.sh, trimmomatic, fastp |
-| `filter` | `filter_reads`, `read_filter` | `AAFTF/filter.py` | bbduk.sh, bowtie2, bwa, minimap2, samtools |
-| `assemble` | `asm`, `spades` | `AAFTF/assemble.py` | spades.py, megahit, unicycler |
-| `vecscreen` | `vectorscreen`, `vector_blast` | `AAFTF/vecscreen.py` | blastn, makeblastdb |
-| `fcs_screen` | `ncbi_fcs`, `ncbi_fcs-screen` | `AAFTF/fcs_screen.py` | run_fcsadaptor.sh (singularity/docker) |
-| `fcs_gx_purge` | `ncbi_fcs-gx`, `ncbi_fcs_gx`, `gx` | `AAFTF/fcs_gx_purge.py` | run_gx.py (NCBI FCS-GX) |
-| `sourpurge` | `purge` | `AAFTF/sourpurge.py` | sourmash, bwa, samtools |
-| `rmdup` | `dedup` | `AAFTF/rmdup.py` | minimap2 |
-| `polish` | `pilon`, `polca` | `AAFTF/polish.py` | pilon, nextPolish, polca, bwa, samtools |
-| `sort` | — | `AAFTF/sort.py` | (none — BioPython only) |
-| `assess` | `stats` | `AAFTF/assess.py` | (none — BioPython only) |
-| `depth` | `coverage`, `cov` | `AAFTF/depth.py` | minimap2, bwa, samtools, mosdepth |
-| `mito` | `mito_asm`, `mitochondria` | `AAFTF/mito.py` | NOVOPlasty, minimap2 |
-| `fix_tbl` | `fix` | `AAFTF/fix_tbl.py` | (none) |
-| `download` | `configure`, `install`, `download_db`, `setup` | `AAFTF/download.py` | (none — urllib only) |
-| `check_dependencies` | `check_deps`, `deps` | `AAFTF/check_dependencies.py` | (none — checks PATH for all of the above) |
-| `pipeline` | — | `AAFTF/pipeline.py` | all of the above |
+| Canonical name | Module | Key external tools |
+|---|---|---|
+| `trim` | `AAFTF/trim.py` | bbduk.sh, trimmomatic, fastp |
+| `filter` | `AAFTF/filter.py` | bbduk.sh, bowtie2, bwa, minimap2, samtools |
+| `assemble` | `AAFTF/assemble.py` | spades.py, megahit, unicycler |
+| `vecscreen` | `AAFTF/vecscreen.py` | blastn, makeblastdb |
+| `fcs_screen` | `AAFTF/fcs_screen.py` | run_fcsadaptor.sh (singularity/docker) |
+| `fcs_gx_purge` | `AAFTF/fcs_gx_purge.py` | run_gx.py (NCBI FCS-GX) |
+| `sourpurge` | `AAFTF/sourpurge.py` | sourmash, bwa, samtools |
+| `rmdup` | `AAFTF/rmdup.py` | minimap2 |
+| `polish` | `AAFTF/polish.py` | polypolish, pypolca, nextPolish2, racon, bwa, samtools, minimap2, yak, freebayes |
+| `sort` | `AAFTF/sort.py` | (none — BioPython only) |
+| `assess` | `AAFTF/assess.py` | (none — BioPython only) |
+| `depth` | `AAFTF/depth.py` | minimap2, bwa, samtools, mosdepth |
+| `mito` | `AAFTF/mito.py` | NOVOPlasty, minimap2 |
+| `fix_tbl` | `AAFTF/fix_tbl.py` | (none) |
+| `download` | `AAFTF/download.py` | (none — urllib only) |
+| `check_dependencies` | `AAFTF/check_dependencies.py` | (none — checks PATH for all of the above) |
+| `pipeline` | `AAFTF/pipeline.py` | all of the above |
 
 ## Module `args` Signatures
 
@@ -57,7 +57,7 @@ Key `args` attributes accessed by each `run()` function:
 - **fcs_gx_purge**: `workdir`, `db`, `input`, `taxid`, `outfile`, `debug`, `pipe`
 - **sourpurge**: `workdir`, `cpus`, `left`, `right`, `sourdb`, `sourdb_type`, `input`, `AAFTF_DB`, `kmer`, `phylum`, `mincovpct`, `outfile`, `taxonomy`, `debug`, `pipe`
 - **rmdup**: `workdir`, `cpus`, `input`, `percent_id`, `percent_cov`, `minlen`, `exhaustive`, `debug`, `out`, `pipe`
-- **polish**: `method`, `memory`, `cpus`, `left`, `right`, `longreads`, `workdir`, `infile`, `outfile`, `iterations`, `debug`, `diploid`, `ploidy`, `pipe`, `polca`, `trimmomatic`
+- **polish**: `method`, `memory`, `cpus`, `left`, `right`, `longreads`, `workdir`, `infile`, `outfile`, `debug`, `pipe`. Each `--method` (`pypolca`, `polypolish`, `nextpolish2`, `racon`) is isolated into its own `run_<method>()` function in `AAFTF/polish.py`.
 - **sort**: `input`, `minlen`, `out`, `name`
 - **assess**: `input`, `report`, `telomere_monomer`, `telomere_n_repeat`, `telomere_window`
 - **depth**: `input`, `out`, `left`, `right`, `longreads`, `illumina_preset`, `longread_preset`, `aligner`, `cpus`, `workdir`, `debug`, `pipe`, `min_contig_len`, `no_plot`, `plot_format`, `quantize`, `quantize_labels`
@@ -111,7 +111,7 @@ Expected inputs/outputs per step:
 
 ### `depth` subtool — coverage analysis
 
-**New file:** `AAFTF/depth.py`; registered in `AAFTF_main.py` with aliases `coverage`/`cov`.
+**New file:** `AAFTF/depth.py`; registered in `AAFTF_main.py`.
 
 **Workflow:**
 1. Counts reads in each input FASTQ

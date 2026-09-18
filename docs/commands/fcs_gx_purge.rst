@@ -2,8 +2,6 @@
 fcs_gx_purge
 ============
 
-**Aliases:** ``ncbi_fcs-gx``, ``ncbi_fcs_gx``, ``gx``
-
 Purges contaminant contigs from an assembly using NCBI's **FCS-GX** tool -- a genome
 cross-contamination screen that classifies every contig/region against a comprehensive reference
 database of taxonomy-labeled genomes, rather than the k-mer/sketch-based approach used by

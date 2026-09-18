@@ -2,8 +2,6 @@
 trim
 ====
 
-**Aliases:** ``trim_reads``, ``read_trim``
-
 Adapter and quality trims raw Illumina FASTQ reads (paired- or single-end). This is normally the
 first step of the pipeline.
 

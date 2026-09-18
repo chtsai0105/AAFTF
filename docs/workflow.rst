@@ -38,8 +38,8 @@ Pipeline diagram
     [6] rmdup ------------------------------ minimap2 self-alignment removes redundant contigs
         |
         v
-    [7] polish ------------------------------ Pilon / POLCA / NextPolish / Racon short/long-read
-        |                                      error correction (iterative)
+    [7] polish ------------------------------ Polypolish / pypolca / NextPolish2 / Racon short/long-read
+        |                                      error correction
         v
     [8] sort -------------------------------- rank contigs longest->shortest, rename headers
         |

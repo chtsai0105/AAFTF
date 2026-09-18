@@ -32,12 +32,10 @@ Most of these can be installed via conda packages. Noting that some tools have d
 
 
 ## Assembly polishing
-- [polca](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007981) (from MaSuRCA) - https://github.com/alekseyzimin/masurca (polca.sh polishing)
-   * note that the polca use of samtools supports an old version and will not work with version of samtools installed by default
-     To fix this apply the patch in patches/polca.patch to fix your local version or copy patches/polca.sh to replace version installed
-     in your environment or system.
-- [Pilon](https://pubmed.ncbi.nlm.nih.gov/25409509/) - https://github.com/broadinstitute/pilon
-- [NextPolish](https://pubmed.ncbi.nlm.nih.gov/31778144/) - https://github.com/Nextomics/NextPolish
+- [polca](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007981) via [pypolca](https://github.com/replikation/pypolca) -
+  a Python reimplementation of MaSuRCA's POLCA algorithm that works with any modern samtools
+- [Polypolish](https://github.com/rrwick/Polypolish) - alignment-filtering short-read polisher
+- [NextPolish2](https://github.com/Nextomics/NextPolish2) - repeat-aware polishing of HiFi assemblies using a short-read k-mer (yak) database
 
 
 # Authors
@@ -52,8 +50,8 @@ We are working on simplifying the install, ie getting on Pypi and bioconda.
 Currently you could create conda environment and install like this:
 
 ```
-conda create -n aaftf -c bioconda "python>=3.6" bbmap trimmomatic bowtie2 bwa pilon sourmash \
-    blast minimap2 spades megahit novoplasty biopython fastp masurca unicycler
+conda create -n aaftf -c bioconda "python>=3.6" bbmap trimmomatic bowtie2 bwa sourmash \
+    blast minimap2 spades megahit novoplasty biopython fastp pypolca polypolish nextpolish2 unicycler
 ```
 A challenge has been older version of samtools tied to some of the dependencies while AAFTF prefers samtool >= 1.0.
 If you can install samtools >1.22.1 for example after installing these depenendicies or via a separate env that can help
@@ -85,8 +83,6 @@ More instructions coming for simplicity of install/testing.
 ## Notes
 This is partially a python re-write of [JAAWS](https://github.com/nextgenusfs/jaaws) which was a unix shell based cleanup and assembly tool written by Jon.
 
-the polca.sh that comes with masurca expects an old version samtools. To solve this you can copy the patches/polca.sh to your installed polca.sh and it corrects one bug to use `-o outfile` option for BAM saving from the `samtools sort` step.
-
 ## Steps / Procedures
 1. trim                Trim FASTQ input reads - with BBMap
 2. mito                De novo assemble mitochondrial genome
@@ -96,7 +92,7 @@ the polca.sh that comes with masurca expects an old version samtools. To solve t
 6a. sourpurge          Purge contigs based on sourmash results - with sourmash
 6b. fcs_gx_purge       Purge contigs based on NCBI fcs-gx tool. Note this runs MUCH faster with large memory.
 7. rmdup               Remove duplicate contigs - using minimap2 to find duplicates
-8. polish              Polish contig sequences - uses POLCA, Pilon, or NextPolish
+8. polish              Polish contig sequences - uses pypolca, Polypolish, NextPolish2, or Racon
 9. sort                Sort contigs by length and rename FASTA headers
 10. assess             Assess completeness of genome assembly
 11. depth              Calculate read depth of coverage across assembled contigs
@@ -245,7 +241,7 @@ AAFTF vecscreen -c $CPU -i $ASMFILE -o $VECTRIM
 
 ## Depth of Coverage
 
-The `depth` subtool (aliases: `coverage`, `cov`) maps reads to the final assembly and
+The `depth` subtool maps reads to the final assembly and
 computes per-contig depth statistics using mosdepth.  It requires `samtools` and `mosdepth`
 plus at least one of `minimap2` (default for both Illumina and long reads) or `bwa`.
 
