@@ -732,7 +732,7 @@ def assess_menu(subparsers):
 
     optional.add_argument("-r", "--report", type=str, help="Filename to save report information otherwise will print to stdout")
 
-    optional.add_argument("-t", "--telomere_monomer", type=str, help="Telomere repeat monomer to search for.", default="TAA[C]+")
+    optional.add_argument("-t", "--telomere_monomer", type=str, help="Telomere monomer pattern to search for.", default="TAAC{3,5}")
 
     optional.add_argument("-n", "--telomere_n_repeat", type=int, default=2, help="Telomere minimum number of monomer repeats.")
 

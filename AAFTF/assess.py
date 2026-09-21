@@ -12,8 +12,10 @@ from Bio import SeqIO
 
 from AAFTF.utility import status
 
+COMPLEMENT_MAP = str.maketrans("ACGTURYKMSWBDHVNacgturykmswbdhvn", "TGCAAYRMKSWVBDHNtgcaayrmkswvbdhn")
 
-def run(input, report=None, telomere_monomer="TAA[C]+", telomere_n_repeat=2, telomere_window=200, **kwargs):
+
+def run(input, report=None, telomere_monomer="TAAC{3,5}", telomere_n_repeat=2, telomere_window=200, **kwargs):
     """This is the general run command to calculate the genome statistics.
 
     This function will also attempt to find the telomere repeats and count these.
@@ -103,49 +105,69 @@ def genome_asm_stats(fasta_file, output_handle, telomere_repeat, n_minimum, telo
         output_handle.write(report)
 
 
-def revcomp(seq):
+def make_regex_revcomp(pattern):
     """Reverse complement sequence or regexp.
 
     Using code based on find_telomeres.py from Markus Hiltunen.
     https://github.com/markhilt/genome_analysis_tools
     """
-    revcomped_seq = []
-    for nucl in seq[::-1]:
-        if nucl == "A" or nucl == "a":
-            revcomped_seq.append("T")
-        elif nucl == "T" or nucl == "t":
-            revcomped_seq.append("A")
-        elif nucl == "C" or nucl == "c":
-            revcomped_seq.append("G")
-        elif nucl == "G" or nucl == "g":
-            revcomped_seq.append("C")
-        elif nucl == "[":
-            revcomped_seq.append("]+")
-        elif nucl == "]":
-            revcomped_seq.append("[")
-        elif nucl == "+":
+    token_re = re.compile(r"(\[[^\]]+\]|\w)(?:(\{[0-9,]+\}|\+|\*|\?))?")
+
+    tokens = []
+    pos = 0
+    while pos < len(pattern):
+        m = token_re.match(pattern, pos)
+        if not m:
+            # Pass through any standalone symbol (e.g. delimiters)
+            tokens.append((pattern[pos], ""))
+            pos += 1
             continue
-        else:  # At this point we don't care about IUPAC coded bases
-            revcomped_seq.append("N")
-    return "".join(revcomped_seq)
+
+        base_unit, quantifier = m.group(1), m.group(2) or ""
+
+        # Complement internal characters if it's a bracketed class
+        if base_unit.startswith("[") and base_unit.endswith("]"):
+            inner = base_unit[1:-1]
+            if inner.startswith("^"):
+                comp_inner = "^" + inner[1:].translate(COMPLEMENT_MAP)
+            else:
+                comp_inner = inner.translate(COMPLEMENT_MAP)
+            comp_base = f"[{comp_inner}]"
+        else:
+            comp_base = base_unit.translate(COMPLEMENT_MAP)
+
+        tokens.append((comp_base, quantifier))
+        pos = m.end()
+
+    # Invert token order while keeping quantifier bound to its base
+    return "".join(base + quant for base, quant in reversed(tokens))
 
 
-def findTelomere(seq, monomer, n, window=200):
+def findTelomere(seq, monomer="TAACCC", min_copies=2, window_size=200):
     """Takes nucleotide sequence and checks if the sequence contains telomere repeats.
 
     Using code based on find_telomeres.py from Markus Hiltunen.
     https://github.com/markhilt/genome_analysis_tools
     """
-    start = str(seq[:window]).upper()
-    end = str(seq[-window:]).upper()
+    fwd_pattern = monomer.strip()
+    rev_pattern = make_regex_revcomp(fwd_pattern)
 
-    forward, reverse = False, False
+    combined_regex = re.compile(rf"(?:{fwd_pattern}|{rev_pattern})", re.IGNORECASE)
 
-    # Look for the monomer repeat n number of times.
-    if re.search(monomer * n, start):
-        forward = True
-    rev_monomer = revcomp(monomer)
-    if re.search(rev_monomer * n, end):
-        reverse = True
+    seq_len = len(seq)
+
+    if seq_len <= window_size * 2:
+        mid = seq_len // 2
+        start_seq = str(seq[:mid])
+        end_seq = str(seq[mid:])
+    else:
+        start_seq = str(seq[:window_size])
+        end_seq = str(seq[-window_size:])
+
+    start_count = len(combined_regex.findall(start_seq))
+    end_count = len(combined_regex.findall(end_seq))
+
+    forward = start_count >= min_copies
+    reverse = end_count >= min_copies
 
     return forward, reverse
