@@ -73,8 +73,7 @@ def run(
     left=None,
     right=None,
     longreads=None,
-    illumina_preset="sr",
-    longread_preset="map-ont",
+    longread_preset=None,
     aligner="minimap2",
     cpus=1,
     workdir=None,
@@ -83,8 +82,6 @@ def run(
     min_contig_len=500,
     no_plot=False,
     plot_format="pdf",
-    quantize=_DEFAULT_QUANTIZE,
-    quantize_labels=None,
     **kwargs,
 ):
     """Execute depth-of-coverage analysis for a genome assembly.
@@ -102,6 +99,10 @@ def run(
     # ------------------------------------------------------------------
     if not left and not longreads:
         status("ERROR: provide at least --left (Illumina) or --longreads")
+        sys.exit(1)
+
+    if longreads and not longread_preset:
+        status("ERROR: --longread_preset is required when --longreads is provided (map-ont, map-pb, or map-hifi)")
         sys.exit(1)
 
     if not checkfile(input):
@@ -128,11 +129,8 @@ def run(
         required.add("minimap2")
     for tool in sorted(required):
         if not which(tool):
-            status(f"ERROR: required tool '{tool}' not found in PATH. " f"Install via conda: conda install -c bioconda {tool}")
+            status(f"ERROR: required tool '{tool}' not found in PATH. Install via conda: conda install -c bioconda {tool}")
             sys.exit(1)
-
-    quantize_str = quantize
-    quantize_labels_str = quantize_labels
 
     if not no_plot and not HAS_MATPLOTLIB:
         status("WARNING: matplotlib not available — coverage plots will be skipped.")
@@ -178,7 +176,7 @@ def run(
         longreads,
         workdir,
         cpus,
-        illumina_preset,
+        "sr",
         longread_preset,
         aligner,
         debug,
@@ -203,13 +201,13 @@ def run(
     labels = None
     colours = None
     if not no_plot:
-        labels, env_dict = _parse_quantize_bins(quantize_str, quantize_labels_str)
+        labels, env_dict = _parse_quantize_bins(_DEFAULT_QUANTIZE)
         colours = _cov_colours_for_labels(labels)
         summary_file, quantized_bed = run_mosdepth_quantized(
             bam_combined,
             workdir,
             cpus,
-            quantize_str,
+            _DEFAULT_QUANTIZE,
             env_dict,
             debug=debug,
         )
@@ -316,7 +314,7 @@ def run(
         fout.write("  ELEVATED contigs are candidates worth inspecting (2–3 SD above mean).\n\n")
 
         cw = (40, 14, 12)
-        header = f"  {'Contig':<{cw[0]}} " f"{'Length (bp)':>{cw[1]}} " f"{'Mean Depth':>{cw[2]}}  Flag\n"
+        header = f"  {'Contig':<{cw[0]}} {'Length (bp)':>{cw[1]}} {'Mean Depth':>{cw[2]}}  Flag\n"
         fout.write(header)
         fout.write("  " + "-" * (sum(cw) + 10) + "\n")
         for c in contig_rows_sorted:
@@ -327,7 +325,7 @@ def run(
                 flag = "   ELEVATED (inspect — 2–3 SD above mean)"
             else:
                 flag = ""
-            fout.write(f"  {c['chrom']:<{cw[0]}} " f"{c['length']:>{cw[1]},} " f"{c['mean']:>{cw[2]}.2f}  {flag}\n")
+            fout.write(f"  {c['chrom']:<{cw[0]}} {c['length']:>{cw[1]},} {c['mean']:>{cw[2]}.2f}  {flag}\n")
 
     status(f"Coverage report written to: {report_file}")
 
@@ -350,7 +348,7 @@ def run(
         SafeRemove(workdir)
 
     if not pipe:
-        status(f"Your next command might be:\n" f"\tAAFTF assess -i {input}\n")
+        status(f"Your next command might be:\n\tAAFTF assess -i {input}\n")
 
 
 # ---------------------------------------------------------------------------
@@ -770,12 +768,6 @@ def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colours, plot_pre
         plot_prefix: Output path prefix (no extension).
         plot_format: "pdf", "svg", or "png".
     """
-    scaffolds = [r["chrom"] for r in scaffold_rows if r["chrom"] in contig_data]
-    if not scaffolds:
-        return
-
-    legend_patches = [Patch(facecolor=colours.get(lbl, "#888888"), label=lbl) for lbl in labels]
-    pages = [scaffolds[i : i + _SCAFFOLDS_PER_PAGE] for i in range(0, len(scaffolds), _SCAFFOLDS_PER_PAGE)]
 
     def _make_page(page_scaffolds, page_num, total_pages):
         n = len(page_scaffolds)
@@ -798,6 +790,13 @@ def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colours, plot_pre
         ax.legend(handles=legend_patches, loc="upper right", fontsize=8)
         fig.tight_layout()
         return fig
+
+    scaffolds = [r["chrom"] for r in scaffold_rows if r["chrom"] in contig_data]
+    if not scaffolds:
+        return
+
+    legend_patches = [Patch(facecolor=colours.get(lbl, "#888888"), label=lbl) for lbl in labels]
+    pages = [scaffolds[i : i + _SCAFFOLDS_PER_PAGE] for i in range(0, len(scaffolds), _SCAFFOLDS_PER_PAGE)]
 
     if plot_format == "pdf":
         path = plot_prefix + ".depth_heatmap.pdf"

@@ -18,10 +18,21 @@ from AAFTF.depth import (
     _read_quantized_bed,
     count_fastq_reads,
     parse_mosdepth_summary,
+    run,
 )
 from tests.conftest import make_fastq_text
 
 pytestmark = pytest.mark.unit
+
+
+class TestRunGuards:
+    def test_longreads_without_preset_exits(self, tmp_path):
+        asm = tmp_path / "asm.fa"
+        asm.write_text(">contig1\nACGT\n")
+        lr = tmp_path / "lr.fq"
+        lr.write_text("@r\nACGT\n+\nIIII\n")
+        with pytest.raises(SystemExit):
+            run(input=str(asm), longreads=str(lr))
 
 
 # ---------------------------------------------------------------------------

@@ -120,12 +120,12 @@ class TestDepthParser:
         args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "--aligner", "bwa"])
         assert args.aligner == "bwa"
 
-    def test_default_longread_preset(self):
+    def test_longread_preset_none_by_default(self):
         args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-lr", "lr.fq"])
-        assert args.longread_preset == "map-ont"
+        assert args.longread_preset is None
 
     def test_longread_preset_map_pb(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-lr", "lr.fq", "--longread_type", "map-pb"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-lr", "lr.fq", "--longread_preset", "map-pb"])
         assert args.longread_preset == "map-pb"
 
     def test_debug_flag_false_by_default(self):
@@ -165,22 +165,6 @@ class TestDepthParser:
     def test_no_plot_flag(self):
         args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "--no-plot"])
         assert args.no_plot is True
-
-    def test_default_quantize(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])
-        assert args.quantize == "0:1:4:100:200:"
-
-    def test_custom_quantize(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "--quantize", "0:5:50:"])
-        assert args.quantize == "0:5:50:"
-
-    def test_quantize_labels_none_by_default(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])
-        assert args.quantize_labels is None
-
-    def test_custom_quantize_labels(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "--quantize-labels", "NONE,LOW,HIGH"])
-        assert args.quantize_labels == "NONE,LOW,HIGH"
 
 
 # ---------------------------------------------------------------------------

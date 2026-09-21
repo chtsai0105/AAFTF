@@ -13,13 +13,12 @@ Algorithm
 1. Counts input reads per FASTQ file (for the report's read-input summary).
 2. Maps Illumina reads with ``minimap2 -ax sr`` (default; ``--aligner bwa`` for ``bwa mem``
    instead) and/or long reads with ``minimap2 -ax {map-ont,map-pb,map-hifi}`` (selected via
-   ``--longread_type``), sorting each to an indexed BAM. When both read types are supplied, the
+   ``--longread_preset``), sorting each to an indexed BAM. When both read types are supplied, the
    two BAMs are merged with ``samtools merge`` before depth calculation.
 3. Runs ``samtools flagstat`` per read type for mapping-rate statistics.
-4. Runs ``mosdepth`` on the combined BAM in **quantized mode** (``--quantize``, default
-   ``0:1:4:100:200:`` -> bins labeled NO_COVERAGE / LOW_COVERAGE / CALLABLE / HIGH_COVERAGE /
-   VERY_HIGH_COVERAGE), producing both a per-contig mean-depth summary and a global coverage
-   distribution.
+4. Runs ``mosdepth`` on the combined BAM in **quantized mode** (fixed bins ``0:1:4:100:200:``
+   -> labeled NO_COVERAGE / LOW_COVERAGE / CALLABLE / HIGH_COVERAGE / VERY_HIGH_COVERAGE),
+   producing both a per-contig mean-depth summary and a global coverage distribution.
 5. Parses ``mosdepth.summary.txt`` for per-contig mean depth and ``mosdepth.global.dist.txt``
    for percent of bases covered at >= 1x.
 6. Computes assembly mean depth and its **population** standard deviation across contigs
@@ -73,15 +72,12 @@ Cutoffs / defaults
    * - ``--aligner``
      - minimap2
      - minimap2 (default) or bwa, for Illumina reads
-   * - ``--illumina_preset``
-     - sr
-     - minimap2 preset for Illumina reads
-   * - ``--longread_type``
+   * - ``--longread_preset``
      - map-ont
      - minimap2 preset for long reads: map-ont / map-pb / map-hifi
-   * - ``--quantize``
-     - ``0:1:4:100:200:``
-     - mosdepth quantize bin boundaries (colon-separated, trailing colon required)
+
+Illumina reads are always mapped with minimap2's ``sr`` preset (or ``bwa mem`` when
+``--aligner bwa`` is given); there is no separate Illumina preset option.
 
 Invocation
 ==========
@@ -89,9 +85,9 @@ Invocation
 .. code-block:: text
 
     AAFTF depth -i INPUT [-o OUT] [-l LEFT] [-r RIGHT] [-lr LONGREADS]
-               [--aligner {minimap2,bwa}] [--illumina_preset {sr,short}]
-               [--longread_type {map-ont,map-pb,map-hifi}]
-               [--min_contig_len N] [--quantize STR] [--quantize-labels LABELS]
+               [--aligner {minimap2,bwa}]
+               [--longread_preset {map-ont,map-pb,map-hifi}]
+               [--min_contig_len N]
                [--plot-format {pdf,svg,png}] [--no-plot]
                [-c CPUS] [-w WORKDIR] [-v] [--pipe]
 
@@ -109,7 +105,7 @@ Example
     # Illumina + long reads together, PDF plots
     AAFTF depth -i genome.final.fasta \
         --left reads_1P.fastq.gz --right reads_2P.fastq.gz \
-        --longreads nanopore.fastq.gz --longread_type map-ont \
+        --longreads nanopore.fastq.gz --longread_preset map-ont \
         -c 16 -o coverage_report.txt
 
 .. note::

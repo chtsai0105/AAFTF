@@ -789,28 +789,7 @@ def depth_menu(subparsers):
         help="Input genome assembly FASTA (e.g. *.sorted.fasta)",
     )
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
-
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
-
-    optional.add_argument(
-        "-o",
-        "--out",
-        "--report",
-        type=str,
-        default="coverage_stats.txt",
-        dest="out",
-        help="Output coverage report file",
-    )
-
-    optional.add_argument(
+    required.add_argument(
         "-l",
         "--left",
         help="Left (Forward) Illumina reads FASTQ",
@@ -829,19 +808,22 @@ def depth_menu(subparsers):
     )
 
     optional.add_argument(
-        "--longread_type",
-        default="map-ont",
-        choices=["map-ont", "map-pb", "map-hifi"],
-        dest="longread_preset",
-        help="minimap2 preset for long reads",
+        "-o",
+        "--out",
+        "--report",
+        type=str,
+        default="coverage_stats.txt",
+        dest="out",
+        help="Output coverage report file",
     )
 
     optional.add_argument(
-        "--illumina_preset",
-        default="sr",
-        choices=["sr", "short"],
-        dest="illumina_preset",
-        help="minimap2 preset for Illumina reads",
+        "-w",
+        "--workdir",
+        "--tmpdir",
+        type=str,
+        dest="workdir",
+        help="Temporary directory to store datafiles and processes in",
     )
 
     optional.add_argument(
@@ -873,22 +855,18 @@ def depth_menu(subparsers):
         help="Disable coverage plot generation",
     )
 
-    optional.add_argument(
-        "--quantize",
-        default="0:1:4:100:200:",
-        dest="quantize",
-        help="mosdepth quantize bin boundaries, colon-separated with trailing colon",
-    )
-
-    optional.add_argument(
-        "--quantize-labels",
-        default=None,
-        dest="quantize_labels",
-        metavar="LABELS",
-        help="Comma-separated labels for quantize bins (default: NO_COVERAGE,LOW_COVERAGE,CALLABLE,HIGH_COVERAGE,VERY_HIGH_COVERAGE for the default bins)",
-    )
+    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
 
     menu_common_args(optional)
+
+    longread_group = parser_depth.add_argument_group(title="minimap2 long-read required arguments")
+
+    longread_group.add_argument(
+        "--longread_preset",
+        choices=["map-ont", "map-pb", "map-hifi"],
+        dest="longread_preset",
+        help="minimap2 preset for long reads",
+    )
 
     parser_depth.set_defaults(func=depth.run)
     return parser_depth
