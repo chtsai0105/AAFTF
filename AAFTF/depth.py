@@ -720,6 +720,9 @@ def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colors, plot_pref
 
     legend_patches = [Patch(facecolor=colors.get(lbl, "#888888"), label=lbl) for lbl in labels]
     pages = _paginate_by_length_ratio(present_rows)
+    # Fixed across pages (derived from the largest page) so labels are the
+    # same size everywhere, regardless of how many rows a given page has.
+    ytick_fontsize = max(5, min(9, 200 // max(len(p) for p in pages)))
 
     def _make_page(scaffold_idx_list, page_idx, total_pages):
         n = len(scaffold_idx_list)
@@ -735,7 +738,7 @@ def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colors, plot_pref
                 )
         ax.set_ylim(-0.5, n - 0.5)
         ax.set_yticks(range(n))
-        ax.set_yticklabels(scaffold_idx_list, fontsize=max(5, min(9, 200 // n)))
+        ax.set_yticklabels(scaffold_idx_list, fontsize=ytick_fontsize)
         ax.invert_yaxis()
         ax.set_xlabel("Genomic position (bp)")
         title = "Coverage class heatmap"
