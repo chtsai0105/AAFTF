@@ -43,24 +43,17 @@ from AAFTF.utility import SafeRemove, checkfile, countfastq, get_samtools_versio
 # ---------------------------------------------------------------------------
 
 _DEFAULT_QUANTIZE = "0:1:4:100:200:"
-_DEFAULT_LABELS = [
-    "NO_COVERAGE",
-    "LOW_COVERAGE",
-    "CALLABLE",
-    "HIGH_COVERAGE",
-    "VERY_HIGH_COVERAGE",
-]
 _COV_COLOURS = {
-    "NO_COVERAGE": "#313695",
-    "LOW_COVERAGE": "#74add1",
-    "CALLABLE": "#ffffbf",
-    "HIGH_COVERAGE": "#f46d43",
-    "VERY_HIGH_COVERAGE": "#a50026",
+    "NO_COVERAGE": "#000080",
+    "LOW_COVERAGE": "#006fff",
+    "CALLABLE": "#54ffaa",
+    "HIGH_COVERAGE": "#ff6c00",
+    "VERY_HIGH_COVERAGE": "#800000",
 }
-# Fallback palette for non-standard bin labels
-_FALLBACK_COLOURS = ["#313695", "#74add1", "#ffffbf", "#f46d43", "#a50026", "#762a83", "#1b7837"]
+_DEFAULT_LABELS = list(_COV_COLOURS)
 
 _SCAFFOLDS_PER_PAGE = 50
+_HEATMAP_MAX_LENGTH_RATIO = 10  # max longest/shortest contig length ratio per page
 
 # ---------------------------------------------------------------------------
 # Main entry point
@@ -197,27 +190,17 @@ def run(
     # mosdepth (quantized when plotting is enabled, standard otherwise)
     # ------------------------------------------------------------------
     status("Running mosdepth...")
-    quantized_bed = None
     labels = None
-    colours = None
+    colors = None
     if not no_plot:
-        labels, env_dict = _parse_quantize_bins(_DEFAULT_QUANTIZE)
-        colours = _cov_colours_for_labels(labels)
-        summary_file, quantized_bed = run_mosdepth_quantized(
-            bam_combined,
-            workdir,
-            cpus,
-            _DEFAULT_QUANTIZE,
-            env_dict,
-            debug=debug,
-        )
-    else:
-        summary_file = run_mosdepth(
-            bam_combined,
-            workdir,
-            cpus,
-            debug=debug,
-        )
+        labels, colors = _parse_quantize_bins()
+    summary_file, quantized_bed = run_mosdepth(
+        bam_combined,
+        workdir,
+        cpus,
+        labels=labels,
+        debug=debug,
+    )
 
     if not Path(summary_file).exists():
         status(f"ERROR: mosdepth summary not produced: {summary_file}")
@@ -225,8 +208,7 @@ def run(
 
     total_row, contig_rows = parse_mosdepth_summary(summary_file)
 
-    dist_file = summary_file.replace(".mosdepth.summary.txt", ".mosdepth.global.dist.txt")
-    coverage_breadth = _coverage_breadth_from_dist(dist_file)
+    coverage_breadth = _coverage_breadth_from_dist(summary_file.with_name(summary_file.name.removesuffix(".mosdepth.summary.txt") + ".mosdepth.global.dist.txt"))
 
     # ------------------------------------------------------------------
     # Statistics for outlier detection
@@ -254,7 +236,8 @@ def run(
         threshold_2sd = 0.0
         threshold_3sd = 0.0
 
-    contig_rows_sorted = sorted(contig_rows, key=lambda x: x["mean"], reverse=True)
+    contig_depth_sorted = sorted(contig_rows, key=lambda x: x["mean"], reverse=True)
+    contig_length_sorted = sorted(contig_rows, key=lambda x: x["length"], reverse=True)
     n_outliers_2sd = sum(1 for c in contig_rows if threshold_2sd < c["mean"] <= threshold_3sd)
     n_outliers_3sd = sum(1 for c in contig_rows if c["mean"] > threshold_3sd)
 
@@ -317,7 +300,7 @@ def run(
         header = f"  {'Contig':<{cw[0]}} {'Length (bp)':>{cw[1]}} {'Mean Depth':>{cw[2]}}  Flag\n"
         fout.write(header)
         fout.write("  " + "-" * (sum(cw) + 10) + "\n")
-        for c in contig_rows_sorted:
+        for c in contig_depth_sorted:
             depth = c["mean"]
             if depth > threshold_3sd:
                 flag = "** OUTLIER (possible contaminant/organelle)"
@@ -337,8 +320,8 @@ def run(
         contig_data = _read_quantized_bed(quantized_bed)
         plot_prefix = _get_plot_prefix(input, out)
         status("Generating coverage plots...")
-        _plot_coverage_heatmap(contig_data, contig_rows_sorted, labels, colours, plot_prefix, plot_format)
-        _plot_coverage_barplot(contig_data, contig_rows_sorted, labels, colours, plot_prefix, plot_format)
+        _plot_coverage_heatmap(contig_data, contig_length_sorted, labels, colors, plot_prefix, plot_format)
+        _plot_coverage_barplot(contig_data, contig_depth_sorted, labels, colors, plot_prefix, plot_format)
         _plot_depth_histogram(contig_rows, mean_depth, plot_prefix, plot_format)
 
     # ------------------------------------------------------------------
@@ -508,31 +491,42 @@ def run_flagstat(bam_file):
     return result.stdout
 
 
-def run_mosdepth(bam_file, workdir, cpus, prefix="coverage", debug=False):
+def run_mosdepth(bam_file, workdir, cpus, labels=None, quantize_str=_DEFAULT_QUANTIZE, prefix="coverage", debug=False):
     """Run mosdepth to calculate per-contig depth statistics.
+
+    When `labels` is given, mosdepth is run in quantized mode: a quantized
+    BED file is also produced, showing which coverage class each genomic
+    interval belongs to (labels are set as MOSDEPTH_Q? env vars for the BED).
 
     Args:
         bam_file: Absolute path to the sorted, indexed BAM file.
         workdir: Directory for mosdepth output files.
         cpus: Number of CPU threads.
+        labels: Optional list of bin label strings; enables quantized mode.
+        quantize_str: Colon-separated quantize boundaries, e.g. "0:1:4:100:200:".
+            Only used when `labels` is given.
         prefix: Filename prefix for mosdepth outputs.
         debug: If True, show mosdepth stderr.
 
     Returns:
-        Path to the mosdepth summary text file.
+        Tuple (summary_file, quantized_bed) — Path objects for the mosdepth
+        summary text file and the quantized BED file. quantized_bed is None
+        unless `labels` was given.
     """
-    mosdepth_prefix = str(Path(Path(workdir).resolve(), prefix))
-    cmd = [
-        "mosdepth",
-        "-n",
-        "--threads",
-        str(cpus),
-        mosdepth_prefix,
-        str(Path(bam_file).resolve()),
-    ]
+    mosdepth_prefix = Path(workdir).resolve() / prefix
+    cmd = ["mosdepth", "-n", "--threads", str(cpus)]
+    run_env = None
+    quantized_bed = None
+    if labels is not None:
+        run_env = os.environ.copy()
+        run_env.update({f"MOSDEPTH_Q{i}": lbl for i, lbl in enumerate(labels)})
+        cmd += ["--quantize", quantize_str]
+        quantized_bed = mosdepth_prefix.with_name(mosdepth_prefix.name + ".quantized.bed.gz")
+    cmd += [str(mosdepth_prefix), str(Path(bam_file).resolve())]
     printCMD(cmd)
-    subprocess.run(cmd, stderr=None if debug else subprocess.DEVNULL)
-    return mosdepth_prefix + ".mosdepth.summary.txt"
+    subprocess.run(cmd, stderr=None if debug else subprocess.DEVNULL, env=run_env)
+    summary_file = mosdepth_prefix.with_name(mosdepth_prefix.name + ".mosdepth.summary.txt")
+    return summary_file, quantized_bed
 
 
 def parse_mosdepth_summary(summary_file):
@@ -597,76 +591,18 @@ def _coverage_breadth_from_dist(dist_file):
 # ---------------------------------------------------------------------------
 
 
-def _parse_quantize_bins(quantize_str, labels_str=None):
-    """Parse a mosdepth quantize string and return bin labels plus env-var dict.
+def _parse_quantize_bins():
+    """Return the default mosdepth quantize bin labels and their colors.
 
-    Args:
-        quantize_str: Colon-separated bin boundaries with trailing colon,
-            e.g. "0:1:4:100:200:".
-        labels_str: Optional comma-separated label names, one per bin.
-            When None, default names are used for the default quantize string;
-            otherwise bins are named BIN_0, BIN_1, etc.
+    Known labels get their canonical color; others fall back to grey.
 
     Returns:
-        Tuple (labels, env_dict) where labels is a list of strings and
-        env_dict maps MOSDEPTH_Q0..QN to the corresponding label strings.
+        Tuple (labels, colors) where labels is a list of strings and colors
+        is a dict mapping label -> hex color string.
     """
-    thresholds = [t for t in quantize_str.split(":") if t.strip()]
-    n_bins = len(thresholds)
-
-    if labels_str:
-        labels = [lbl.strip() for lbl in labels_str.split(",")]
-    elif quantize_str == _DEFAULT_QUANTIZE:
-        labels = _DEFAULT_LABELS[:]
-    else:
-        labels = [f"BIN_{i}" for i in range(n_bins)]
-
-    # pad or truncate to match bin count
-    while len(labels) < n_bins:
-        labels.append(f"BIN_{len(labels)}")
-    labels = labels[:n_bins]
-
-    env_dict = {f"MOSDEPTH_Q{i}": labels[i] for i in range(n_bins)}
-    return labels, env_dict
-
-
-def run_mosdepth_quantized(bam_file, workdir, cpus, quantize_str, env_dict, prefix="coverage", debug=False):
-    """Run mosdepth in quantized mode.
-
-    Produces a summary file (same format as run_mosdepth) plus a
-    quantized BED file showing which coverage class each genomic interval
-    belongs to.
-
-    Args:
-        bam_file: Absolute path to the sorted, indexed BAM file.
-        workdir: Directory for mosdepth output files.
-        cpus: Number of CPU threads.
-        quantize_str: Colon-separated quantize boundaries, e.g. "0:1:4:100:200:".
-        env_dict: Dict of MOSDEPTH_Q? env vars to set (label names for BED).
-        prefix: Filename prefix for mosdepth outputs.
-        debug: If True, show mosdepth stderr.
-
-    Returns:
-        Tuple (summary_file, quantized_bed) — paths to the two output files.
-    """
-    mosdepth_prefix = str(Path(Path(workdir).resolve(), prefix))
-    run_env = os.environ.copy()
-    run_env.update(env_dict)
-    cmd = [
-        "mosdepth",
-        "--threads",
-        str(cpus),
-        "-n",
-        "--quantize",
-        quantize_str,
-        mosdepth_prefix,
-        str(Path(bam_file).resolve()),
-    ]
-    printCMD(cmd)
-    subprocess.run(cmd, stderr=None if debug else subprocess.DEVNULL, env=run_env)
-    summary_file = mosdepth_prefix + ".mosdepth.summary.txt"
-    quantized_bed = mosdepth_prefix + ".quantized.bed.gz"
-    return summary_file, quantized_bed
+    labels = list(_DEFAULT_LABELS)
+    colors = {lbl: _COV_COLOURS.get(lbl, "#888888") for lbl in labels}
+    return labels, colors
 
 
 def _read_quantized_bed(quantized_bed):
@@ -680,7 +616,7 @@ def _read_quantized_bed(quantized_bed):
         in order of appearance.
     """
     data = {}
-    opener = gzip.open if quantized_bed.endswith(".gz") else open
+    opener = gzip.open if Path(quantized_bed).suffix == ".gz" else open
     with opener(quantized_bed, "rt") as fh:
         for line in fh:
             parts = line.rstrip("\n").split("\t")
@@ -720,28 +656,6 @@ def _get_plot_prefix(input_file, report_file):
     return str(Path(report_dir, basename))
 
 
-def _cov_colours_for_labels(labels):
-    """Return a colour dict for the given label list.
-
-    Known labels get their canonical colour; others get sequential fallbacks.
-
-    Args:
-        labels: List of coverage-class label strings.
-
-    Returns:
-        Dict mapping label → hex colour string.
-    """
-    colours = {}
-    fallback_idx = 0
-    for lbl in labels:
-        if lbl in _COV_COLOURS:
-            colours[lbl] = _COV_COLOURS[lbl]
-        else:
-            colours[lbl] = _FALLBACK_COLOURS[fallback_idx % len(_FALLBACK_COLOURS)]
-            fallback_idx += 1
-    return colours
-
-
 # ---------------------------------------------------------------------------
 # Plot helpers
 # ---------------------------------------------------------------------------
@@ -753,56 +667,100 @@ def _save_figure(fig, path, plot_format):
     plt.close(fig)
 
 
-def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colours, plot_prefix, plot_format):
+def _paginate_by_length_ratio(scaffold_rows, max_ratio=_HEATMAP_MAX_LENGTH_RATIO, max_per_page=_SCAFFOLDS_PER_PAGE):
+    """Group scaffolds (pre-sorted by length, descending) into pages.
+
+    Starts a new page once the running page's longest/shortest length
+    ratio would exceed max_ratio, or once max_per_page rows is reached.
+
+    Args:
+        scaffold_rows: List of contig dicts (with 'chrom' and 'length'),
+            sorted by length descending.
+        max_ratio: Max allowed ratio between the longest and shortest
+            contig length within one page.
+        max_per_page: Hard cap on rows per page.
+
+    Returns:
+        List of pages, each a list of chrom name strings.
+    """
+    pages = []
+    current, page_max_len = [], None
+    for row in scaffold_rows:
+        length = row.get("length") or 1
+        if current and (length < page_max_len / max_ratio or len(current) >= max_per_page):
+            pages.append(current)
+            current, page_max_len = [], None
+        if page_max_len is None:
+            page_max_len = length
+        current.append(row["chrom"])
+    if current:
+        pages.append(current)
+    return pages
+
+
+def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colors, plot_prefix, plot_format):
     """Write per-scaffold coverage-class heatmap.
 
-    Each scaffold is one horizontal row; regions are coloured by coverage
-    class.  Scaffolds are paginated (_SCAFFOLDS_PER_PAGE per page).
+    Each scaffold is one horizontal row; regions are colored by coverage class. Scaffolds are paginated by length ratio (see
+    _paginate_by_length_ratio) so contigs of wildly different sizes don't share a page and squash each other on the shared bp
+    x-axis.
 
     Args:
         contig_data: Dict from _read_quantized_bed.
-        scaffold_rows: List of contig dicts from parse_mosdepth_summary
-            (used for scaffold ordering).
+        scaffold_rows: List of contig dicts from parse_mosdepth_summary,
+            sorted by length descending.
         labels: Ordered list of coverage-class label strings.
-        colours: Dict mapping label → hex colour.
+        colors: Dict mapping label → hex color.
         plot_prefix: Output path prefix (no extension).
         plot_format: "pdf", "svg", or "png".
     """
+    present_rows = [r for r in scaffold_rows if r["chrom"] in contig_data]
+    if not present_rows:
+        return
 
-    def _make_page(page_scaffolds, page_num, total_pages):
-        n = len(page_scaffolds)
-        fig, ax = plt.subplots(figsize=(14, max(4, n * 0.35 + 2)))
-        for row_idx, contig in enumerate(page_scaffolds):
+    legend_patches = [Patch(facecolor=colors.get(lbl, "#888888"), label=lbl) for lbl in labels]
+    pages = _paginate_by_length_ratio(present_rows)
+
+    def _make_page(scaffold_idx_list, page_idx, total_pages):
+        n = len(scaffold_idx_list)
+        fig_h = max(4, n * 0.35 + 2)
+        fig, ax = plt.subplots(figsize=(14, fig_h))
+        for row_idx, contig in enumerate(scaffold_idx_list):
             for s, e, lbl in contig_data.get(contig, []):
                 ax.broken_barh(
                     [(s, e - s)],
                     (row_idx - 0.4, 0.8),
-                    facecolors=colours.get(lbl, "#888888"),
+                    facecolors=colors.get(lbl, "#888888"),
                     linewidth=0,
                 )
+        ax.set_ylim(-0.5, n - 0.5)
         ax.set_yticks(range(n))
-        ax.set_yticklabels(page_scaffolds, fontsize=max(5, min(9, 200 // n)))
+        ax.set_yticklabels(scaffold_idx_list, fontsize=max(5, min(9, 200 // n)))
+        ax.invert_yaxis()
         ax.set_xlabel("Genomic position (bp)")
         title = "Coverage class heatmap"
         if total_pages > 1:
-            title += f"  [page {page_num}/{total_pages}]"
-        ax.set_title(title)
-        ax.legend(handles=legend_patches, loc="upper right", fontsize=8)
-        fig.tight_layout()
+            title += f"  [page {page_idx}/{total_pages}]"
+        # Fixed inch offsets from the top of the figure keep the title/legend
+        # at a consistent visual position regardless of per-page figure height.
+        title_in, legend_in, axes_top_in = 0.3, 0.65, 1.0
+        fig.suptitle(title, y=1 - title_in / fig_h)
+        fig.legend(
+            handles=legend_patches,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1 - legend_in / fig_h),
+            bbox_transform=fig.transFigure,
+            ncol=5,
+            fontsize=8,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 1 - axes_top_in / fig_h))
         return fig
-
-    scaffolds = [r["chrom"] for r in scaffold_rows if r["chrom"] in contig_data]
-    if not scaffolds:
-        return
-
-    legend_patches = [Patch(facecolor=colours.get(lbl, "#888888"), label=lbl) for lbl in labels]
-    pages = [scaffolds[i : i + _SCAFFOLDS_PER_PAGE] for i in range(0, len(scaffolds), _SCAFFOLDS_PER_PAGE)]
 
     if plot_format == "pdf":
         path = plot_prefix + ".depth_heatmap.pdf"
         with PdfPages(path) as pdf:
-            for i, page in enumerate(pages):
-                fig = _make_page(page, i + 1, len(pages))
+            for page_idx, scaffold_idx_list in enumerate(pages):
+                fig = _make_page(scaffold_idx_list, page_idx + 1, len(pages))
                 pdf.savefig(fig)
                 plt.close(fig)
         status(f"Coverage heatmap written to: {path}")
@@ -815,14 +773,14 @@ def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colours, plot_pre
             status(f"Coverage heatmap written to: {path}")
 
 
-def _plot_coverage_barplot(contig_data, scaffold_rows, labels, colours, plot_prefix, plot_format):
+def _plot_coverage_barplot(contig_data, scaffold_rows, labels, colors, plot_prefix, plot_format):
     """Write per-scaffold stacked bar chart of coverage-class proportions.
 
     Args:
         contig_data: Dict from _read_quantized_bed.
         scaffold_rows: List of contig dicts from parse_mosdepth_summary.
         labels: Ordered list of coverage-class label strings.
-        colours: Dict mapping label → hex colour.
+        colors: Dict mapping label → hex color.
         plot_prefix: Output path prefix (no extension).
         plot_format: "pdf", "svg", or "png".
     """
@@ -841,31 +799,42 @@ def _plot_coverage_barplot(contig_data, scaffold_rows, labels, colours, plot_pre
                 label_bp[lbl] += e - s
         pcts[contig] = {lbl: (label_bp[lbl] / total_bp * 100 if total_bp else 0.0) for lbl in labels}
 
-    legend_patches = [Patch(facecolor=colours.get(lbl, "#888888"), label=lbl) for lbl in labels]
+    legend_patches = [Patch(facecolor=colors.get(lbl, "#888888"), label=lbl) for lbl in labels]
     pages = [scaffolds[i : i + _SCAFFOLDS_PER_PAGE] for i in range(0, len(scaffolds), _SCAFFOLDS_PER_PAGE)]
 
     def _make_page(page_scaffolds, page_num, total_pages):
         n = len(page_scaffolds)
-        fig, ax = plt.subplots(figsize=(12, max(4, n * 0.35 + 2)))
-        # draw bottom-to-top so first scaffold appears at the top
-        display_order = list(reversed(page_scaffolds))
-        for row_idx, contig in enumerate(display_order):
+        fig_h = max(4, n * 0.35 + 2)
+        fig, ax = plt.subplots(figsize=(12, fig_h))
+        for row_idx, contig in enumerate(page_scaffolds):
             left = 0.0
             for lbl in labels:
                 pct = pcts[contig].get(lbl, 0.0)
                 if pct > 0:
-                    ax.barh(row_idx, pct, left=left, color=colours.get(lbl, "#888888"))
+                    ax.barh(row_idx, pct, left=left, color=colors.get(lbl, "#888888"))
                 left += pct
+        ax.set_ylim(-0.5, n - 0.5)
         ax.set_yticks(range(n))
-        ax.set_yticklabels(display_order, fontsize=max(5, min(9, 200 // n)))
+        ax.set_yticklabels(page_scaffolds, fontsize=max(5, min(9, 200 // _SCAFFOLDS_PER_PAGE)))
+        ax.invert_yaxis()
         ax.set_xlabel("Percentage of scaffold (bp)")
         ax.set_xlim(0, 100)
         title = "Coverage class proportions"
         if total_pages > 1:
             title += f"  [page {page_num}/{total_pages}]"
-        ax.set_title(title)
-        ax.legend(handles=legend_patches, loc="lower right", fontsize=8)
-        fig.tight_layout()
+        # Fixed inch offsets from the top of the figure keep the title/legend
+        # at a consistent visual position regardless of per-page figure height.
+        title_in, legend_in, axes_top_in = 0.3, 0.65, 1.0
+        fig.suptitle(title, y=1 - title_in / fig_h)
+        fig.legend(
+            handles=legend_patches,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1 - legend_in / fig_h),
+            bbox_transform=fig.transFigure,
+            ncol=5,
+            fontsize=8,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 1 - axes_top_in / fig_h))
         return fig
 
     if plot_format == "pdf":

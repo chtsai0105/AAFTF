@@ -14,6 +14,7 @@ import pytest
 from AAFTF.depth import (
     _coverage_breadth_from_dist,
     _get_plot_prefix,
+    _paginate_by_length_ratio,
     _parse_quantize_bins,
     _read_quantized_bed,
     count_fastq_reads,
@@ -190,52 +191,20 @@ class TestOutlierDetectionMath:
 
 
 class TestParseQuantizeBins:
-    def test_default_bins_returns_five_labels(self):
-        labels, env_dict = _parse_quantize_bins("0:1:4:100:200:")
+    def test_default_returns_five_labels(self):
+        labels, colors = _parse_quantize_bins()
         assert len(labels) == 5
 
-    def test_default_bins_uses_canonical_names(self):
-        labels, _ = _parse_quantize_bins("0:1:4:100:200:")
+    def test_default_uses_canonical_names(self):
+        labels, colors = _parse_quantize_bins()
         assert labels[0] == "NO_COVERAGE"
         assert labels[2] == "CALLABLE"
         assert labels[4] == "VERY_HIGH_COVERAGE"
 
-    def test_env_dict_keys_are_mosdepth_q_vars(self):
-        _, env_dict = _parse_quantize_bins("0:1:4:100:200:")
-        assert set(env_dict.keys()) == {"MOSDEPTH_Q0", "MOSDEPTH_Q1", "MOSDEPTH_Q2", "MOSDEPTH_Q3", "MOSDEPTH_Q4"}
-
-    def test_env_dict_values_match_labels(self):
-        labels, env_dict = _parse_quantize_bins("0:1:4:100:200:")
-        for i, lbl in enumerate(labels):
-            assert env_dict[f"MOSDEPTH_Q{i}"] == lbl
-
-    def test_custom_bins_auto_named(self):
-        labels, _ = _parse_quantize_bins("0:5:50:")
-        assert labels == ["BIN_0", "BIN_1", "BIN_2"]
-
-    def test_custom_labels_override(self):
-        labels, _ = _parse_quantize_bins("0:5:50:", labels_str="NONE,LOW,HIGH")
-        assert labels == ["NONE", "LOW", "HIGH"]
-
-    def test_too_few_custom_labels_get_padded(self):
-        labels, _ = _parse_quantize_bins("0:1:4:100:200:", labels_str="A,B")
-        assert len(labels) == 5
-        assert labels[0] == "A"
-        assert labels[1] == "B"
-        assert labels[2] == "BIN_2"
-
-    def test_too_many_custom_labels_get_truncated(self):
-        labels, _ = _parse_quantize_bins("0:5:", labels_str="X,Y,Z,W")
-        assert labels == ["X", "Y"]
-
-    def test_trailing_colon_not_counted_as_bin(self):
-        labels, _ = _parse_quantize_bins("0:1:")
-        assert len(labels) == 2
-
-    def test_three_bin_custom_string(self):
-        labels, env_dict = _parse_quantize_bins("0:10:100:")
-        assert len(labels) == 3
-        assert "MOSDEPTH_Q2" in env_dict
+    def test_default_labels_get_canonical_colors(self):
+        labels, colors = _parse_quantize_bins()
+        assert colors["NO_COVERAGE"] == "#000080"
+        assert colors["VERY_HIGH_COVERAGE"] == "#800000"
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +238,33 @@ class TestGetPlotPrefix:
         report = str(tmp_path / "coverage_stats.txt")
         prefix = _get_plot_prefix("strain.final.sorted.fasta", report)
         assert Path(prefix).name == "strain.final.sorted"
+
+
+# ---------------------------------------------------------------------------
+# _paginate_by_length_ratio
+# ---------------------------------------------------------------------------
+
+
+class TestPaginateByLengthRatio:
+    def _rows(self, lengths):
+        return [{"chrom": f"ctg{i}", "length": length} for i, length in enumerate(lengths)]
+
+    def test_similar_lengths_stay_on_one_page(self):
+        pages = _paginate_by_length_ratio(self._rows([1000, 900, 800, 700]))
+        assert len(pages) == 1
+        assert pages[0] == ["ctg0", "ctg1", "ctg2", "ctg3"]
+
+    def test_splits_when_ratio_exceeded(self):
+        # 1000 / 50 = 20 > default max_ratio (10), so ctg2 starts a new page
+        pages = _paginate_by_length_ratio(self._rows([1000, 200, 50]))
+        assert pages == [["ctg0", "ctg1"], ["ctg2"]]
+
+    def test_splits_when_max_per_page_exceeded(self):
+        pages = _paginate_by_length_ratio(self._rows([100, 100, 100]), max_per_page=2)
+        assert pages == [["ctg0", "ctg1"], ["ctg2"]]
+
+    def test_empty_input_returns_no_pages(self):
+        assert _paginate_by_length_ratio([]) == []
 
 
 # ---------------------------------------------------------------------------
