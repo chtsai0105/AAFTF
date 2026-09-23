@@ -4,6 +4,7 @@ All tests are pure Python — no external bioinformatics tools required.
 """
 
 import gzip
+import io
 import subprocess
 
 import pytest
@@ -17,6 +18,7 @@ from AAFTF.utility import (
     fastastats,
     filter_fasta,
     softwrap,
+    write_fasta,
 )
 from tests.conftest import make_fastq_text
 
@@ -109,6 +111,21 @@ class TestSoftwrap:
 
     def test_empty_string(self):
         assert softwrap("", 80) == ""
+
+    def test_default_width_is_60(self):
+        assert softwrap("A" * 61).split("\n") == ["A" * 60, "A"]
+
+
+class TestWriteFasta:
+    def test_wraps_at_60(self):
+        buf = io.StringIO()
+        write_fasta(buf, "ctg1 desc", "A" * 61)
+        assert buf.getvalue() == ">ctg1 desc\n" + "A" * 60 + "\nA\n"
+
+    def test_empty_sequence_has_no_blank_line(self):
+        buf = io.StringIO()
+        write_fasta(buf, "empty", "")
+        assert buf.getvalue() == ">empty\n"
 
 
 # ---------------------------------------------------------------------------

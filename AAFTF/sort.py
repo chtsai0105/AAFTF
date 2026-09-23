@@ -2,7 +2,7 @@
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from AAFTF.utility import softwrap, status
+from AAFTF.utility import status, write_fasta
 
 
 def run(input, out, minlen=0, name="scaffold", **kwargs):
@@ -17,6 +17,6 @@ def run(input, out, minlen=0, name="scaffold", **kwargs):
     sortSeqs = sorted(AllSeqs.items(), key=lambda item: len(item[1]), reverse=True)
     with open(out, "w") as fasta_out:
         for i, (Header, Seq) in enumerate(sortSeqs):
-            fasta_out.write(f">{name}_{i + 1}\n{softwrap(Seq)}\n")
+            write_fasta(fasta_out, f"{name}_{i + 1}", Seq)
 
     status(f"Output written to: {out}")

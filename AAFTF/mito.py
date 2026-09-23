@@ -10,7 +10,7 @@ from pathlib import Path
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
 from AAFTF.resources import Mitoseqs
-from AAFTF.utility import RevComp, estimate_read_length, execute, printCMD, softwrap, status
+from AAFTF.utility import RevComp, estimate_read_length, execute, printCMD, status, write_fasta
 
 
 def run(
@@ -120,7 +120,7 @@ def run(
                 for title, seq in SimpleFastaParser(infile):
                     numContigs += 1
                     contigLength += len(seq)
-                    outfile.write(f">contig_{numContigs}\n{softwrap(seq)}\n")
+                    write_fasta(outfile, f"contig_{numContigs}", seq)
         # weird formatting here for PEP8
         status(f"NOVOplasty assembled {numContigs} contigs consisting of {contigLength:,} bp," + "but was unable to circularize genome")
 
@@ -138,7 +138,7 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
         # move this to a configurable file
         cob1 = Mitoseqs["COB1"]
         with open(startFile, "w") as outfile:
-            outfile.write(f">COB\n{softwrap(cob1)}\n")
+            write_fasta(outfile, "COB", cob1)
     else:
         shutil.copyfile(start, startFile)
 
@@ -171,7 +171,7 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
             # erroring, so treat it the same as a failed rotation.
             status(f"ERROR: unable to rotate because computed rotation offset {ref_start} is out of range for sequence of length {len(initial_seq)}\n")
             with open(fasta_out, "w") as outfile:
-                outfile.write(">{}\n{}\n".format("mt", softwrap(initial_seq)))
+                write_fasta(outfile, "mt", initial_seq)
             if Path(startFile).is_file():
                 Path(startFile).unlink()
             return
@@ -179,16 +179,16 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
         if ref_strand == "-":
             rotated = RevComp(rotated)
         with open(fasta_out, "w") as outfile:
-            outfile.write(">{}\n{}\n".format("mt", softwrap(rotated)))
+            write_fasta(outfile, "mt", rotated)
     elif len(alignments) == 0:
         status("ERROR: unable to rotate because did " + "not find --starting sequence\n")
         with open(fasta_out, "w") as outfile:
-            outfile.write(">{}\n{}\n".format("mt", softwrap(initial_seq)))
+            write_fasta(outfile, "mt", initial_seq)
     elif len(alignments) > 1:
         status("ERROR: unable to rotate because found multiple alignments\n")
         for x in alignments:
             sys.stderr.write(f"{x}\n")
         with open(fasta_out, "w") as outfile:
-            outfile.write(">{}\n{}\n".format("mt", softwrap(initial_seq)))
+            write_fasta(outfile, "mt", initial_seq)
     if Path(startFile).is_file():
         Path(startFile).unlink()

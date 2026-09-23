@@ -23,7 +23,7 @@ from subprocess import DEVNULL, call
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import SafeRemove, printCMD, softwrap, status
+from AAFTF.utility import SafeRemove, printCMD, status, write_fasta
 
 BlastPercent_ID_ContamMatch = "90.0"
 BlastPercent_ID_MitoMatch = "98.6"
@@ -201,7 +201,7 @@ def _write_euk_cleaned(infile, regions_to_trim, workdir, prefix):
     with open(eukCleaned, "w") as cleanout, open(infile) as fastain:
         for record in SeqIO.parse(fastain, "fasta"):
             if record.id not in regions_to_trim:
-                cleanout.write(f">{record.id}\n{softwrap(str(record.seq))}\n")
+                write_fasta(cleanout, record.id, str(record.seq))
             else:
                 Seq = str(record.seq)
                 regions = regions_to_trim[record.id]
@@ -212,10 +212,10 @@ def _write_euk_cleaned(infile, regions_to_trim, workdir, prefix):
                     # slice end doesn't retain the first contaminant base.
                     newSeq = Seq[lastpos : x[0] - 1]
                     lastpos = x[1]
-                    cleanout.write(f">split{i}_{record.id}\n{softwrap(newSeq)}\n")
+                    write_fasta(cleanout, f"split{i}_{record.id}", newSeq)
                     if i == len(regions) - 1:
                         newSeq = Seq[x[1] :]
-                        cleanout.write(f">split{i + 1}_{record.id}\n{softwrap(newSeq)}\n")
+                        write_fasta(cleanout, f"split{i + 1}_{record.id}", newSeq)
     return eukCleaned
 
 
@@ -297,10 +297,10 @@ def _write_final_outputs(outfile_vec, contigs_to_remove, mitoHits, outfile, mito
     with open(outfile, "w") as oh, open(mitochondria, "w") as mh:
         for record in SeqIO.parse(outfile_vec, "fasta"):
             if record.id not in contigs_to_remove:
-                SeqIO.write(record, oh, "fasta")
+                write_fasta(oh, record.description, str(record.seq))
                 n_clean += 1
             elif record.id in mitoHits:
-                SeqIO.write(record, mh, "fasta")
+                write_fasta(mh, record.description, str(record.seq))
                 n_mito += 1
     status(f"Writing {n_clean:,} cleaned contigs to: {outfile}")
     status(f"Writing {n_mito:,} mitochondrial contigs to: {mitochondria}")
@@ -406,7 +406,7 @@ def _write_trimmed_and_split(fastafile, vec_hits, cleaned):
             seq_str = str(record.seq)
             if record.id not in vec_hits:
                 if len(record.seq) >= 200:
-                    output_handle.write(f">{record.id}\n{softwrap(seq_str)}\n")
+                    write_fasta(output_handle, record.id, seq_str)
                 continue
 
             five_end = 0
@@ -436,13 +436,13 @@ def _write_trimmed_and_split(fastafile, vec_hits, cleaned):
                 status(f"Terminal trimming {record.id} to {keep_regions}")
                 newSeq = seq_str[keep_regions[0][0] : keep_regions[0][1]]
                 if len(newSeq) >= 200:
-                    output_handle.write(f">{record.id}\n{softwrap(newSeq)}\n")
+                    write_fasta(output_handle, record.id, newSeq)
             else:
                 status(f"Splitting contig {record.id} into {keep_regions}")
                 for num, (start, end) in enumerate(keep_regions):
                     newSeq = seq_str[start:end]
                     if len(newSeq) >= 200:
-                        output_handle.write(f">split{num + 1}_{record.id}\n{softwrap(newSeq)}\n")
+                        write_fasta(output_handle, f"split{num + 1}_{record.id}", newSeq)
 
 
 def _group(lst, n):

@@ -111,9 +111,7 @@ def filter_fasta(fasta_in, fasta_out, keep, wrap=60):
     with open(fasta_in) as fin, open(fasta_out, "w") as fout:
         for header, seq in SimpleFastaParser(fin):
             if keep(header.split(None, 1)[0]):
-                fout.write(f">{header}\n")
-                if seq:
-                    fout.write(f"{softwrap(seq, wrap)}\n")
+                write_fasta(fout, header, seq, wrap)
                 count += 1
                 length += len(seq)
     return count, length
@@ -151,12 +149,16 @@ def countfastq(input):
     return lines // 4
 
 
-def softwrap(string, every=80):
-    """Softwrap lines in a textstring."""
-    lines = []
-    for i in range(0, len(string), every):
-        lines.append(string[i : i + every])
-    return "\n".join(lines)
+def softwrap(string, every=60):
+    """Softwrap lines in a textstring (60 columns by default, as Biopython's SeqIO.write)."""
+    return "\n".join(string[i : i + every] for i in range(0, len(string), every))
+
+
+def write_fasta(fh, header, seq, wrap=60):
+    """Write one FASTA record to an open file handle, wrapped at ``wrap`` columns."""
+    fh.write(f">{header}\n")
+    if seq:
+        fh.write(f"{softwrap(seq, wrap)}\n")
 
 
 # ---------------------------------------------------------------------------

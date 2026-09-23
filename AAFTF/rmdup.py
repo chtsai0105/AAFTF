@@ -12,7 +12,7 @@ from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from AAFTF.utility import SafeRemove, calcN50, execute, softwrap, status
+from AAFTF.utility import SafeRemove, calcN50, execute, status, write_fasta
 
 
 def run(
@@ -38,9 +38,9 @@ def run(
                 with open(fasta) as infile:
                     for Header, Seq in SimpleFastaParser(infile):
                         if Header in query:
-                            qout.write(f">{Header}\n{softwrap(Seq)}\n")
+                            write_fasta(qout, Header, Seq)
                         elif Header in reference:
-                            rout.write(f">{Header}\n{softwrap(Seq)}\n")
+                            write_fasta(rout, Header, Seq)
         return qfile, rfile
 
     def runMinimap2(query, reference, name):
@@ -118,7 +118,7 @@ def run(
         with open(input) as infile:
             for Header, Seq in SimpleFastaParser(infile):
                 if Header not in ignore:
-                    clean_out.write(f">{Header}\n{softwrap(Seq)}\n")
+                    write_fasta(clean_out, Header, Seq)
                     numSeqs += 1
                     assemblySize += len(Seq)
     status(f"Cleaned assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
