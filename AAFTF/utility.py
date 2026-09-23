@@ -119,11 +119,35 @@ def filter_fasta(fasta_in, fasta_out, keep, wrap=60):
     return count, length
 
 
+def _count_lines(fh):
+    """Count lines in a binary stream, including a final line with no newline."""
+    lines = 0
+    last = b"\n"
+    for chunk in iter(lambda: fh.read(1 << 20), b""):
+        lines += chunk.count(b"\n")
+        last = chunk[-1:]
+    return lines + (last != b"\n")
+
+
 def countfastq(input):
-    """Count the number of records in a FASTQ file (gzip or regular)."""
-    opener = gzip.open if input.endswith(".gz") else open
-    with opener(input, "rt") as fh:
-        lines = sum(1 for _ in fh)
+    """Count the number of records in a FASTQ file (gzip or regular).
+
+    Gzipped input is decompressed with pigz (or gzip) when available, which is
+    much faster than Python's gzip module.
+
+    Raises:
+        OSError: If the file is missing or not valid gzip.
+        subprocess.CalledProcessError: If pigz/gzip fails to decompress it.
+    """
+    decompressor = input.endswith(".gz") and (shutil.which("pigz") or shutil.which("gzip"))
+    if decompressor:
+        with subprocess.Popen([decompressor, "-dc", input], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as proc:
+            lines = _count_lines(proc.stdout)
+        if proc.returncode:
+            raise subprocess.CalledProcessError(proc.returncode, [decompressor, "-dc", input])
+    else:
+        with (gzip.open if input.endswith(".gz") else open)(input, "rb") as fh:
+            lines = _count_lines(fh)
     return lines // 4
 
 
@@ -314,71 +338,3 @@ def SafeRemove(input):
         Path(input).unlink()
     else:
         return
-
-
-def open_pipe(command, mode="r", buff=1024 * 1024):
-    """Open read or write pipe to program.
-
-    `command` may be an argv list (run directly, no shell) or a string
-    (run via the shell) -- the string form exists for `zopen()`'s "!"
-    passthrough where the caller explicitly supplies a shell command.
-    """
-    import signal
-    import subprocess
-
-    shell = isinstance(command, str)
-    if "r" in mode:
-        return subprocess.Popen(command, shell=shell, bufsize=buff, stdout=subprocess.PIPE, preexec_fn=lambda: signal.signal(signal.SIGPIPE, signal.SIG_DFL)).stdout
-    elif "w" in mode:
-        return subprocess.Popen(command, shell=shell, bufsize=buff, stdin=subprocess.PIPE).stdin
-    return None
-
-
-NORMAL = 0
-PROCESS = 1
-PARALLEL = 2
-WHICH_GZIP = shutil.which("gzip")
-WHICH_PIGZ = shutil.which("pigz")
-
-# streaming parallel pigz open via
-# https://github.com/DarkoVeberic/utl/blob/master/futile/futile.py
-
-
-def open_gz(filename, mode="r", buff=1024 * 1024, external=PARALLEL):
-    """Open a gzip file using processes (gzip/pigz) or native library."""
-    import gzip
-
-    if "w" in mode:
-        return gzip.open(filename, mode)
-
-    if external is None or external == NORMAL:
-        return gzip.GzipFile(filename, mode, buff)
-    elif external == PROCESS:
-        if not WHICH_GZIP:
-            return open_gz(filename, mode, buff, NORMAL)
-        if "r" in mode:
-            return open_pipe([WHICH_GZIP, "-dc", filename], mode, buff)
-    elif external == PARALLEL:
-        if not WHICH_PIGZ:
-            return open_gz(filename, mode, buff, PROCESS)
-        if "r" in mode:
-            return open_pipe([WHICH_PIGZ, "-dc", filename], mode, buff)
-    return None
-
-
-def zopen(filename, mode="r", buff=1024 * 1024, external=PARALLEL):
-    """Open pipe, zipped, or unzipped file automagically.
-
-    external == 0: normal zip libraries
-    external == 1: (zcat, gzip) or (bzcat, bzip2)
-    external == 2: (pigz -dc, pigz) or (pbzip2 -dc, pbzip2)
-    """
-    if "r" in mode and "w" in mode:
-        return None
-    if filename.startswith("!"):
-        return open_pipe(filename[1:], mode, buff)
-    elif filename.endswith(".gz"):
-        return open_gz(filename, mode, buff, external)
-    else:
-        return open(filename, mode, buff)
-    return None

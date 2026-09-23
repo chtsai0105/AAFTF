@@ -3,6 +3,8 @@
 All tests are pure Python — no external bioinformatics tools required.
 """
 
+import gzip
+import subprocess
 
 import pytest
 
@@ -162,7 +164,18 @@ class TestFilterFasta:
         src.write_text(">a desc\nACGT\nAC\n>b\nGG\n>c\nTTT\n")
         out = tmp_path / "out.fa"
         assert filter_fasta(str(src), str(out), lambda seq_id: seq_id != "b") == (2, 9)
-        assert out.read_text() == ">a desc\nACGT\nAC\n>c\nTTT\n"
+        assert out.read_text() == ">a desc\nACGTAC\n>c\nTTT\n"
+
+    def test_matches_biopython_seqio_write(self, tmp_path):
+        from Bio import SeqIO
+
+        src = tmp_path / "in.fa"
+        src.write_text(">a desc\n" + "ACGT" * 40 + "\n>b\n" + "G" * 60 + "\n>c\n" + "T" * 61 + "\n")
+        out = tmp_path / "out.fa"
+        expected = tmp_path / "expected.fa"
+        filter_fasta(str(src), str(out), lambda seq_id: True)
+        SeqIO.write(SeqIO.parse(str(src), "fasta"), str(expected), "fasta")
+        assert out.read_text() == expected.read_text()
 
     def test_keep_none(self, tmp_path):
         src = tmp_path / "in.fa"
@@ -188,6 +201,27 @@ class TestCountFastq:
         p = tmp_path / "one.fastq"
         p.write_text(make_fastq_text(1))
         assert countfastq(str(p)) == 1
+
+    def test_gz_50_reads(self, tmp_path):
+        p = tmp_path / "fifty.fastq.gz"
+        with gzip.open(p, "wt") as fh:
+            fh.write(make_fastq_text(50))
+        assert countfastq(str(p)) == 50
+
+    def test_missing_trailing_newline(self, tmp_path):
+        p = tmp_path / "nonl.fastq"
+        p.write_text(make_fastq_text(3).rstrip("\n"))
+        assert countfastq(str(p)) == 3
+
+    def test_gz_without_pigz_or_gzip(self, gz_fastq_file, monkeypatch):
+        monkeypatch.setattr("AAFTF.utility.shutil.which", lambda name: None)
+        assert countfastq(str(gz_fastq_file)) == 10
+
+    def test_bad_gzip_raises(self, tmp_path):
+        p = tmp_path / "bad.fastq.gz"
+        p.write_bytes(b"not a valid gzip file")
+        with pytest.raises((OSError, subprocess.CalledProcessError)):
+            countfastq(str(p))
 
 
 # ---------------------------------------------------------------------------

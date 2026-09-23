@@ -146,17 +146,14 @@ def run(
     # Count input reads
     # ------------------------------------------------------------------
     status("Counting input reads...")
-    illumina_counts = {}
-    if reads_left:
-        status(f"  Counting reads in {Path(reads_left).name}")
-        illumina_counts["left"] = count_fastq_reads(reads_left)
-    if reads_right:
-        status(f"  Counting reads in {Path(reads_right).name}")
-        illumina_counts["right"] = count_fastq_reads(reads_right)
-    lr_count = 0
-    if longreads:
-        status(f"  Counting reads in {Path(longreads).name}")
-        lr_count = count_fastq_reads(longreads)
+    read_counts = {}  # -1 marks a file that could not be read; reported as "unknown"
+    for key, fastq in (("left", reads_left), ("right", reads_right), ("long", longreads)):
+        if fastq:
+            status(f"  Counting reads in {Path(fastq).name}")
+            try:
+                read_counts[key] = countfastq(fastq)
+            except (OSError, subprocess.CalledProcessError):
+                read_counts[key] = -1
 
     # ------------------------------------------------------------------
     # Map reads
@@ -255,16 +252,17 @@ def run(
         # --- Section 1: Read Input Summary ---
         fout.write("=== 1. Read Input Summary ===\n")
         if reads_left:
-            n = illumina_counts.get("left", -1)
+            n = read_counts["left"]
             fout.write(f"  Illumina left reads:  {reads_left}\n")
             fout.write(f"    Read count:         {n:,}\n" if n >= 0 else "    Read count:         unknown\n")
         if reads_right:
-            n = illumina_counts.get("right", -1)
+            n = read_counts["right"]
             fout.write(f"  Illumina right reads: {reads_right}\n")
             fout.write(f"    Read count:         {n:,}\n" if n >= 0 else "    Read count:         unknown\n")
         if longreads:
             fout.write(f"  Long reads:           {longreads}\n")
-            fout.write(f"    Read count:         {lr_count:,}\n" if lr_count >= 0 else "    Read count:         unknown\n")
+            n = read_counts["long"]
+            fout.write(f"    Read count:         {n:,}\n" if n >= 0 else "    Read count:         unknown\n")
 
         if flagstat_illumina:
             fout.write("\n  Illumina alignment (samtools flagstat):\n")
@@ -337,21 +335,6 @@ def run(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def count_fastq_reads(fastq_file):
-    """Count the number of reads in a FASTQ file.
-
-    Args:
-        fastq_file: Path to FASTQ file (gzip-compressed or plain).
-
-    Returns:
-        Integer count of reads, or -1 on failure.
-    """
-    try:
-        return countfastq(fastq_file)
-    except Exception:
-        return -1
 
 
 def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumina_preset, longread_preset, aligner, debug):

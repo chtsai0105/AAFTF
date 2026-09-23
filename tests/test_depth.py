@@ -17,11 +17,9 @@ from AAFTF.depth import (
     _paginate_by_length_ratio,
     _parse_quantize_bins,
     _read_quantized_bed,
-    count_fastq_reads,
     parse_mosdepth_summary,
     run,
 )
-from tests.conftest import make_fastq_text
 
 pytestmark = pytest.mark.unit
 
@@ -34,42 +32,6 @@ class TestRunGuards:
         lr.write_text("@r\nACGT\n+\nIIII\n")
         with pytest.raises(SystemExit):
             run(input=str(asm), longreads=str(lr))
-
-
-# ---------------------------------------------------------------------------
-# count_fastq_reads
-# ---------------------------------------------------------------------------
-
-
-class TestCountFastqReads:
-    def test_plain_fastq(self, fastq_file):
-        assert count_fastq_reads(str(fastq_file)) == 10
-
-    def test_gz_fastq(self, gz_fastq_file):
-        assert count_fastq_reads(str(gz_fastq_file)) == 10
-
-    def test_single_read(self, tmp_path):
-        p = tmp_path / "one.fastq"
-        p.write_text(make_fastq_text(1))
-        assert count_fastq_reads(str(p)) == 1
-
-    def test_50_reads(self, tmp_path):
-        p = tmp_path / "fifty.fastq"
-        p.write_text(make_fastq_text(50))
-        assert count_fastq_reads(str(p)) == 50
-
-    def test_gz_50_reads(self, tmp_path):
-        p = tmp_path / "fifty.fastq.gz"
-        with gzip.open(p, "wt") as fh:
-            fh.write(make_fastq_text(50))
-        assert count_fastq_reads(str(p)) == 50
-
-    def test_returns_minus_one_on_error(self, tmp_path):
-        # Corrupted gzip content → error → returns -1
-        p = tmp_path / "bad.fastq.gz"
-        p.write_bytes(b"not a valid gzip file")
-        result = count_fastq_reads(str(p))
-        assert result == -1
 
 
 # ---------------------------------------------------------------------------
