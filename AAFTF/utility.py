@@ -322,11 +322,23 @@ def execute(cmd, cwd=None, debug=False, quiet=False):
         raise subprocess.CalledProcessError(return_code, cmd)
 
 
-def SafeRemove(input):
-    """Test and remove a folder or file."""
-    if Path(input).is_dir():
-        shutil.rmtree(input)
-    elif Path(input).is_file():
-        Path(input).unlink()
+def safe_remove(path):
+    """Remove a file, symlink or directory tree; do nothing if it does not exist.
+
+    A symlink is removed itself, never the directory it points to.
+    """
+    path = Path(path)
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
     else:
-        return
+        path.unlink(missing_ok=True)
+
+
+def cleanup_workdir(workdir, debug, custom_workdir):
+    """Remove an auto-generated workdir, unless debugging or the user supplied it.
+
+    A user-supplied ``--workdir`` (which may be shared, e.g. by ``pipeline``, or
+    even the current directory) is never deleted.
+    """
+    if not debug and not custom_workdir:
+        safe_remove(workdir)

@@ -76,7 +76,7 @@ def run(
     # run mitochondrial assembly on bbduk trimmed reads
     if right:
         if not checkfile(basename + ".mito.fasta"):
-            mitoOpts = ["left", "right", "out", "minlen", "maxlen", "seed", "starting", "workdir", "pipe", "reference", "memory"]
+            mitoOpts = ["left", "right", "out", "minlen", "maxlen", "seed", "starting", "workdir", "pipe", "reference", "memory", "debug"]
             mito_args = create_namespace(
                 mitoOpts,
                 required_args={

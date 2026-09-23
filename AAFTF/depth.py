@@ -34,7 +34,7 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, checkfile, countfastq, printCMD, run_cmd, status
+from AAFTF.utility import align_to_sorted_bam, checkfile, cleanup_workdir, countfastq, printCMD, run_cmd, status
 
 # ---------------------------------------------------------------------------
 # Constants for quantized coverage classes
@@ -323,8 +323,7 @@ def run(
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
-    if not debug and not custom_workdir:
-        SafeRemove(workdir)
+    cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
         status(f"Your next command might be:\n\tAAFTF assess -i {input}\n")

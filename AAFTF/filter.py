@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, bam_read_count, countfastq, run_cmd, status
+from AAFTF.utility import align_to_sorted_bam, bam_read_count, cleanup_workdir, countfastq, run_cmd, status
 
 
 # flake8: noqa: C901
@@ -181,7 +181,7 @@ def run(
             # cmd.extend(['prealloc','qhdist=1'])
             run_cmd(cmd, debug)
 
-        _cleanup_workdir(workdir, debug, custom_workdir)
+        cleanup_workdir(workdir, debug, custom_workdir)
 
         clean = countfastq(leftcleanfname)
         if revReads:
@@ -252,7 +252,7 @@ def run(
         elif forReads:
             samtools_cmd = ["samtools", "fastq", "-f", "4", "-1", clean_reads + ".fastq.gz", alignBAM]
         run_cmd(samtools_cmd, debug)
-        _cleanup_workdir(workdir, debug, custom_workdir)
+        cleanup_workdir(workdir, debug, custom_workdir)
 
         if revReads:
             status(f"Filtering complete:\n\tFor: {clean_reads}_1.fastq.gz\n\tRev: {clean_reads}_2.fastq.gz")
@@ -269,9 +269,3 @@ def _rebuild_index_if_stale(marker_file, contamdb, build_cmd, debug):
     marker = Path(marker_file)
     if not marker.exists() or marker.stat().st_ctime < Path(contamdb).stat().st_ctime:
         run_cmd(build_cmd, debug, quiet_stdout=True)
-
-
-def _cleanup_workdir(workdir, debug, custom_workdir):
-    """Remove the auto-generated workdir, unless debugging or the caller supplied their own."""
-    if not debug and not custom_workdir:
-        SafeRemove(workdir)

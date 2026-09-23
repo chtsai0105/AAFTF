@@ -61,7 +61,7 @@ Key `args` attributes accessed by each `run()` function:
 - **sort**: `input`, `minlen`, `out`, `name`
 - **assess**: `input`, `report`, `telomere_monomer`, `telomere_n_repeat`, `telomere_window`
 - **depth**: `input`, `out`, `left`, `right`, `longreads`, `longread_preset`, `aligner`, `cpus`, `workdir`, `debug`, `pipe`, `min_contig_len`, `no_plot`, `plot_format`
-- **mito**: `workdir`, `left`, `right`, `seed`, `reference`, `minlen`, `maxlen`, `out`, `starting`, `pipe`
+- **mito**: `workdir`, `left`, `right`, `seed`, `reference`, `minlen`, `maxlen`, `out`, `starting`, `memory`, `debug`, `pipe`
 - **fix_tbl**: `table`, `report`, `output`, `debug`, `pipe`
 
 ## Pipeline `create_namespace()` Convention

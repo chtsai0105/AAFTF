@@ -6,7 +6,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from AAFTF.utility import SafeRemove, checkfile, fastastats, filter_fasta, printCMD, status
+from AAFTF.utility import checkfile, cleanup_workdir, fastastats, filter_fasta, printCMD, status
 
 # logging - we may need to think about whether this has
 # separate name for the different runfolder
@@ -24,6 +24,7 @@ def run(
     **kwargs,
 ):
     """Run NCBI fcs_gx routines to detect and remove contaminant contigs."""
+    custom_workdir = bool(workdir)
     if not workdir:
         workdir = f"aaftf-fcsgx_{str(uuid.uuid4())[:8]}"
     if not Path(workdir).exists():
@@ -97,8 +98,7 @@ def run(
             outbase = outbase.rsplit(".", 1)[0]
         shutil.copy(fcsgxTSV, str(Path(basedir, f"{outbase}.fcs_gx-taxonomy.tsv")))
 
-    if not debug:
-        SafeRemove(workdir)
+    cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
         status(f"Your next command might be:\n\tAAFTF rmdup -i {outfile} -o {nextOut}\n")

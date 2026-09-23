@@ -10,7 +10,7 @@ from pathlib import Path
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
 from AAFTF.resources import Mitoseqs
-from AAFTF.utility import COMPLEMENT, estimate_read_length, execute, printCMD, status, write_fasta
+from AAFTF.utility import COMPLEMENT, cleanup_workdir, estimate_read_length, execute, printCMD, status, write_fasta
 
 
 def run(
@@ -24,6 +24,7 @@ def run(
     starting=None,
     reference=None,
     memory=8,
+    debug=False,
     pipe=False,
     **kwargs,
 ):
@@ -36,6 +37,7 @@ def run(
             sys.exit(1)
     # first we need to generate working directory
     unique_id = str(uuid.uuid4())[:8]
+    custom_workdir = bool(workdir)
     if not workdir:
         workdir = "mito_" + unique_id
     if not Path(workdir).is_dir():
@@ -125,8 +127,7 @@ def run(
         status(f"NOVOplasty assembled {numContigs} contigs consisting of {contigLength:,} bp," + "but was unable to circularize genome")
 
     status(f"AAFTF mito complete: {out}")
-    if not pipe:
-        shutil.rmtree(workdir)
+    cleanup_workdir(workdir, debug, custom_workdir)
 
 
 def _rev_comp(seq):
@@ -157,9 +158,12 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
 
     alignments = []
     minimap2_cmd = ["minimap2", "-x", "map-ont", "-c", fasta_in, startFile]
-    for line in execute(minimap2_cmd):
-        cols = line.rstrip().split("\t")
-        alignments.append(cols)
+    try:
+        for line in execute(minimap2_cmd):
+            cols = line.rstrip().split("\t")
+            alignments.append(cols)
+    finally:
+        Path(startFile).unlink(missing_ok=True)
     if len(alignments) == 1:
         ref_strand = cols[4]
         ref_offset = int(cols[2])
@@ -177,8 +181,6 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
             status(f"ERROR: unable to rotate because computed rotation offset {ref_start} is out of range for sequence of length {len(initial_seq)}\n")
             with open(fasta_out, "w") as outfile:
                 write_fasta(outfile, "mt", initial_seq)
-            if Path(startFile).is_file():
-                Path(startFile).unlink()
             return
         rotated = initial_seq[ref_start:] + initial_seq[:ref_start]
         if ref_strand == "-":
@@ -195,5 +197,3 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
             sys.stderr.write(f"{x}\n")
         with open(fasta_out, "w") as outfile:
             write_fasta(outfile, "mt", initial_seq)
-    if Path(startFile).is_file():
-        Path(startFile).unlink()

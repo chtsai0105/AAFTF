@@ -11,16 +11,17 @@ import subprocess
 import pytest
 
 from AAFTF.utility import (
-    SafeRemove,
     align_to_sorted_bam,
     bam_read_count,
     calc_nx,
     checkfile,
+    cleanup_workdir,
     countfastq,
     execute,
     fastastats,
     filter_fasta,
     run_cmd,
+    safe_remove,
     samtools_sort_cmd,
     softwrap,
     write_fasta,
@@ -219,7 +220,7 @@ class TestCountFastq:
 
 
 # ---------------------------------------------------------------------------
-# SafeRemove
+# safe_remove
 # ---------------------------------------------------------------------------
 
 
@@ -227,19 +228,57 @@ class TestSafeRemove:
     def test_remove_file(self, tmp_path):
         p = tmp_path / "todelete.txt"
         p.write_text("bye")
-        SafeRemove(str(p))
+        safe_remove(str(p))
         assert not p.exists()
 
     def test_remove_directory(self, tmp_path):
         d = tmp_path / "subdir"
         d.mkdir()
         (d / "file.txt").write_text("hi")
-        SafeRemove(str(d))
+        safe_remove(str(d))
         assert not d.exists()
 
     def test_remove_nonexistent_is_noop(self, tmp_path):
         # Should not raise
-        SafeRemove(str(tmp_path / "ghost"))
+        safe_remove(str(tmp_path / "ghost"))
+
+    def test_symlink_to_directory_removes_link_not_target(self, tmp_path):
+        target = tmp_path / "target"
+        target.mkdir()
+        (target / "keep.txt").write_text("keep")
+        link = tmp_path / "link"
+        link.symlink_to(target)
+        safe_remove(str(link))
+        assert not link.exists() and not link.is_symlink()
+        assert (target / "keep.txt").exists()
+
+    def test_broken_symlink_removed(self, tmp_path):
+        link = tmp_path / "broken"
+        link.symlink_to(tmp_path / "missing")
+        safe_remove(str(link))
+        assert not link.is_symlink()
+
+
+class TestCleanupWorkdir:
+    def _workdir(self, tmp_path):
+        d = tmp_path / "wd"
+        d.mkdir()
+        return d
+
+    def test_removes_auto_generated_workdir(self, tmp_path):
+        d = self._workdir(tmp_path)
+        cleanup_workdir(str(d), debug=False, custom_workdir=False)
+        assert not d.exists()
+
+    def test_keeps_user_supplied_workdir(self, tmp_path):
+        d = self._workdir(tmp_path)
+        cleanup_workdir(str(d), debug=False, custom_workdir=True)
+        assert d.exists()
+
+    def test_keeps_workdir_when_debugging(self, tmp_path):
+        d = self._workdir(tmp_path)
+        cleanup_workdir(str(d), debug=True, custom_workdir=False)
+        assert d.exists()
 
 
 # ---------------------------------------------------------------------------

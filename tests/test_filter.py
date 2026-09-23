@@ -363,7 +363,7 @@ def _run_filter_bwa(tmp_path, left, right=None, **extra):
             with patch("AAFTF.utility.subprocess.run", side_effect=_fake_run):
                 with patch("AAFTF.utility.subprocess.Popen", side_effect=lambda cmd, **kw: (popen_cmds.append(cmd), mock_proc)[1]):
                     with patch("AAFTF.filter.bam_read_count", return_value=(50, 50)):
-                        with patch("AAFTF.filter.SafeRemove"):
+                        with patch("AAFTF.utility.safe_remove"):
                             run(**vars(args))
     return cmds, popen_cmds, args
 

@@ -9,7 +9,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from AAFTF.utility import SafeRemove, countfastq, run_cmd, status
+from AAFTF.utility import countfastq, run_cmd, safe_remove, status
 
 TRIMMOMATIC_TRUSEQSE = "adapters/TruSeq3-SE.fa"
 TRIMMOMATIC_TRUSEQPE = "adapters/TruSeq3-PE.fa"
@@ -129,8 +129,8 @@ def run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe)
             f"out2={basename}_2P.fastq.gz",
         ]
         run_cmd(reformat_cmd, debug)
-        SafeRemove(interleaved_in)
-        SafeRemove(interleaved_out)
+        safe_remove(interleaved_in)
+        safe_remove(interleaved_out)
     elif left:
         cmd = bbduk_base + [f"in={left}", f"out={basename}_1U.fastq.gz"]
         run_cmd(cmd, debug)
@@ -240,8 +240,8 @@ def run_trimmomatic(
     status("Running trimmomatic adapter and quality trimming")
     run_cmd(cmd, debug)
     if right:
-        SafeRemove(basename + "_1U.fastq.gz")
-        SafeRemove(basename + "_2U.fastq.gz")
+        safe_remove(basename + "_1U.fastq.gz")
+        safe_remove(basename + "_2U.fastq.gz")
         status("Trimming finished:\n\tFor: {:}\n\tRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
         if not pipe:
             status("Your next command might be:\n\t" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))

@@ -13,7 +13,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, printCMD, run_cmd, status
+from AAFTF.utility import align_to_sorted_bam, cleanup_workdir, printCMD, run_cmd, status
 
 
 def run(
@@ -102,8 +102,7 @@ def run(
 
     nextOut = _derive_next_out(polishedFasta)
 
-    if not debug and not custom_workdir:
-        SafeRemove(workdir)
+    cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
         status("Your next command might be:\n" + f"\tAAFTF sort -i {polishedFasta} -o {nextOut}\n")

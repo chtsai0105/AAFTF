@@ -10,7 +10,7 @@ from pathlib import Path
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, calc_nx, checkfile, execute, fastastats, filter_fasta, run_cmd, status
+from AAFTF.utility import align_to_sorted_bam, calc_nx, checkfile, cleanup_workdir, execute, fastastats, filter_fasta, run_cmd, status
 
 
 # logging - we may need to think about whether this has
@@ -34,6 +34,7 @@ def run(
     **kwargs,
 ):
     """Run the sourpurge routines to detect and remove contaminant contigs."""
+    custom_workdir = bool(workdir)
     if not workdir:
         workdir = "aaftf-sourpurge_" + str(uuid.uuid4())[:8]
     if not Path(workdir).exists():
@@ -225,8 +226,7 @@ def run(
 
         shutil.copy(sourmashTSV, str(Path(basedir, baseinput + ".sourmash-taxonomy.csv")))
 
-    if not debug:
-        SafeRemove(workdir)
+    cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
         status(f"Your next command might be:\n\tAAFTF rmdup -i {outfile} -o {nextOut}\n")

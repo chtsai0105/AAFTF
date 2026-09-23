@@ -12,7 +12,7 @@ from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from AAFTF.utility import SafeRemove, calc_nx, execute, status, write_fasta
+from AAFTF.utility import calc_nx, cleanup_workdir, execute, status, write_fasta
 
 
 def run(
@@ -132,5 +132,4 @@ def run(
     if not pipe:
         status(f"Your next command might be:\n\tAAFTF polish -i {out} -l PE_R1.fastq.gz -r PE_R2.fastq.gz -o {nextOut}\n")
 
-    if not debug and not custom_workdir:
-        SafeRemove(workdir)
+    cleanup_workdir(workdir, debug, custom_workdir)

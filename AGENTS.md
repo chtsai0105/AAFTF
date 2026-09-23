@@ -125,7 +125,7 @@ def calculate_n50(contig_lengths):
 ### File I/O Patterns
 - Support both compressed (.gz) and uncompressed files
 - Use `checkfile()` to validate input files
-- Use `SafeRemove()` for file cleanup
+- Use `safe_remove()` for file cleanup, and `cleanup_workdir(workdir, debug, custom_workdir)` to remove a subcommand's working directory (it never deletes a user-supplied `--workdir`)
 - Handle file paths with `os.path` operations for cross-platform compatibility
 
 ### Logging and Output

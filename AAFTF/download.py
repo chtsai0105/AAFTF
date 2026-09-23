@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 
 from AAFTF.resources import FCSADAPTOR, Contaminant_Accessions, DB_Links
-from AAFTF.utility import SafeRemove, status
+from AAFTF.utility import safe_remove, status
 
 
 class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
@@ -212,7 +212,7 @@ def _download(url, dest, force=False):
     except Exception as e:
         status(f"  ERROR downloading {url}: {e}")
         if Path(tmp).exists():
-            SafeRemove(tmp)
+            safe_remove(tmp)
         raise
 
     status(f"  Saved {dest}")

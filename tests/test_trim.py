@@ -404,7 +404,7 @@ class TestTrimRunTrimmomatic:
         with patch("AAFTF.trim._find_trimmomatic", return_value=fake_jar):
             with patch("AAFTF.trim.countfastq", return_value=100):
                 with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-                    with patch("AAFTF.trim.SafeRemove"):
+                    with patch("AAFTF.trim.safe_remove"):
                         from AAFTF.trim import run
 
                         run(**vars(args))

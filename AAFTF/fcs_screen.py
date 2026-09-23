@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 
 from AAFTF.resources import FCSADAPTOR
-from AAFTF.utility import SafeRemove, run_cmd, status
+from AAFTF.utility import cleanup_workdir, run_cmd, status
 
 
 def run(
@@ -102,5 +102,4 @@ def run(
     # make a copy of the report to show
     Path(fcsreport).rename(outfile + ".fcs_adaptor_report.txt")
     # cleanup after running
-    if not debug and not custom_workdir:
-        SafeRemove(workdir)
+    cleanup_workdir(workdir, debug, custom_workdir)

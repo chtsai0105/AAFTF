@@ -23,7 +23,7 @@ from subprocess import DEVNULL, call
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import SafeRemove, printCMD, status, write_fasta
+from AAFTF.utility import cleanup_workdir, printCMD, status, write_fasta
 
 BlastPercent_ID_ContamMatch = "90.0"
 BlastPercent_ID_MitoMatch = "98.6"
@@ -66,6 +66,7 @@ def run(
     (UniVec) rounds to trim/split vector hits, then write the cleaned
     assembly and a separate mitochondrial-contigs FASTA.
     """
+    custom_workdir = bool(workdir)
     workdir = _resolve_workdir(workdir)
     DB = _resolve_db_dir()
     percentid_cutoff = percent_id or BlastPercent_ID_ContamMatch
@@ -103,8 +104,7 @@ def run(
     if not pipe:
         status("Your next command might be:\n\t" + "AAFTF sourpurge -i {:} -o {:} -c {:} --phylum {:} \n".format(final_outfile, nextOut, cpus, "Ascomycota"))
 
-    if not debug:
-        SafeRemove(workdir)
+    cleanup_workdir(workdir, debug, custom_workdir)
 
 
 def _resolve_workdir(workdir):
