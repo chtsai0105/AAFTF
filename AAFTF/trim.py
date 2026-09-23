@@ -9,7 +9,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from AAFTF.utility import countfastq, run_cmd, safe_remove, status
+from AAFTF.utility import basename_from_reads, countfastq, run_cmd, safe_remove, status
 
 TRIMMOMATIC_TRUSEQSE = "adapters/TruSeq3-SE.fa"
 TRIMMOMATIC_TRUSEQPE = "adapters/TruSeq3-PE.fa"
@@ -50,12 +50,7 @@ def run(
 ):
     """Run command for the module subtool of AAFTF."""
     if not basename:
-        if "_" in Path(left).name:
-            basename = Path(left).name.split("_")[0]
-        elif "." in Path(left).name:
-            basename = Path(left).name.split(".")[0]
-        else:
-            basename = Path(left).name
+        basename = basename_from_reads(left)
 
     total = countfastq(left)
     if right:

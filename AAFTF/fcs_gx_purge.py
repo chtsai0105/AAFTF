@@ -3,10 +3,9 @@
 import shutil
 import subprocess
 import sys
-import uuid
 from pathlib import Path
 
-from AAFTF.utility import checkfile, cleanup_workdir, fastastats, filter_fasta, printCMD, status
+from AAFTF.utility import checkfile, cleanup_workdir, fastastats, filter_fasta, make_workdir, next_step_name, printCMD, status
 
 # logging - we may need to think about whether this has
 # separate name for the different runfolder
@@ -24,11 +23,7 @@ def run(
     **kwargs,
 ):
     """Run NCBI fcs_gx routines to detect and remove contaminant contigs."""
-    custom_workdir = bool(workdir)
-    if not workdir:
-        workdir = f"aaftf-fcsgx_{str(uuid.uuid4())[:8]}"
-    if not Path(workdir).exists():
-        Path(workdir).mkdir()
+    workdir, custom_workdir = make_workdir(workdir, "fcsgx")
 
     # parse database locations
     if not db or not Path(f"{db}.gxi").is_file():
@@ -84,12 +79,7 @@ def run(
         print("Contigs dropped due to taxonomy: {:}".format(",".join(Seq2Drop)))
 
     status(f"fcs-gx assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
-    if "_" in outfile:
-        nextOut = outfile.split("_")[0] + ".rmdup.fasta"
-    elif "." in outfile:
-        nextOut = outfile.split(".")[0] + ".rmdup.fasta"
-    else:
-        nextOut = f"{outfile}.rmdup.fasta"
+    nextOut = next_step_name(outfile, ".rmdup.fasta")
 
     if checkfile(fcsgxTSV):
         outbase = Path(outfile).name

@@ -4,13 +4,12 @@ This simply gives GC%, N50, L50, Min, Max
 contig statistics.
 """
 
-import gzip
 import re
 from pathlib import Path
 
 from Bio import SeqIO
 
-from AAFTF.utility import COMPLEMENT, calc_nx, status
+from AAFTF.utility import COMPLEMENT, calc_nx, open_maybe_gz, status
 
 
 def run(input, report=None, telomere_monomer="TAAC{3,5}", telomere_n_repeat=2, telomere_window=200, **kwargs):
@@ -31,33 +30,28 @@ def run(input, report=None, telomere_monomer="TAAC{3,5}", telomere_n_repeat=2, t
 def genome_asm_stats(fasta_file, output_handle, telomere_repeat, n_minimum, telomere_window=200):
     """Calculate genome assembly statistics."""
     lengths = []
-    # could be smart here and handle compressed files?
     GC = 0
     total_Ns = 0
     n_gap_count = 0
-    if fasta_file.endswith(".gz"):
-        seqio = SeqIO.parse(gzip.open(fasta_file, mode="rt"), "fasta")
-    else:
-        seqio = SeqIO.parse(fasta_file, "fasta")
-
     total_masked = 0
     telomere_stats = {"TELOMERE FWD": 0, "TELOMERE REV": 0, "T2T SCAFFOLDS": 0}
-    for record in seqio:
-        lengths.append(len(record))
-        forward, reverse = findTelomere(record.seq, telomere_repeat, n_minimum, telomere_window)
-        if forward:
-            telomere_stats["TELOMERE FWD"] += 1
-        if reverse:
-            telomere_stats["TELOMERE REV"] += 1
-        if forward and reverse:
-            telomere_stats["T2T SCAFFOLDS"] += 1
+    with open_maybe_gz(fasta_file) as fh:
+        for record in SeqIO.parse(fh, "fasta"):
+            lengths.append(len(record))
+            forward, reverse = findTelomere(record.seq, telomere_repeat, n_minimum, telomere_window)
+            if forward:
+                telomere_stats["TELOMERE FWD"] += 1
+            if reverse:
+                telomere_stats["TELOMERE REV"] += 1
+            if forward and reverse:
+                telomere_stats["T2T SCAFFOLDS"] += 1
 
-        seq_str = str(record.seq)
-        total_masked += sum(1 for c in seq_str if c.islower())
-        seq_upper = seq_str.upper()
-        GC += sum(seq_upper.count(x) for x in ["G", "C", "S"])
-        total_Ns += seq_upper.count("N")
-        n_gap_count += len(re.findall(r"N+", seq_upper))
+            seq_str = str(record.seq)
+            total_masked += sum(1 for c in seq_str if c.islower())
+            seq_upper = seq_str.upper()
+            GC += sum(seq_upper.count(x) for x in ["G", "C", "S"])
+            total_Ns += seq_upper.count("N")
+            n_gap_count += len(re.findall(r"N+", seq_upper))
 
     lengths.sort()
     total_len = sum(lengths)

@@ -84,14 +84,15 @@ def _write_stub_plain(path: Path, content: bytes = b">stub\nATCG\n"):
     path.write_bytes(content)
 
 
-def _mock_urlretrieve(url, dest):
-    """Side effect for urlretrieve: create a stub file at *dest*."""
+def _mock_download(url, dest, force=False):
+    """Side effect for download_file: create a stub file at *dest* and return it."""
     p = Path(dest)
     p.parent.mkdir(parents=True, exist_ok=True)
     if dest.endswith(".gz"):
         _write_stub_gz(p)
     else:
         _write_stub_plain(p)
+    return dest
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +188,7 @@ class TestFilterRunGuards:
         args = _make_filter_args(tmp_path, left=None)
         from AAFTF.filter import run
 
-        with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
+        with patch("AAFTF.filter.download_file", side_effect=_mock_download):
             with patch("AAFTF.filter.countfastq", return_value=0):
                 with pytest.raises(SystemExit):
                     run(**vars(args))
@@ -207,7 +208,7 @@ class TestFilterContamdbCreation:
 
         from AAFTF.filter import run
 
-        with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
+        with patch("AAFTF.filter.download_file", side_effect=_mock_download):
             with patch("AAFTF.filter.countfastq", return_value=100):
                 with patch("AAFTF.utility.subprocess.run"):
                     run(**vars(args))
@@ -224,7 +225,7 @@ class TestFilterContamdbCreation:
 
         from AAFTF.filter import run
 
-        with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
+        with patch("AAFTF.filter.download_file", side_effect=_mock_download):
             with patch("AAFTF.filter.countfastq", return_value=100):
                 with patch("AAFTF.utility.subprocess.run"):
                     run(**vars(args))
@@ -240,7 +241,7 @@ class TestFilterContamdbCreation:
 
         from AAFTF.filter import run
 
-        with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
+        with patch("AAFTF.filter.download_file", side_effect=_mock_download):
             with patch("AAFTF.filter.countfastq", return_value=100):
                 with patch("AAFTF.utility.subprocess.run"):
                     run(**vars(args))
@@ -262,7 +263,7 @@ def _run_filter_bbduk(tmp_path, left, right=None, **extra):
 
     from AAFTF.filter import run
 
-    with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
+    with patch("AAFTF.filter.download_file", side_effect=_mock_download):
         with patch("AAFTF.filter.countfastq", return_value=100):
             with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
                 run(**vars(args))
@@ -358,7 +359,7 @@ def _run_filter_bwa(tmp_path, left, right=None, **extra):
 
     from AAFTF.filter import run
 
-    with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
+    with patch("AAFTF.filter.download_file", side_effect=_mock_download):
         with patch("AAFTF.filter.countfastq", return_value=100):
             with patch("AAFTF.utility.subprocess.run", side_effect=_fake_run):
                 with patch("AAFTF.utility.subprocess.Popen", side_effect=lambda cmd, **kw: (popen_cmds.append(cmd), mock_proc)[1]):

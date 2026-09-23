@@ -13,13 +13,11 @@ quantized mode and three additional plots are produced alongside the report:
   <prefix>.depth_histogram.<format> — histogram + boxplot of per-scaffold depths
 """
 
-import gzip
 import math
 import os
 import shutil
 import subprocess
 import sys
-import uuid
 from pathlib import Path
 
 try:
@@ -34,7 +32,7 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from AAFTF.utility import align_to_sorted_bam, checkfile, cleanup_workdir, countfastq, printCMD, run_cmd, status
+from AAFTF.utility import align_to_sorted_bam, checkfile, cleanup_workdir, countfastq, make_workdir, open_maybe_gz, printCMD, require_tools, run_cmd, status
 
 # ---------------------------------------------------------------------------
 # Constants for quantized coverage classes
@@ -118,10 +116,7 @@ def run(
         required.add(aligner)
     if longreads:
         required.add("minimap2")
-    for tool in sorted(required):
-        if not shutil.which(tool):
-            status(f"ERROR: required tool '{tool}' not found in PATH. Install via conda: conda install -c bioconda {tool}")
-            sys.exit(1)
+    require_tools(sorted(required))
 
     if not no_plot and not HAS_MATPLOTLIB:
         status("WARNING: matplotlib not available — coverage plots will be skipped.")
@@ -131,12 +126,8 @@ def run(
     # ------------------------------------------------------------------
     # Working directory
     # ------------------------------------------------------------------
-    custom_workdir = bool(workdir)
-    if not workdir:
-        workdir = f"aaftf-depth_{str(uuid.uuid4())[:8]}"
+    workdir, custom_workdir = make_workdir(workdir, "depth")
     workdir = str(Path(workdir).resolve())
-    if not Path(workdir).exists():
-        os.mkdir(workdir)
 
     report_file = out
 
@@ -553,8 +544,7 @@ def _read_quantized_bed(quantized_bed):
         in order of appearance.
     """
     data = {}
-    opener = gzip.open if Path(quantized_bed).suffix == ".gz" else open
-    with opener(quantized_bed, "rt") as fh:
+    with open_maybe_gz(quantized_bed) as fh:
         for line in fh:
             parts = line.rstrip("\n").split("\t")
             if len(parts) < 4:

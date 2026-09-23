@@ -10,10 +10,9 @@ Three polishing engines are supported via --method:
 import shutil
 import subprocess
 import sys
-import uuid
 from pathlib import Path
 
-from AAFTF.utility import align_to_sorted_bam, cleanup_workdir, printCMD, run_cmd, status
+from AAFTF.utility import align_to_sorted_bam, cleanup_workdir, make_workdir, next_step_name, printCMD, require_tools, run_cmd, status
 
 
 def run(
@@ -52,11 +51,7 @@ def run(
         status("Unable to locate FASTQ raw reads, pass via -l,--left and/or -r,--right")
         sys.exit(1)
 
-    custom_workdir = bool(workdir)
-    if not workdir:
-        workdir = f"aaftf-polish_{str(uuid.uuid4())[:8]}"
-    if not Path(workdir).exists():
-        Path(workdir).mkdir()
+    workdir, custom_workdir = make_workdir(workdir, "polish")
 
     # Output file
     polishedFasta = outfile
@@ -73,11 +68,7 @@ def run(
         "nextpolish2": ["minimap2", "samtools", "yak", "nextPolish2"],
         "racon": ["minimap2", "racon"],
     }.get(method, [])
-    missing = [exe for exe in required_exes if shutil.which(exe) is None]
-    if missing:
-        status(f"ERROR: required executable(s) not found on PATH for --method {method}: {', '.join(missing)}")
-        status("Install the missing tool(s) (e.g. `pixi add polypolish` / `conda install -c bioconda polypolish`) and ensure the correct environment is activated.")
-        sys.exit(1)
+    require_tools(required_exes, hint=f"--method {method} needs: {', '.join(required_exes)}. Install the missing tool(s) (e.g. `pixi add <tool>` / `conda install -c bioconda <tool>`) and make sure the correct environment is activated.")
 
     if method == "polypolish":
         ret, out_path = run_polypolish(infile, forReads, revReads, cpus, workdir, polish_log, debug)
@@ -100,21 +91,12 @@ def run(
     status("AAFTF polish completed.")
     status(f"{method} polished assembly: {polishedFasta}")
 
-    nextOut = _derive_next_out(polishedFasta)
+    nextOut = next_step_name(polishedFasta, ".final.fasta")
 
     cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
         status("Your next command might be:\n" + f"\tAAFTF sort -i {polishedFasta} -o {nextOut}\n")
-
-
-def _derive_next_out(polishedFasta):
-    """Derive the suggested next-step (sort) output filename from polishedFasta."""
-    if "_" in polishedFasta:
-        return polishedFasta.split("_")[0] + ".final.fasta"
-    elif "." in polishedFasta:
-        return polishedFasta.split(".")[0] + ".final.fasta"
-    return polishedFasta + ".final.fasta"
 
 
 def run_polypolish(infile, forReads, revReads, cpus, workdir, polish_log, debug):

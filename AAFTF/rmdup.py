@@ -7,12 +7,11 @@ assembly and removes those which are redundant.
 import operator
 import os
 import sys
-import uuid
 from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from AAFTF.utility import calc_nx, cleanup_workdir, execute, status, write_fasta
+from AAFTF.utility import calc_nx, cleanup_workdir, execute, make_workdir, next_step_name, status, write_fasta
 
 
 def run(
@@ -61,12 +60,7 @@ def run(
         return garbage  # false is good, true is repeat
 
     # start here -- functions nested so they can inherit the arguments
-    custom_workdir = 1
-    if not workdir:
-        custom_workdir = 0
-        workdir = "aaftf-rmdup_" + str(uuid.uuid4())[:8]
-    if not Path(workdir).exists():
-        Path(workdir).mkdir()
+    workdir, custom_workdir = make_workdir(workdir, "rmdup")
 
     if debug:
         status(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} " f"percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive} pipe={pipe}")
@@ -122,12 +116,7 @@ def run(
                     numSeqs += 1
                     assemblySize += len(Seq)
     status(f"Cleaned assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
-    if "_" in out:
-        nextOut = out.split("_")[0] + ".polish.fasta"
-    elif "." in out:
-        nextOut = out.split(".")[0] + ".polish.fasta"
-    else:
-        nextOut = out + ".polish.fasta"
+    nextOut = next_step_name(out, ".polish.fasta")
 
     if not pipe:
         status(f"Your next command might be:\n\tAAFTF polish -i {out} -l PE_R1.fastq.gz -r PE_R2.fastq.gz -o {nextOut}\n")

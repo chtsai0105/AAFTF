@@ -11,11 +11,7 @@ and include common Euk, Prok, and MITO contaminants.
 """
 
 import csv
-import gzip
 import os
-import shutil
-import urllib.request
-import uuid
 from pathlib import Path
 from subprocess import DEVNULL, call
 
@@ -23,7 +19,7 @@ from subprocess import DEVNULL, call
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import cleanup_workdir, printCMD, status, write_fasta
+from AAFTF.utility import aaftf_db_dir, cleanup_workdir, concat_files, download_file, make_workdir, next_step_name, printCMD, status, write_fasta
 
 BlastPercent_ID_ContamMatch = "90.0"
 BlastPercent_ID_MitoMatch = "98.6"
@@ -66,9 +62,8 @@ def run(
     (UniVec) rounds to trim/split vector hits, then write the cleaned
     assembly and a separate mitochondrial-contigs FASTA.
     """
-    custom_workdir = bool(workdir)
-    workdir = _resolve_workdir(workdir)
-    DB = _resolve_db_dir()
+    workdir, custom_workdir = make_workdir(workdir, "vecscreen")
+    DB = aaftf_db_dir()
     percentid_cutoff = percent_id or BlastPercent_ID_ContamMatch
 
     # final_outfile/outdir/prefix are derived from the user's --outfile once,
@@ -100,25 +95,11 @@ def run(
     mitochondria = str(Path(outdir, prefix + ".mitochondria.fasta"))
     _write_final_outputs(outfile_vec, contigs_to_remove, mitoHits, final_outfile, mitochondria)
 
-    nextOut = _derive_next_out(final_outfile)
+    nextOut = next_step_name(final_outfile, ".sourpurge.fasta")
     if not pipe:
         status("Your next command might be:\n\t" + "AAFTF sourpurge -i {:} -o {:} -c {:} --phylum {:} \n".format(final_outfile, nextOut, cpus, "Ascomycota"))
 
     cleanup_workdir(workdir, debug, custom_workdir)
-
-
-def _resolve_workdir(workdir):
-    """Create (if needed) and return the working directory path."""
-    if not workdir:
-        workdir = "aaftf-vecscreen_" + str(uuid.uuid4())[:8]
-    if not Path(workdir).exists():
-        Path(workdir).mkdir()
-    return workdir
-
-
-def _resolve_db_dir():
-    """Resolve the AAFTF resource DB directory from $AAFTF_DB."""
-    return os.environ.get("AAFTF_DB")
 
 
 def _build_contam_databases(workdir, DB):
@@ -127,22 +108,13 @@ def _build_contam_databases(workdir, DB):
     for d in DB_Links:
         if d.startswith("sourmash"):
             continue
+        sources = []
+        for url in DB_Links[d]:
+            dbname = Path(str(url)).name
+            cached = Path(DB, dbname) if DB else None
+            sources.append(str(cached) if cached and cached.exists() else download_file(url, str(Path(workdir, dbname))))
         combined_fasta = str(Path(workdir, f"{d}.fasta"))
-        with open(combined_fasta, "wb") as outfa:
-            for url in DB_Links[d]:
-                dbname = Path(str(url)).name
-                if DB and Path(DB, dbname).exists():
-                    file = str(Path(DB, dbname))
-                else:
-                    file = str(Path(workdir, dbname))
-                if not Path(file).exists():
-                    urllib.request.urlretrieve(url, file)
-                if file.endswith(".gz"):
-                    with gzip.open(file, "rb") as ingz:
-                        shutil.copyfileobj(ingz, outfa)
-                else:
-                    with open(file, "rb") as infa:
-                        shutil.copyfileobj(infa, outfa)
+        concat_files(sources, combined_fasta)
         _make_blastdb("nucl", combined_fasta, str(Path(workdir, d)))
 
 
@@ -305,15 +277,6 @@ def _write_final_outputs(outfile_vec, contigs_to_remove, mitoHits, outfile, mito
                 n_mito += 1
     status(f"Writing {n_clean:,} cleaned contigs to: {outfile}")
     status(f"Writing {n_mito:,} mitochondrial contigs to: {mitochondria}")
-
-
-def _derive_next_out(outfile):
-    """Derive the suggested next-step (sourpurge) output filename from outfile."""
-    if "_" in outfile:
-        return outfile.split("_")[0] + ".sourpurge.fasta"
-    elif "." in outfile:
-        return outfile.split(".")[0] + ".sourpurge.fasta"
-    return outfile + ".sourpurge.fasta"
 
 
 def _parse_clean_blastn(fastafile, prefix, blastn, stringent, contigs_to_remove=None):

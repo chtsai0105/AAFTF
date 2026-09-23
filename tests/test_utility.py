@@ -11,15 +11,23 @@ import subprocess
 import pytest
 
 from AAFTF.utility import (
+    aaftf_db_dir,
     align_to_sorted_bam,
     bam_read_count,
+    basename_from_reads,
     calc_nx,
     checkfile,
     cleanup_workdir,
+    concat_files,
     countfastq,
+    download_file,
     execute,
     fastastats,
     filter_fasta,
+    make_workdir,
+    next_step_name,
+    open_maybe_gz,
+    require_tools,
     run_cmd,
     safe_remove,
     samtools_sort_cmd,
@@ -374,3 +382,104 @@ class TestExecute:
         gen = execute(["yes"], quiet=True)
         assert next(gen) == "y\n"
         gen.close()  # what a `break` in the caller's loop does
+
+
+class TestNextStepName:
+    def test_splits_at_first_underscore(self):
+        assert next_step_name("strain_vecscreen.fasta", ".sourpurge.fasta") == "strain.sourpurge.fasta"
+
+    def test_splits_at_first_dot_without_underscore(self):
+        assert next_step_name("strain.rmdup.fasta", ".polish.fasta") == "strain.polish.fasta"
+
+    def test_no_separator(self):
+        assert next_step_name("strain", ".final.fasta") == "strain.final.fasta"
+
+
+class TestBasenameFromReads:
+    def test_underscore(self):
+        assert basename_from_reads("/data/Sample1_R1.fastq.gz") == "Sample1"
+
+    def test_dot(self):
+        assert basename_from_reads("Sample1.fq.gz") == "Sample1"
+
+    def test_uses_file_name_not_directory(self):
+        assert basename_from_reads("/my_dir/reads") == "reads"
+
+
+class TestMakeWorkdir:
+    def test_auto_named_and_created(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        workdir, custom = make_workdir(None, "filter")
+        assert custom is False
+        assert workdir.startswith("aaftf-filter_") and (tmp_path / workdir).is_dir()
+
+    def test_user_supplied_is_created_and_flagged(self, tmp_path):
+        target = tmp_path / "a" / "b"
+        workdir, custom = make_workdir(str(target), "filter")
+        assert custom is True and workdir == str(target) and target.is_dir()
+
+
+class TestRequireTools:
+    def test_present_tools_pass(self):
+        require_tools(["sh"])
+
+    def test_missing_tool_exits(self, capsys):
+        with pytest.raises(SystemExit):
+            require_tools(["sh", "definitely_not_a_tool_xyz"])
+        assert "definitely_not_a_tool_xyz" in capsys.readouterr().out
+
+
+class TestOpenAndConcat:
+    def test_open_maybe_gz_reads_both(self, tmp_path):
+        plain, gz = tmp_path / "a.txt", tmp_path / "b.txt.gz"
+        plain.write_text("plain\n")
+        with gzip.open(gz, "wt") as fh:
+            fh.write("zipped\n")
+        with open_maybe_gz(plain) as fh:
+            assert fh.read() == "plain\n"
+        with open_maybe_gz(gz) as fh:
+            assert fh.read() == "zipped\n"
+
+    def test_concat_files_mixes_plain_and_gz(self, tmp_path):
+        plain, gz, out = tmp_path / "a.fa", tmp_path / "b.fa.gz", tmp_path / "all.fa"
+        plain.write_text(">a\nAC\n")
+        with gzip.open(gz, "wt") as fh:
+            fh.write(">b\nGT\n")
+        concat_files([str(plain), str(gz)], str(out))
+        assert out.read_text() == ">a\nAC\n>b\nGT\n"
+
+
+class TestAaftfDbDir:
+    def test_unset_returns_none(self, monkeypatch):
+        monkeypatch.delenv("AAFTF_DB", raising=False)
+        assert aaftf_db_dir() is None
+
+    def test_unset_required_exits(self, monkeypatch):
+        monkeypatch.delenv("AAFTF_DB", raising=False)
+        with pytest.raises(SystemExit):
+            aaftf_db_dir(required=True)
+
+    def test_set_returns_absolute_path(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("AAFTF_DB", str(tmp_path))
+        assert aaftf_db_dir() == str(tmp_path.resolve())
+
+
+class TestDownloadFile:
+    def test_downloads_and_returns_dest(self, tmp_path):
+        src = tmp_path / "src.txt"
+        src.write_text("data")
+        dest = tmp_path / "sub" / "dest.txt"
+        assert download_file(src.as_uri(), str(dest)) == str(dest)
+        assert dest.read_text() == "data"
+
+    def test_existing_file_not_redownloaded(self, tmp_path):
+        dest = tmp_path / "dest.txt"
+        dest.write_text("cached")
+        download_file((tmp_path / "missing.txt").as_uri(), str(dest))
+        assert dest.read_text() == "cached"
+
+    def test_failed_download_leaves_no_partial_file(self, tmp_path):
+        dest = tmp_path / "dest.txt"
+        with pytest.raises(Exception):
+            download_file((tmp_path / "missing.txt").as_uri(), str(dest))
+        assert not dest.exists() and not (tmp_path / "dest.txt.tmp").exists()

@@ -8,43 +8,12 @@ them on first use.
 """
 
 import os
-import shutil
 import sys
 import urllib.request
 from pathlib import Path
 
 from AAFTF.resources import FCSADAPTOR, Contaminant_Accessions, DB_Links
-from AAFTF.utility import safe_remove, status
-
-
-class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
-    """Extend urllib's redirect handler to also follow HTTP 308.
-
-    Python < 3.11 does not handle 308 (Permanent Redirect).  The base
-    class ``redirect_request()`` hard-codes the allowed set to
-    {301,302,303,307} and raises HTTPError for anything else, so we must
-    override both that method and add the http_error_308 dispatcher.
-    """
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        if code == 308:
-            code = 307  # method-preserving permanent redirect
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-    def http_error_308(self, req, fp, code, msg, headers):
-        return self.http_error_302(req, fp, code, msg, headers)
-
-
-_opener = urllib.request.build_opener(_Redirect308Handler())
-
-
-def _resolve_db_dir():
-    """Resolve the AAFTF_DB directory from $AAFTF_DB, exiting with an error if it isn't set."""
-    db_dir = os.environ.get("AAFTF_DB")
-    if not db_dir:
-        status("ERROR: No database directory specified.\n" "  Set the AAFTF_DB environment variable.\n" "  Example:\n" "    export AAFTF_DB=/path/to/aaftf_db\n" "    AAFTF download")
-        sys.exit(1)
-    return str(Path(db_dir).resolve())
+from AAFTF.utility import URL_OPENER, aaftf_db_dir, download_file, status
 
 
 def _human_size(num_bytes):
@@ -78,7 +47,7 @@ def _remote_size(url):
     """Return the remote file size in bytes via an HTTP HEAD request, or ``None`` if unavailable."""
     try:
         req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "AAFTF/1.0"})
-        with _opener.open(req, timeout=10) as response:
+        with URL_OPENER.open(req, timeout=10) as response:
             length = response.headers.get("Content-Length")
             return int(length) if length is not None else None
     except Exception:
@@ -131,7 +100,7 @@ def run(force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourd
     ``list_db`` is set, lists the existing database files (and their sizes)
     instead of downloading anything.
     """
-    db_dir = _resolve_db_dir()
+    db_dir = aaftf_db_dir(required=True)
 
     if list_db:
         _list_db(db_dir)
@@ -177,48 +146,6 @@ def run(force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourd
     status("Setup complete. Future AAFTF runs will use cached files from " f"{db_dir}")
 
 
-def _download(url, dest, force=False):
-    """Download ``url`` to ``dest`` if it does not already exist.
-
-    Writes to a temporary file first and renames atomically on success so
-    that an interrupted download never leaves a partial file that would be
-    mistaken for a complete one on the next run.
-
-    Args:
-        url: Remote URL to download.
-        dest: Local file path to write.
-        force: If True, re-download even if ``dest`` exists.
-
-    Returns:
-        The absolute path to the downloaded file.
-    """
-    if Path(dest).exists() and not force:
-        status(f"  Already present: {dest}")
-        return dest
-
-    status(f"  Downloading {Path(dest).name} ...")
-    Path(dest).parent.mkdir(parents=True, exist_ok=True)
-
-    tmp = dest + ".tmp"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "AAFTF/1.0"})
-        with _opener.open(req, timeout=300) as response:
-            final_url = response.geturl()
-            if final_url != url:
-                status(f"  Redirected to {final_url}")
-            with open(tmp, "wb") as outfh:
-                shutil.copyfileobj(response, outfh)
-        os.rename(tmp, dest)
-    except Exception as e:
-        status(f"  ERROR downloading {url}: {e}")
-        if Path(tmp).exists():
-            safe_remove(tmp)
-        raise
-
-    status(f"  Saved {dest}")
-    return dest
-
-
 def _download_db_links(db_dir, keys=None, force=False):
     """Download files referenced in ``DB_Links``.
 
@@ -245,7 +172,7 @@ def _download_db_links(db_dir, keys=None, force=False):
                 url = url_or_meta
                 filename = Path(url).name
             dest = str(Path(db_dir, filename))
-            _download(url, dest, force=force)
+            download_file(url, dest, force=force)
 
 
 def _download_contaminants(db_dir, force=False):
@@ -261,7 +188,7 @@ def _download_contaminants(db_dir, force=False):
         for url in urls:
             filename = Path(url).name
             dest = str(Path(db_dir, filename))
-            _download(url, dest, force=force)
+            download_file(url, dest, force=force)
 
 
 def _download_sourmash(db_dir, sourdb_type="gbk", force=False):
@@ -290,7 +217,7 @@ def _download_sourmash(db_dir, sourdb_type="gbk", force=False):
         status(f"Downloading sourmash database ({idx}) ...")
         for entry in DB_Links[idx]:
             dest = str(Path(db_dir, entry["filename"]))
-            _download(entry["url"], dest, force=force)
+            download_file(entry["url"], dest, force=force)
 
 
 def _download_fcs(db_dir, force=False):
@@ -308,7 +235,7 @@ def _download_fcs(db_dir, force=False):
     if Path(script_dest).exists() and not force:
         status(f"  Already present: {script_dest}")
     else:
-        _download(script_url, script_dest, force=force)
+        download_file(script_url, script_dest, force=force)
         os.chmod(script_dest, 0o555)
 
     # Singularity image
@@ -318,4 +245,4 @@ def _download_fcs(db_dir, force=False):
         status(f"  Already present: {image_dest}")
     else:
         image_url = str(Path(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]))
-        _download(image_url, image_dest, force=force)
+        download_file(image_url, image_dest, force=force)

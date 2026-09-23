@@ -10,15 +10,12 @@ The default libraries for screening are located in resources.py
 and include common Euk, Prok, and MITO contaminants.
 """
 
-import os
 import shutil
 import sys
-import urllib.request
-import uuid
 from pathlib import Path
 
 from AAFTF.resources import FCSADAPTOR
-from AAFTF.utility import cleanup_workdir, run_cmd, status
+from AAFTF.utility import aaftf_db_dir, cleanup_workdir, download_file, make_workdir, run_cmd, status
 
 
 def run(
@@ -33,23 +30,14 @@ def run(
     **kwargs,
 ):
     """Perform vector trimming via the fcs screening tool."""
-    DB = os.environ.get("AAFTF_DB")
-    if not DB:
-        status("ERROR: AAFTF_DB not set. Set the $AAFTF_DB environment variable.")
-        sys.exit(1)
+    DB = aaftf_db_dir(required=True)
 
     containerengine = container_engine
     infilename = Path(infile).resolve().name
     tax = "--euk"
     if prok:
         tax = "--prok"
-    custom_workdir = 1
-    if not workdir:
-        custom_workdir = 0
-        workdir = "aaftf-fcsscreen_" + str(uuid.uuid4())[:8]
-
-    if not Path(workdir).exists():
-        Path(workdir).mkdir()
+    workdir, custom_workdir = make_workdir(workdir, "fcsscreen")
 
     fcsexe = fcs_script
     if fcsexe is None:
@@ -59,10 +47,8 @@ def run(
         #  This will help download the fcs-adaptor shell script rather than re-implementing it here
         if not Path(fcsexe).exists():
             url = FCSADAPTOR["EXEURL"] % (FCSADAPTOR["VERSION"])
-            if debug:
-                status(f"url {url} download to {fcsexe}")
-            urllib.request.urlretrieve(url, fcsexe)
-            Path(fcsexe).chmod(0o444)
+            download_file(url, fcsexe)
+            Path(fcsexe).chmod(0o555)
 
     if containerengine == "singularity":
         # local SIF file: download once and cache under AAFTF_DB
@@ -71,9 +57,7 @@ def run(
             if not Path(image).exists():
                 # SIFURL is a URL prefix, not a filesystem path — do not use pathlib here.
                 url = "/".join([FCSADAPTOR["SIFURL"].rstrip("/"), FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]])
-                if debug:
-                    status(f"url {url} download to {image}")
-                urllib.request.urlretrieve(url, image)
+                download_file(url, image)
         if shutil.which("singularity") is None and shutil.which("apptainer") is None:
             status("ERROR: --container_engine singularity requires 'singularity' or 'apptainer' on PATH.")
             sys.exit(1)

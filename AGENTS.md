@@ -125,7 +125,8 @@ def calculate_n50(contig_lengths):
 ### File I/O Patterns
 - Support both compressed (.gz) and uncompressed files
 - Use `checkfile()` to validate input files
-- Use `safe_remove()` for file cleanup, and `cleanup_workdir(workdir, debug, custom_workdir)` to remove a subcommand's working directory (it never deletes a user-supplied `--workdir`)
+- Use `safe_remove()` for file cleanup. Create a subcommand's working directory with `workdir, custom_workdir = make_workdir(workdir, "<name>")` and remove it with `cleanup_workdir(workdir, debug, custom_workdir)` (it never deletes a user-supplied `--workdir`)
+- Other shared helpers in `AAFTF/utility.py` — use these instead of re-implementing: `download_file()` (never leaves a partial file behind), `aaftf_db_dir()`, `require_tools()`, `run_cmd()` / `execute()`, `align_to_sorted_bam()`, `concat_files()`, `open_maybe_gz()`, `next_step_name()`, `basename_from_reads()`, `filter_fasta()` / `write_fasta()`, `calc_nx()`
 - Handle file paths with `os.path` operations for cross-platform compatibility
 
 ### Logging and Output

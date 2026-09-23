@@ -10,7 +10,7 @@ from pathlib import Path
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
 from AAFTF.resources import Mitoseqs
-from AAFTF.utility import COMPLEMENT, cleanup_workdir, estimate_read_length, execute, printCMD, status, write_fasta
+from AAFTF.utility import COMPLEMENT, cleanup_workdir, estimate_read_length, execute, make_workdir, printCMD, require_tools, status, write_fasta
 
 
 def run(
@@ -29,19 +29,10 @@ def run(
     **kwargs,
 ):
     """Run the NOVOplasty tool."""
-    # first check if NOVOplasty and minimap2 are installed, else exit
-    programs = ["NOVOPlasty.pl", "minimap2"]
-    for x in programs:
-        if not shutil.which(x):
-            status(f"ERROR: {x} is not installed, exiting")
-            sys.exit(1)
+    require_tools(["NOVOPlasty.pl", "minimap2"])
     # first we need to generate working directory
     unique_id = str(uuid.uuid4())[:8]
-    custom_workdir = bool(workdir)
-    if not workdir:
-        workdir = "mito_" + unique_id
-    if not Path(workdir).is_dir():
-        Path(workdir).mkdir(parents=True)
+    workdir, custom_workdir = make_workdir(workdir, "mito")
 
     # now estimate read lengths of FASTQ
     read_len = estimate_read_length(left)

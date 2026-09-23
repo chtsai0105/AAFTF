@@ -4,16 +4,23 @@ This will match contaminant database and PhiX using read mapping kmer
 tools. See resources.py for these defaults.
 """
 
-import gzip
-import os
-import shutil
 import sys
-import urllib.request
-import uuid
 from pathlib import Path
 
 from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
-from AAFTF.utility import align_to_sorted_bam, bam_read_count, cleanup_workdir, countfastq, run_cmd, status
+from AAFTF.utility import (
+    aaftf_db_dir,
+    align_to_sorted_bam,
+    bam_read_count,
+    basename_from_reads,
+    cleanup_workdir,
+    concat_files,
+    countfastq,
+    download_file,
+    make_workdir,
+    run_cmd,
+    status,
+)
 
 
 # flake8: noqa: C901
@@ -33,95 +40,32 @@ def run(
     **kwargs,
 ):
     """Generic run command for this submodule for filtering reads."""
-    custom_workdir = 1
-    if not workdir:
-        custom_workdir = 0
-        workdir = "aaftf-filter_" + str(uuid.uuid4())[:8]
-    if not Path(workdir).exists():
-        Path(workdir).mkdir()
+    workdir, custom_workdir = make_workdir(workdir, "filter")
+    DB = aaftf_db_dir()
+    bamthreads = min(cpus, 4)
 
-    # parse database location
-    DB = os.environ.get("AAFTF_DB")
-
-    bamthreads = 4
-    if cpus < 4:
-        bamthreads = cpus
-
-    earliest_file_age = -1
+    # contaminant sequences: cached in $AAFTF_DB when set, else the workdir
     contam_filenames = []
-    # db of contaminant (PhiX)
-    for urls in Contaminant_Accessions.values():
-        for url in urls:
-            acc = Path(url).name
-            if DB:
-                acc_file = str(Path(DB, acc))
-            else:
-                acc_file = str(Path(workdir, acc))
-            contam_filenames.append(acc_file)
-        if not Path(acc_file).exists():
-            try:
-                urllib.request.urlretrieve(url, acc_file)
-            except Exception as e:
-                status(f"error with url {url} {acc_file}: {e}")
-            if earliest_file_age < 0 or earliest_file_age < Path(acc_file).stat().st_ctime:
-                earliest_file_age = Path(acc_file).stat().st_ctime
+    for url in [u for urls in Contaminant_Accessions.values() for u in urls] + DB_Links["UniVec"]:
+        contam_filenames.append(download_file(url, str(Path(DB or workdir, Path(url).name))))
 
-    # download univec
-    for url in DB_Links["UniVec"]:
-        # take first file for now, could combine in future
-        acc = Path(url).name
-        if DB:
-            acc_file = str(Path(DB, acc))
-        else:
-            acc_file = str(Path(workdir, acc))
-        contam_filenames.append(acc_file)
-        if not Path(acc_file).exists():
-            urllib.request.urlretrieve(url, acc_file)
-            if earliest_file_age < 0 or earliest_file_age < Path(acc_file).stat().st_ctime:
-                earliest_file_age = Path(acc_file).stat().st_ctime
+    for acc in screen_accessions or []:
+        acc_file = str(Path(DB, acc + ".fna")) if DB else ""
+        if not Path(acc_file).is_file():
+            acc_file = str(Path(workdir, acc + ".fna"))
+        contam_filenames.append(download_file(SeqDBs["nucleotide"] % acc, acc_file))
 
-    if screen_accessions:
-        for acc in screen_accessions:
-            if DB:
-                acc_file = str(Path(DB, acc + ".fna"))
-                if not Path(acc_file).exists():
-                    acc_file = str(Path(workdir, acc + ".fna"))
-            else:
-                acc_file = str(Path(workdir, acc + ".fna"))
-            contam_filenames.append(acc_file)
-            if not Path(acc_file).exists():
-                url = SeqDBs["nucleotide"] % (acc)
-                urllib.request.urlretrieve(url, acc_file)
-            if earliest_file_age < 0 or earliest_file_age < Path(acc_file).stat().st_ctime:
-                earliest_file_age = Path(acc_file).stat().st_ctime
+    for url in screen_urls or []:
+        contam_filenames.append(download_file(url, str(Path(workdir, Path(url).name))))
 
-    if screen_urls:
-        for url in screen_urls:
-            url_file = str(Path(workdir, Path(url).name))
-            contam_filenames.append(url_file)
-            if not Path(url_file).exists():
-                urllib.request.urlretrieve(url, url_file)
-            if earliest_file_age < 0 or earliest_file_age < Path(url_file).stat().st_ctime:
-                earliest_file_age = Path(url_file).stat().st_ctime
-
-    if screen_local:
-        for f in screen_local:
-            contam_filenames.append(str(Path(f).resolve()))
-
-    # concat vector db
+    contam_filenames.extend(str(Path(f).resolve()) for f in screen_local or [])
 
     contamdb = str(Path(workdir, "contamdb.fa"))
     filelist = "\n".join(contam_filenames)
     status(f"Generating combined contamination database {contamdb} from:\n{filelist}")
-    if not Path(contamdb).exists() or (Path(contamdb).stat().st_ctime < earliest_file_age):
-        with open(contamdb, "wb") as wfd:
-            for fname in contam_filenames:
-                if fname.endswith(".gz"):
-                    with gzip.open(fname, "r") as fd:
-                        shutil.copyfileobj(fd, wfd)
-                else:
-                    with open(fname, "rb") as fd:  # reasonably fast copy for append
-                        shutil.copyfileobj(fd, wfd)
+    newest_source = max(Path(f).stat().st_ctime for f in contam_filenames)
+    if not Path(contamdb).exists() or Path(contamdb).stat().st_ctime < newest_source:
+        concat_files(contam_filenames, contamdb)
 
     # find reads
     forReads, revReads = (None,) * 2
@@ -139,12 +83,7 @@ def run(
 
     # seems like this needs to be stripping trailing extension?
     if not basename:
-        if "_" in Path(forReads).name:
-            basename = Path(forReads).name.split("_")[0]
-        elif "." in Path(forReads).name:
-            basename = Path(forReads).name.split(".")[0]
-        else:
-            basename = Path(forReads).name
+        basename = basename_from_reads(forReads)
 
     # logger.info('Loading {:,} FASTQ reads'.format(countfastq(forReads)))
 

@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import urllib.request
+import uuid
 from itertools import islice
 from pathlib import Path
 
@@ -46,10 +48,22 @@ class CustomHelpFormatter(ap.HelpFormatter):
         return help
 
 
+def open_maybe_gz(path, mode="rt"):
+    """Open ``path`` with gzip if its name ends in ``.gz``, else as a plain file."""
+    return (gzip.open if str(path).endswith(".gz") else open)(path, mode)
+
+
+def concat_files(paths, dest):
+    """Concatenate files (gzipped ones are decompressed) into ``dest``."""
+    with open(dest, "wb") as out:
+        for path in paths:
+            with open_maybe_gz(path, "rb") as fh:
+                shutil.copyfileobj(fh, out)
+
+
 def estimate_read_length(input):
     """Guess the read length in a FASTQ file, rounded to the nearest 10bp."""
-    opener = gzip.open if input.endswith(".gz") else open
-    with opener(input, "rt") as infile:
+    with open_maybe_gz(input) as infile:
         records = islice(FastqGeneralIterator(infile), 500)
         max_len = max(len(seq) for _, seq, _ in records)
     return round(max_len, -1)
@@ -144,7 +158,7 @@ def countfastq(input):
         if proc.returncode:
             raise subprocess.CalledProcessError(proc.returncode, [decompressor, "-dc", input])
     else:
-        with (gzip.open if input.endswith(".gz") else open)(input, "rb") as fh:
+        with open_maybe_gz(input, "rb") as fh:
             lines = _count_lines(fh)
     return lines // 4
 
@@ -283,6 +297,107 @@ def run_cmd(cmd, debug=False, cwd=None, stdout=None, env=None, quiet_stdout=Fals
     return subprocess.run(cmd, cwd=cwd, stdout=stdout, stderr=None if debug else subprocess.DEVNULL, env=env)
 
 
+def require_tools(tools, hint=None):
+    """Exit with an error naming any of ``tools`` that are not on PATH."""
+    missing = [tool for tool in tools if shutil.which(tool) is None]
+    if missing:
+        status(f"ERROR: required tool(s) not found on PATH: {', '.join(missing)}")
+        status(hint or "Install them (e.g. `conda install -c bioconda <tool>`) and make sure the correct environment is activated.")
+        sys.exit(1)
+
+
+def next_step_name(outfile, suffix):
+    """Suggest the next step's output name: ``outfile`` up to its first '_' (else first '.') plus ``suffix``."""
+    for sep in ("_", "."):
+        if sep in outfile:
+            return outfile.split(sep)[0] + suffix
+    return outfile + suffix
+
+
+def basename_from_reads(reads):
+    """Derive a sample basename from a reads filename: the name up to its first '_' (else first '.')."""
+    name = Path(reads).name
+    for sep in ("_", "."):
+        if sep in name:
+            return name.split(sep)[0]
+    return name
+
+
+def aaftf_db_dir(required=False):
+    """Return the ``$AAFTF_DB`` database directory, or None if it is unset.
+
+    Args:
+        required: Exit with an error instead of returning None when unset.
+    """
+    db_dir = os.environ.get("AAFTF_DB")
+    if db_dir:
+        return str(Path(db_dir).resolve())
+    if required:
+        status("ERROR: No database directory specified.\n  Set the AAFTF_DB environment variable.\n  Example:\n    export AAFTF_DB=/path/to/aaftf_db\n    AAFTF download")
+        sys.exit(1)
+    return None
+
+
+class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
+    """Extend urllib's redirect handler to also follow HTTP 308.
+
+    Python < 3.11 does not handle 308 (Permanent Redirect): the base
+    ``redirect_request()`` only allows {301,302,303,307} and raises HTTPError
+    for anything else, so both it and an http_error_308 dispatcher are needed.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if code == 308:
+            code = 307  # method-preserving permanent redirect
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    def http_error_308(self, req, fp, code, msg, headers):
+        return self.http_error_302(req, fp, code, msg, headers)
+
+
+URL_OPENER = urllib.request.build_opener(_Redirect308Handler())
+
+
+def download_file(url, dest, force=False):
+    """Download ``url`` to ``dest`` unless it already exists.
+
+    Writes to a temporary file and renames it on success, so an interrupted
+    download never leaves a partial file that a later run would reuse.
+
+    Args:
+        url: Remote URL to download.
+        dest: Local file path to write.
+        force: Re-download even if ``dest`` exists.
+
+    Returns:
+        ``dest``.
+    """
+    if Path(dest).exists() and not force:
+        status(f"  Already present: {dest}")
+        return dest
+
+    status(f"  Downloading {Path(dest).name} ...")
+    Path(dest).parent.mkdir(parents=True, exist_ok=True)
+
+    tmp = f"{dest}.tmp"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "AAFTF/1.0"})
+        with URL_OPENER.open(req, timeout=300) as response:
+            final_url = response.geturl()
+            if final_url != url:
+                status(f"  Redirected to {final_url}")
+            with open(tmp, "wb") as outfh:
+                shutil.copyfileobj(response, outfh)
+        os.replace(tmp, dest)
+    except Exception as e:
+        status(f"  ERROR downloading {url}: {e}")
+        safe_remove(tmp)
+        raise
+
+    status(f"  Saved {dest}")
+    return dest
+
+
 def status(string):
     """Print out status."""
     print("\033[92m[{:}]\033[00m {:}".format(datetime.datetime.now().strftime("%b %d %I:%M %p"), string))
@@ -332,6 +447,24 @@ def safe_remove(path):
         shutil.rmtree(path)
     else:
         path.unlink(missing_ok=True)
+
+
+def make_workdir(workdir, prefix):
+    """Create a subcommand's working directory.
+
+    Args:
+        workdir: User-supplied ``--workdir``, or None to auto-name it
+            ``aaftf-<prefix>_<random id>``.
+        prefix: Subcommand name used in the auto-generated name.
+
+    Returns:
+        Tuple (workdir, custom_workdir); pass both to ``cleanup_workdir``.
+    """
+    custom_workdir = bool(workdir)
+    if not custom_workdir:
+        workdir = f"aaftf-{prefix}_{uuid.uuid4().hex[:8]}"
+    Path(workdir).mkdir(parents=True, exist_ok=True)
+    return workdir, custom_workdir
 
 
 def cleanup_workdir(workdir, debug, custom_workdir):

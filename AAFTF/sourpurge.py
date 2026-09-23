@@ -1,16 +1,13 @@
 """Run the sourmash fast matching kmer tool to look for obvious contaminants."""
 
-import os
 import shutil
 import sys
-import urllib
-import uuid
 from pathlib import Path
 
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import align_to_sorted_bam, calc_nx, checkfile, cleanup_workdir, execute, fastastats, filter_fasta, run_cmd, status
+from AAFTF.utility import aaftf_db_dir, align_to_sorted_bam, calc_nx, checkfile, cleanup_workdir, download_file, execute, fastastats, filter_fasta, make_workdir, next_step_name, run_cmd, status
 
 
 # logging - we may need to think about whether this has
@@ -34,15 +31,8 @@ def run(
     **kwargs,
 ):
     """Run the sourpurge routines to detect and remove contaminant contigs."""
-    custom_workdir = bool(workdir)
-    if not workdir:
-        workdir = "aaftf-sourpurge_" + str(uuid.uuid4())[:8]
-    if not Path(workdir).exists():
-        Path(workdir).mkdir()
-
-    bamthreads = 4
-    if cpus < 4:
-        bamthreads = 1
+    workdir, custom_workdir = make_workdir(workdir, "sourpurge")
+    bamthreads = min(cpus, 4)
 
     # find reads
     forReads, revReads = (None,) * 2
@@ -63,19 +53,14 @@ def run(
         dburl = DB_Links[dbindex][0]["url"]
         dbfile = DB_Links[dbindex][0]["filename"]
 
-        DB = os.environ.get("AAFTF_DB")
+        DB = aaftf_db_dir()
         if not DB:
             status(f"$AAFTF_DB/{dbfile} not found, pass --sourdb")
             sys.exit(1)
         SOUR = str(Path(DB, dbfile))
-        if not Path(SOUR).is_file():
-            try:
-                status(f"{SOUR} sourmash database not found, downloading from {dburl} and renaming to {DB}/{dbfile}")
-                urllib.request.urlretrieve(dburl, SOUR)
-            except urllib.error.HTTPError as error:
-                status(f"Error downloading from {dburl}: {error}")
-                sys.exit(1)
-        if not Path(SOUR).is_file():
+        try:
+            download_file(dburl, SOUR)
+        except Exception:
             status(f"{SOUR} sourmash database download of {dburl} failed. Manually download and rename to {DB}/{dbfile}")
             sys.exit(1)
     else:
@@ -211,12 +196,7 @@ def run(
     status(f"Dropping {len(DropFinal):,} total contigs based on taxonomy and coverage")
     numSeqs, assemblySize = filter_fasta(sourTax, outfile, lambda seq_id: seq_id not in DropFinal)
     status(f"Sourpurged assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
-    if "_" in outfile:
-        nextOut = outfile.split("_")[0] + ".rmdup.fasta"
-    elif "." in outfile:
-        nextOut = outfile.split(".")[0] + ".rmdup.fasta"
-    else:
-        nextOut = outfile + ".rmdup.fasta"
+    nextOut = next_step_name(outfile, ".rmdup.fasta")
 
     if checkfile(sourmashTSV):
         baseinput = Path(input).name
