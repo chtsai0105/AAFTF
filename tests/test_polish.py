@@ -566,15 +566,16 @@ class TestPolishNextpolish2:
         mock_result.returncode = 1
         mock_popen = MagicMock()
         mock_popen.stdout = MagicMock()
+        mock_popen.wait.return_value = 0
+        mock_popen.returncode = 0
 
         from AAFTF.polish import run
 
         with patch("AAFTF.polish.subprocess.run", return_value=mock_result):
             with patch("AAFTF.polish.subprocess.Popen", return_value=mock_popen):
-                with patch("AAFTF.polish.samtools_sort_cmd", return_value=["samtools", "sort", "-o", "hifi.map.bam", "-"]):
-                    with patch("AAFTF.polish.shutil.which", return_value=True):
-                        with pytest.raises(SystemExit) as exc:
-                            run(**vars(args))
+                with patch("AAFTF.polish.shutil.which", return_value=True):
+                    with pytest.raises(SystemExit) as exc:
+                        run(**vars(args))
         assert exc.value.code == 1
 
     def test_success_copies_corrected_fasta(self, tmp_path):
@@ -583,6 +584,8 @@ class TestPolishNextpolish2:
         workdir = tmp_path / "wdir"
         mock_popen = MagicMock()
         mock_popen.stdout = MagicMock()
+        mock_popen.wait.return_value = 0
+        mock_popen.returncode = 0
 
         def _fake_run(cmd, **kw):
             if cmd[0] == "nextPolish2":
@@ -596,9 +599,8 @@ class TestPolishNextpolish2:
 
         with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
             with patch("AAFTF.polish.subprocess.Popen", return_value=mock_popen):
-                with patch("AAFTF.polish.samtools_sort_cmd", return_value=["samtools", "sort", "-o", "hifi.map.bam", "-"]):
-                    with patch("AAFTF.polish.shutil.which", return_value=True):
-                        run(**vars(args))
+                with patch("AAFTF.polish.shutil.which", return_value=True):
+                    run(**vars(args))
 
         assert (tmp_path / "polished.fasta").exists()
 
@@ -608,6 +610,8 @@ class TestPolishNextpolish2:
         workdir = tmp_path / "wdir"
         mock_popen = MagicMock()
         mock_popen.stdout = MagicMock()
+        mock_popen.wait.return_value = 0
+        mock_popen.returncode = 0
         captured_cmds = []
 
         def _fake_run(cmd, **kw):
@@ -623,9 +627,8 @@ class TestPolishNextpolish2:
 
         with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
             with patch("AAFTF.polish.subprocess.Popen", return_value=mock_popen):
-                with patch("AAFTF.polish.samtools_sort_cmd", return_value=["samtools", "sort", "-o", "hifi.map.bam", "-"]):
-                    with patch("AAFTF.polish.shutil.which", return_value=True):
-                        run(**vars(args))
+                with patch("AAFTF.polish.shutil.which", return_value=True):
+                    run(**vars(args))
 
         yak_cmds = [c for c in captured_cmds if c[:2] == ["yak", "count"]]
         assert len(yak_cmds) == 1

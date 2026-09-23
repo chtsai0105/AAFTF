@@ -34,9 +34,7 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from packaging.version import Version
-
-from AAFTF.utility import SafeRemove, checkfile, countfastq, get_samtools_version, printCMD, samtools_sort_cmd, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, checkfile, countfastq, printCMD, status
 
 # ---------------------------------------------------------------------------
 # Constants for quantized coverage classes
@@ -367,40 +365,6 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
     bam_illumina = None
     bam_longreads = None
 
-    _pipe_sort = get_samtools_version() >= Version("1.19")
-
-    def _map_and_sort(map_cmd, bam_out):
-        """Run mapper and produce a sorted BAM.
-
-        On samtools >= 1.19 the mapper's stdout is piped directly into
-        samtools sort (no intermediate file).  On older versions the SAM is
-        written to a temp file first, sorted, then removed.
-        """
-        printCMD(map_cmd)
-        if _pipe_sort:
-            sort_cmd = samtools_sort_cmd("-", bam_out, cpus)
-            printCMD(sort_cmd)
-            p1 = subprocess.Popen(map_cmd, stdout=subprocess.PIPE, stderr=stderr_dest)
-            p2 = subprocess.Popen(sort_cmd, stdin=p1.stdout, stderr=stderr_dest)
-            p1.stdout.close()
-            p2.communicate()
-            if p1.wait() != 0 or p2.returncode != 0:
-                status(f"ERROR: mapping/sorting pipeline failed for {bam_out}")
-                sys.exit(1)
-        else:
-            sam_out = bam_out.replace(".bam", ".sam")
-            ret = subprocess.run(map_cmd + ["-o", sam_out], stderr=stderr_dest)
-            if ret.returncode != 0:
-                status(f"ERROR: mapping failed for {bam_out}")
-                sys.exit(1)
-            sort_cmd = samtools_sort_cmd(sam_out, bam_out, cpus)
-            printCMD(sort_cmd)
-            ret = subprocess.run(sort_cmd, stderr=stderr_dest)
-            if ret.returncode != 0:
-                status(f"ERROR: samtools sort failed for {bam_out}")
-                sys.exit(1)
-            SafeRemove(sam_out)
-
     # --- Illumina reads ---
     if reads_left:
         bam_illumina = str(Path(workdir, "illumina.sorted.bam"))
@@ -423,14 +387,14 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
             if reads_right:
                 map_cmd.append(reads_right)
 
-        _map_and_sort(map_cmd, bam_illumina)
+        align_to_sorted_bam(map_cmd, bam_illumina, cpus, stderr=stderr_dest)
         subprocess.run(["samtools", "index", bam_illumina], stderr=stderr_dest)
 
     # --- Long reads ---
     if longreads:
         bam_longreads = str(Path(workdir, "longreads.sorted.bam"))
         map_cmd = ["minimap2", "-ax", longread_preset, "-t", str(cpus), genome, longreads]
-        _map_and_sort(map_cmd, bam_longreads)
+        align_to_sorted_bam(map_cmd, bam_longreads, cpus, stderr=stderr_dest)
         subprocess.run(["samtools", "index", bam_longreads], stderr=stderr_dest)
 
     # --- Combine ---

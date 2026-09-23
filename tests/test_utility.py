@@ -5,6 +5,7 @@ All tests are pure Python — no external bioinformatics tools required.
 
 import gzip
 import io
+import shutil
 import subprocess
 
 import pytest
@@ -12,11 +13,13 @@ import pytest
 from AAFTF.utility import (
     RevComp,
     SafeRemove,
+    align_to_sorted_bam,
     calcN50,
     checkfile,
     countfastq,
     fastastats,
     filter_fasta,
+    samtools_sort_cmd,
     softwrap,
     write_fasta,
 )
@@ -263,3 +266,39 @@ class TestSafeRemove:
     def test_remove_nonexistent_is_noop(self, tmp_path):
         # Should not raise
         SafeRemove(str(tmp_path / "ghost"))
+
+
+# ---------------------------------------------------------------------------
+# samtools helpers
+# ---------------------------------------------------------------------------
+
+
+class TestSamtoolsSortCmd:
+    def test_basic(self):
+        assert samtools_sort_cmd("-", "out.bam", 4) == ["samtools", "sort", "-@", "4", "-o", "out.bam", "-"]
+
+    def test_memory_and_tmp_prefix(self):
+        cmd = samtools_sort_cmd("in.sam", "out.bam", 2, memory_per_thread="1G", tmp_prefix="tmp")
+        assert cmd == ["samtools", "sort", "-@", "2", "-m", "1G", "-o", "out.bam", "-T", "tmp", "in.sam"]
+
+
+_SAM = "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nr1\t0\tc1\t10\t60\t4M\t*\t0\t0\tACGT\tIIII\n"
+
+
+@pytest.mark.skipif(shutil.which("samtools") is None, reason="samtools not installed")
+class TestAlignToSortedBam:
+    def test_writes_bam_relative_to_current_dir_not_cwd(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        sub = tmp_path / "work"
+        sub.mkdir()
+        (sub / "in.sam").write_text(_SAM)
+        align_to_sorted_bam(["cat", "in.sam"], "out.bam", cwd=str(sub), stderr=subprocess.DEVNULL)
+        assert (tmp_path / "out.bam").stat().st_size > 0
+        assert not (sub / "out.bam").exists()
+
+    def test_failing_aligner_exits_and_removes_partial_bam(self, tmp_path):
+        bam = tmp_path / "out.bam"
+        with pytest.raises(SystemExit) as exc:
+            align_to_sorted_bam(["false"], str(bam), stderr=subprocess.DEVNULL)
+        assert exc.value.code == 1
+        assert not bam.exists()

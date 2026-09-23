@@ -13,7 +13,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from AAFTF.utility import SafeRemove, printCMD, samtools_sort_cmd, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, printCMD, status
 
 
 def run(
@@ -220,12 +220,7 @@ def run_nextpolish2(infile, forReads, revReads, longreads, cpus, workdir, polish
 
     hifi_bam = "hifi.map.bam"
     minimap_cmd = ["minimap2", "-ax", "map-hifi", "-t", str(cpus), asm_name, longreads]
-    sort_cmd = samtools_sort_cmd("-", hifi_bam, cpus)
-    printCMD(minimap_cmd)
-    p1 = subprocess.Popen(minimap_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=stderr_dest)
-    p2 = subprocess.Popen(sort_cmd, cwd=workdir, stdin=p1.stdout, stderr=stderr_dest)
-    p1.stdout.close()
-    p2.communicate()
+    align_to_sorted_bam(minimap_cmd, str(Path(workdir, hifi_bam)), cpus, cwd=workdir, stderr=stderr_dest)
     subprocess.run(["samtools", "index", hifi_bam], cwd=workdir, stderr=stderr_dest)
 
     out_fasta = "nextpolish2_corrected.fasta"

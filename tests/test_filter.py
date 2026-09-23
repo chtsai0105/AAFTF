@@ -337,6 +337,8 @@ def _run_filter_bwa(tmp_path, left, right=None, **extra):
     mock_proc = MagicMock()
     mock_proc.stdout = MagicMock()
     mock_proc.communicate.return_value = (b"", b"")
+    mock_proc.wait.return_value = 0
+    mock_proc.returncode = 0
 
     def _fake_run(cmd, **kw):
         cmds.append(cmd)
@@ -354,18 +356,15 @@ def _run_filter_bwa(tmp_path, left, right=None, **extra):
                 # create a stub alignBAM so isfile check passes
                 (workdir / "_stub.bam").touch()
 
-    from packaging.version import Version
-
     from AAFTF.filter import run
 
     with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
         with patch("AAFTF.filter.countfastq", return_value=100):
             with patch("AAFTF.filter.subprocess.run", side_effect=_fake_run):
                 with patch("AAFTF.filter.subprocess.Popen", side_effect=lambda cmd, **kw: (popen_cmds.append(cmd), mock_proc)[1]):
-                    with patch("AAFTF.utility.get_samtools_version", return_value=Version("1.23")):
-                        with patch("AAFTF.filter.bam_read_count", return_value=(50, 50)):
-                            with patch("AAFTF.filter.SafeRemove"):
-                                run(**vars(args))
+                    with patch("AAFTF.filter.bam_read_count", return_value=(50, 50)):
+                        with patch("AAFTF.filter.SafeRemove"):
+                            run(**vars(args))
     return cmds, popen_cmds, args
 
 

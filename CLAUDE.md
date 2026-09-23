@@ -100,7 +100,7 @@ Expected inputs/outputs per step:
 
 ## External Tool Versions (minimum known-good)
 
-- samtools >= 1.0 (many modules branch on samtools version)
+- samtools >= 1.3 (pixi pins >= 1.24). No samtools version branching: aligner → sorted BAM pipelines use `utility.align_to_sorted_bam()`, which pipes SAM straight into `samtools sort`
 - minimap2 >= 2.17
 - mosdepth >= 0.3
 - sourmash >= 4.x (LCA-based classification)

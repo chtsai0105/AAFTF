@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
-from AAFTF.utility import SafeRemove, bam_read_count, countfastq, printCMD, samtools_sort_cmd, samtools_view_bam_cmd, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, bam_read_count, countfastq, printCMD, status
 
 
 # flake8: noqa: C901
@@ -150,7 +150,6 @@ def run(
     # logger.info('Loading {:,} FASTQ reads'.format(countfastq(forReads)))
 
     alignBAM = str(Path(workdir, basename + "_contam_db.bam"))
-    unsorted_bam = str(Path(workdir, basename + "_contam.unsorted.bam"))
     clean_reads = basename + "_filtered"
     refmatch_bbduk = [contamdb, "phix", "artifacts", "lambda"]
     if aligner == "bbduk":
@@ -215,7 +214,7 @@ def run(
             elif forReads:
                 bowtie_cmd = bowtie_cmd + ["-U", forReads]
 
-            _align_and_sort(bowtie_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug)
+            align_to_sorted_bam(bowtie_cmd, alignBAM, bamthreads, cwd=workdir, stderr=_stderr_for(debug))
 
     elif aligner == "bwa":
         # likely less accurate than bbduk so may not be used
@@ -227,7 +226,7 @@ def run(
             if revReads:
                 bwa_cmd.append(revReads)
 
-            _align_and_sort(bwa_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug)
+            align_to_sorted_bam(bwa_cmd, alignBAM, bamthreads, cwd=workdir, stderr=_stderr_for(debug))
 
     elif aligner == "minimap2":
         # likely not used but may be useful for pacbio/nanopore?
@@ -238,7 +237,7 @@ def run(
             if revReads:
                 minimap2_cmd.append(revReads)
 
-            _align_and_sort(minimap2_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug)
+            align_to_sorted_bam(minimap2_cmd, alignBAM, bamthreads, cwd=workdir, stderr=_stderr_for(debug))
     else:
         status("Must specify bowtie2, bwa, or minimap2 for filtering")
 
@@ -284,18 +283,6 @@ def _rebuild_index_if_stale(marker_file, contamdb, build_cmd, debug):
     marker = Path(marker_file)
     if not marker.exists() or marker.stat().st_ctime < Path(contamdb).stat().st_ctime:
         _run(build_cmd, debug, suppress_stdout=True)
-
-
-def _align_and_sort(align_cmd, workdir, unsorted_bam, alignBAM, bamthreads, debug):
-    """Pipe an aligner's SAM output through samtools view/sort into a sorted alignBAM."""
-    printCMD(align_cmd)
-    stderr = _stderr_for(debug)
-    p1 = subprocess.Popen(align_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=stderr)
-    p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsorted_bam, bamthreads), stdin=p1.stdout, stderr=stderr)
-    p1.stdout.close()
-    p2.communicate()
-    subprocess.run(samtools_sort_cmd(unsorted_bam, alignBAM, bamthreads), stderr=stderr)
-    SafeRemove(unsorted_bam)
 
 
 def _cleanup_workdir(workdir, debug, custom_workdir):

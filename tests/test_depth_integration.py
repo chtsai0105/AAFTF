@@ -227,7 +227,7 @@ class TestMosdepthReal:
             aligner="minimap2",
             debug=False,
         )
-        summary = depth.run_mosdepth(bam, str(workdir), cpus=2)
+        summary, _ = depth.run_mosdepth(bam, str(workdir), cpus=2)
         assert Path(summary).exists()
         total, contigs = depth.parse_mosdepth_summary(summary)
         names = {c["chrom"] for c in contigs}
@@ -250,7 +250,7 @@ class TestMosdepthReal:
             aligner="minimap2",
             debug=False,
         )
-        summary = depth.run_mosdepth(bam, str(workdir), cpus=2)
+        summary, _ = depth.run_mosdepth(bam, str(workdir), cpus=2)
         _, contigs = depth.parse_mosdepth_summary(summary)
         by_name = {c["chrom"]: c["mean"] for c in contigs}
         nuclear_mean = sum(by_name[c] for c in ("chr1", "chr2", "chr3")) / 3
@@ -272,8 +272,8 @@ class TestMosdepthReal:
             aligner="minimap2",
             debug=False,
         )
-        labels, env_dict = depth._parse_quantize_bins(depth._DEFAULT_QUANTIZE)
-        summary, bed = depth.run_mosdepth_quantized(bam, str(workdir), cpus=2, quantize_str=depth._DEFAULT_QUANTIZE, env_dict=env_dict)
+        labels, _ = depth._parse_quantize_bins()
+        summary, bed = depth.run_mosdepth(bam, str(workdir), cpus=2, labels=labels)
         assert Path(summary).exists()
         assert Path(bed).exists()
         contig_data = depth._read_quantized_bed(bed)

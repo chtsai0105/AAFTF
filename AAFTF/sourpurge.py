@@ -9,10 +9,9 @@ import uuid
 from pathlib import Path
 
 from Bio import SeqIO
-from packaging.version import Version
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import SafeRemove, calcN50, checkfile, execute, fastastats, filter_fasta, get_samtools_version, printCMD, samtools_sort_cmd, samtools_view_bam_cmd, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, calcN50, checkfile, execute, fastastats, filter_fasta, printCMD, status
 
 
 # logging - we may need to think about whether this has
@@ -158,25 +157,8 @@ def run(
             if revReads:
                 bwa_cmd.append(revReads)
 
-            # run BWA and pipe to samtools sort
             status("Aligning reads to assembly with BWA")
-            printCMD(bwa_cmd)
-            p1 = subprocess.Popen(bwa_cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            if get_samtools_version() >= Version("1.3"):
-                # Modern samtools sort reads SAM directly from stdin
-                sort_cmd = samtools_sort_cmd("-", str(Path(workdir, blobBAM)), bamthreads)
-                printCMD(sort_cmd)
-                p2 = subprocess.Popen(sort_cmd, stdin=p1.stdout, stderr=subprocess.DEVNULL)
-                p1.stdout.close()
-                p2.communicate()
-            else:
-                # Older samtools: convert SAM→BAM first, then sort
-                unsortBAM = str(Path(workdir, "unsorted.bam"))
-                p2 = subprocess.Popen(samtools_view_bam_cmd("-", unsortBAM, bamthreads), cwd=workdir, stdin=p1.stdout, stderr=subprocess.DEVNULL)
-                p1.stdout.close()
-                p2.communicate()
-                subprocess.run(samtools_sort_cmd(unsortBAM, str(Path(workdir, blobBAM)), bamthreads), stderr=subprocess.DEVNULL)
-                SafeRemove(unsortBAM)
+            align_to_sorted_bam(bwa_cmd, str(Path(workdir, blobBAM)), bamthreads, cwd=workdir, stderr=subprocess.DEVNULL)
 
             subprocess.run(["samtools", "index", str(Path(workdir, blobBAM))], stderr=subprocess.DEVNULL)
 
