@@ -12,6 +12,7 @@ from itertools import islice
 from pathlib import Path
 
 import psutil
+from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.SeqIO.QualityIO import FastqGeneralIterator
 from packaging.version import Version
 
@@ -96,26 +97,25 @@ def fastastats(input):
     return count, length
 
 
-def filter_fasta(fasta_in, fasta_out, keep):
-    """Copy records whose ID passes ``keep(id)`` to fasta_out, lines unchanged.
+def filter_fasta(fasta_in, fasta_out, keep, wrap=60):
+    """Write records whose ID passes ``keep(id)`` to fasta_out, wrapped at ``wrap`` columns.
 
     The ID is the first whitespace-delimited word of the header (as Biopython's
-    ``record.id``).
+    ``record.id``); the full header line is kept. The default 60-column wrap
+    matches Biopython's ``SeqIO.write``.
 
     Returns:
         Tuple (number of records written, total length written).
     """
     count = length = 0
-    write = False
     with open(fasta_in) as fin, open(fasta_out, "w") as fout:
-        for line in fin:
-            if line.startswith(">"):
-                write = keep(line[1:].split(None, 1)[0])
-                count += write
-            elif write:
-                length += len(line.rstrip())
-            if write:
-                fout.write(line)
+        for header, seq in SimpleFastaParser(fin):
+            if keep(header.split(None, 1)[0]):
+                fout.write(f">{header}\n")
+                if seq:
+                    fout.write(f"{softwrap(seq, wrap)}\n")
+                count += 1
+                length += len(seq)
     return count, length
 
 
