@@ -13,7 +13,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, printCMD, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, printCMD, run_cmd, status
 
 
 def run(
@@ -132,26 +132,22 @@ def run_polypolish(infile, forReads, revReads, cpus, workdir, polish_log, debug)
         status("ERROR: --method polypolish requires paired reads (-l/--left and -r/--right)")
         sys.exit(1)
 
-    stderr_dest = None if debug else subprocess.DEVNULL
     assembly = str(Path(workdir, Path(infile).name))
     shutil.copyfile(infile, assembly)
     asm_name = Path(assembly).name
 
     bwa_index = ["bwa", "index", asm_name]
-    printCMD(bwa_index)
-    subprocess.run(bwa_index, cwd=workdir, stderr=stderr_dest)
+    run_cmd(bwa_index, debug, cwd=workdir)
 
     sam1, sam2 = "alignments_1.sam", "alignments_2.sam"
     for reads, sam_out in ((forReads, sam1), (revReads, sam2)):
         bwa_cmd = ["bwa", "mem", "-t", str(cpus), "-a", asm_name, reads]
-        printCMD(bwa_cmd)
         with open(str(Path(workdir, sam_out)), "w") as out_fh:
-            subprocess.run(bwa_cmd, cwd=workdir, stdout=out_fh, stderr=stderr_dest)
+            run_cmd(bwa_cmd, debug, cwd=workdir, stdout=out_fh)
 
     filt1, filt2 = "filtered_1.sam", "filtered_2.sam"
     filter_cmd = ["polypolish", "filter", "--in1", sam1, "--in2", sam2, "--out1", filt1, "--out2", filt2]
-    printCMD(filter_cmd)
-    subprocess.run(filter_cmd, cwd=workdir, stderr=stderr_dest)
+    run_cmd(filter_cmd, debug, cwd=workdir)
 
     polish_cmd = ["polypolish", "polish", asm_name, filt1, filt2]
     printCMD(polish_cmd)
@@ -206,7 +202,6 @@ def run_nextpolish2(infile, forReads, revReads, longreads, cpus, workdir, polish
     Returns (returncode, out_path). Validation, copying to the final
     destination, and status reporting are all handled centrally by run().
     """
-    stderr_dest = None if debug else subprocess.DEVNULL
     assembly = str(Path(workdir, Path(infile).name))
     shutil.copyfile(infile, assembly)
     asm_name = Path(assembly).name
@@ -215,12 +210,11 @@ def run_nextpolish2(infile, forReads, revReads, longreads, cpus, workdir, polish
     yak_cmd = ["yak", "count", "-k31", "-b37", "-t", str(cpus), "-o", yak_db, forReads]
     if revReads:
         yak_cmd.append(revReads)
-    printCMD(yak_cmd)
-    subprocess.run(yak_cmd, cwd=workdir, stderr=stderr_dest)
+    run_cmd(yak_cmd, debug, cwd=workdir)
 
     hifi_bam = "hifi.map.bam"
     minimap_cmd = ["minimap2", "-ax", "map-hifi", "-t", str(cpus), asm_name, longreads]
-    align_to_sorted_bam(minimap_cmd, str(Path(workdir, hifi_bam)), cpus, cwd=workdir, stderr=stderr_dest)
+    align_to_sorted_bam(minimap_cmd, str(Path(workdir, hifi_bam)), cpus, cwd=workdir, debug=debug)
 
     out_fasta = "nextpolish2_corrected.fasta"
     nextpolish2_cmd = ["nextPolish2", "-t", str(cpus), "-o", out_fasta, hifi_bam, asm_name, yak_db]
@@ -240,16 +234,14 @@ def run_racon(infile, longreads, cpus, workdir, polish_log, debug):
     Returns (returncode, out_path). Validation, copying to the final
     destination, and status reporting are all handled centrally by run().
     """
-    stderr_dest = None if debug else subprocess.DEVNULL
     assembly = str(Path(workdir, Path(infile).name))
     shutil.copyfile(infile, assembly)
     asm_name = Path(assembly).name
 
     overlaps = "overlaps.paf"
     minimap_cmd = ["minimap2", "-x", "map-ont", "-t", str(cpus), asm_name, longreads]
-    printCMD(minimap_cmd)
     with open(str(Path(workdir, overlaps)), "w") as out_fh:
-        subprocess.run(minimap_cmd, cwd=workdir, stdout=out_fh, stderr=stderr_dest)
+        run_cmd(minimap_cmd, debug, cwd=workdir, stdout=out_fh)
 
     racon_cmd = ["racon", "-t", str(cpus), longreads, overlaps, asm_name]
     printCMD(racon_cmd)

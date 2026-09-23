@@ -209,7 +209,7 @@ def _run_bbduk(tmp_path, left, right=None, **extra):
     args = _make_trim_args(tmp_path, method="bbduk", left=left, right=right, **extra)
     cmds = []
     with patch("AAFTF.trim.countfastq", return_value=100):
-        with patch("AAFTF.trim.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)) as _:
+        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)) as _:
             from AAFTF.trim import run
 
             run(**vars(args))
@@ -286,7 +286,7 @@ def _run_fastp(tmp_path, left, right=None, **extra):
     args = _make_trim_args(tmp_path, method="fastp", left=left, right=right, **extra)
     cmds = []
     with patch("AAFTF.trim.countfastq", return_value=100):
-        with patch("AAFTF.trim.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
             from AAFTF.trim import run
 
             run(**vars(args))
@@ -403,7 +403,7 @@ class TestTrimRunTrimmomatic:
         cmds = []
         with patch("AAFTF.trim._find_trimmomatic", return_value=fake_jar):
             with patch("AAFTF.trim.countfastq", return_value=100):
-                with patch("AAFTF.trim.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+                with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
                     with patch("AAFTF.trim.Fzip_inplace"):
                         with patch("AAFTF.trim.SafeRemove"):
                             from AAFTF.trim import run

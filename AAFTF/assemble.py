@@ -9,12 +9,11 @@ solution for draft Illumina genome processing en masse.
 import os
 import re
 import shutil
-import subprocess
 import sys
 import uuid
 from pathlib import Path
 
-from AAFTF.utility import fastastats, printCMD, status
+from AAFTF.utility import fastastats, run_cmd, status
 
 
 def run(
@@ -90,7 +89,7 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=True, careful=True, as
         runcmd = ["spades.py", "-o", workdir, "--threads", str(cpus), "--mem", memory, "--restart-from last"]
 
     status("Assembling FASTQ data using Spades")
-    _run_assembler(runcmd, debug)
+    run_cmd(runcmd, debug, quiet_stdout=True)
 
     finalOut = _derive_finalOut(out, forReads, ".spades.fasta")
     _finish_assembly(Path(workdir, "scaffolds.fasta"), finalOut, "Spades", cpus, pipe)
@@ -126,7 +125,7 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
         runcmd = ["dipspades.py", "-o", workdir, "--continue"]
 
     status("Assembling FASTQ data using Spades")
-    _run_assembler(runcmd, debug)
+    run_cmd(runcmd, debug, quiet_stdout=True)
 
     finalOut = _derive_finalOut(out, forReads, ".dipspades.fasta")
     prefix = Path(finalOut).name.removesuffix(".dipspades.fasta")
@@ -167,7 +166,7 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
         status(f"Cannot re-run with existing folder {workdir}")
 
     status("Assembling FASTQ data using megahit")
-    _run_assembler(runcmd, debug)
+    run_cmd(runcmd, debug, quiet_stdout=True)
 
     finalOut = _derive_finalOut(out, forReads, ".megahit.fasta")
     _finish_assembly(Path(workdir, "final.contigs.fa"), finalOut, "Megahit", cpus, pipe)
@@ -206,7 +205,7 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     #            '--restart-from last']
 
     status("Assembling FASTQ data using Unicycler")
-    _run_assembler(runcmd, debug)
+    run_cmd(runcmd, debug, quiet_stdout=True)
 
     finalOut = _derive_finalOut(out, forReads, ".unicycler.fasta")
     _finish_assembly(Path(workdir, "assembly.fasta"), finalOut, "Unicycler", cpus, pipe)
@@ -220,15 +219,6 @@ def _resolve_reads(left, right):
         status("Unable to located FASTQ raw reads, provide --left")
         sys.exit(1)
     return forReads, revReads
-
-
-def _run_assembler(runcmd, debug):
-    """Print then run an assembler command, suppressing output unless debugging."""
-    printCMD(runcmd)
-    if debug:
-        subprocess.run(runcmd)
-    else:
-        subprocess.run(runcmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _derive_finalOut(out, forReads, suffix):

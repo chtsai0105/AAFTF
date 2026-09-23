@@ -6,11 +6,10 @@ trimmomatic. Expects adaptor sequence files to be in trimmomatic installed folde
 """
 
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
-from AAFTF.utility import Fzip_inplace, SafeRemove, countfastq, printCMD, status
+from AAFTF.utility import Fzip_inplace, SafeRemove, countfastq, run_cmd, status
 
 TRIMMOMATIC_TRUSEQSE = "adapters/TruSeq3-SE.fa"
 TRIMMOMATIC_TRUSEQPE = "adapters/TruSeq3-PE.fa"
@@ -118,18 +117,10 @@ def run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe)
         interleaved_in = f"{basename}_ivl.fq.gz"
         interleaved_out = f"{basename}_ivl.trimmed.fq.gz"
         shuffle_cmd = ["shuffle.sh", f"in1={left}", f"in2={right}", f"out={interleaved_in}"]
-        printCMD(shuffle_cmd)
-        if debug:
-            subprocess.run(shuffle_cmd)
-        else:
-            subprocess.run(shuffle_cmd, stderr=subprocess.DEVNULL)
+        run_cmd(shuffle_cmd, debug)
 
         cmd = bbduk_base + [f"in={interleaved_in}", "interleaved=true", f"out={interleaved_out}"]
-        printCMD(cmd)
-        if debug:
-            subprocess.run(cmd)
-        else:
-            subprocess.run(cmd, stderr=subprocess.DEVNULL)
+        run_cmd(cmd, debug)
 
         reformat_cmd = [
             "reformat.sh",
@@ -137,20 +128,12 @@ def run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe)
             f"out1={basename}_1P.fastq.gz",
             f"out2={basename}_2P.fastq.gz",
         ]
-        printCMD(reformat_cmd)
-        if debug:
-            subprocess.run(reformat_cmd)
-        else:
-            subprocess.run(reformat_cmd, stderr=subprocess.DEVNULL)
+        run_cmd(reformat_cmd, debug)
         SafeRemove(interleaved_in)
         SafeRemove(interleaved_out)
     elif left:
         cmd = bbduk_base + [f"in={left}", f"out={basename}_1U.fastq.gz"]
-        printCMD(cmd)
-        if debug:
-            subprocess.run(cmd)
-        else:
-            subprocess.run(cmd, stderr=subprocess.DEVNULL)
+        run_cmd(cmd, debug)
 
     _report_trimmed(basename, right, pipe, cpus)
 
@@ -255,11 +238,7 @@ def run_trimmomatic(
         return
 
     status("Running trimmomatic adapter and quality trimming")
-    printCMD(cmd)
-    if debug:
-        subprocess.run(cmd)
-    else:
-        subprocess.run(cmd, stderr=subprocess.DEVNULL)
+    run_cmd(cmd, debug)
     if right:
         status("Compressing trimmed PE FASTQ files")
         Fzip_inplace(basename + "_1P.fastq", cpus)
@@ -314,11 +293,7 @@ def run_fastp(left, right, basename, cpus, minlen, avgqual, merge, dedup, cutfro
         cmd += ["--cut_right"]
 
     cmd += [f"--html={basename}.fastp.html", f"--json={basename}.fastp.json"]
-    printCMD(cmd)
-    if debug:
-        subprocess.run(cmd)
-    else:
-        subprocess.run(cmd, stderr=subprocess.DEVNULL)
+    run_cmd(cmd, debug)
 
     _report_trimmed(basename, right, pipe, cpus)
 

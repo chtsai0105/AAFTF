@@ -7,14 +7,13 @@ tools. See resources.py for these defaults.
 import gzip
 import os
 import shutil
-import subprocess
 import sys
 import urllib.request
 import uuid
 from pathlib import Path
 
 from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, bam_read_count, countfastq, printCMD, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, bam_read_count, countfastq, run_cmd, status
 
 
 # flake8: noqa: C901
@@ -166,21 +165,21 @@ def run(
             interleaved_in = str(Path(workdir, f"{basename}_ivl.fq.gz"))
             interleaved_out = str(Path(workdir, f"{basename}_ivl.clean.fq.gz"))
             shuffle_cmd = ["shuffle.sh", f"in1={forReads}", f"in2={revReads}", f"out={interleaved_in}"]
-            _run(shuffle_cmd, debug)
+            run_cmd(shuffle_cmd, debug)
 
             cmd = ["bbduk.sh", MEM, f"t={cpus}", "hdist=1", "k=27", "overwrite=true", f"in={interleaved_in}", "interleaved=true", f"out={interleaved_out}"]
             cmd.extend([f"ref={','.join(refmatch_bbduk)}"])
-            _run(cmd, debug)
+            run_cmd(cmd, debug)
 
             reformat_cmd = ["reformat.sh", f"in={interleaved_out}", f"out1={clean_reads}_1.fastq.gz", f"out2={clean_reads}_2.fastq.gz"]
-            _run(reformat_cmd, debug)
+            run_cmd(reformat_cmd, debug)
         else:
             cmd = ["bbduk.sh", MEM, f"t={cpus}", "hdist=1", "k=27", "overwrite=true"]
             cmd.extend([f"in={forReads}", f"out={clean_reads}_U.fastq.gz"])
             leftcleanfname = f"{clean_reads}_U.fastq.gz"
             cmd.extend([f"ref={','.join(refmatch_bbduk)}"])
             # cmd.extend(['prealloc','qhdist=1'])
-            _run(cmd, debug)
+            run_cmd(cmd, debug)
 
         _cleanup_workdir(workdir, debug, custom_workdir)
 
@@ -214,7 +213,7 @@ def run(
             elif forReads:
                 bowtie_cmd = bowtie_cmd + ["-U", forReads]
 
-            align_to_sorted_bam(bowtie_cmd, alignBAM, bamthreads, cwd=workdir, stderr=_stderr_for(debug))
+            align_to_sorted_bam(bowtie_cmd, alignBAM, bamthreads, cwd=workdir, debug=debug)
 
     elif aligner == "bwa":
         # likely less accurate than bbduk so may not be used
@@ -226,7 +225,7 @@ def run(
             if revReads:
                 bwa_cmd.append(revReads)
 
-            align_to_sorted_bam(bwa_cmd, alignBAM, bamthreads, cwd=workdir, stderr=_stderr_for(debug))
+            align_to_sorted_bam(bwa_cmd, alignBAM, bamthreads, cwd=workdir, debug=debug)
 
     elif aligner == "minimap2":
         # likely not used but may be useful for pacbio/nanopore?
@@ -237,7 +236,7 @@ def run(
             if revReads:
                 minimap2_cmd.append(revReads)
 
-            align_to_sorted_bam(minimap2_cmd, alignBAM, bamthreads, cwd=workdir, stderr=_stderr_for(debug))
+            align_to_sorted_bam(minimap2_cmd, alignBAM, bamthreads, cwd=workdir, debug=debug)
     else:
         status("Must specify bowtie2, bwa, or minimap2 for filtering")
 
@@ -252,7 +251,7 @@ def run(
             samtools_cmd = ["samtools", "fastq", "-f", "12", "-1", clean_reads + "_1.fastq.gz", "-2", clean_reads + "_2.fastq.gz", alignBAM]
         elif forReads:
             samtools_cmd = ["samtools", "fastq", "-f", "4", "-1", clean_reads + ".fastq.gz", alignBAM]
-        _run(samtools_cmd, debug)
+        run_cmd(samtools_cmd, debug)
         _cleanup_workdir(workdir, debug, custom_workdir)
 
         if revReads:
@@ -265,23 +264,11 @@ def run(
                 status(f"Your next command might be:\n\tAAFTF assemble -l {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
 
 
-def _stderr_for(debug):
-    """Return the stderr= value to use for a subprocess call: inherited when debugging, else silenced."""
-    return None if debug else subprocess.DEVNULL
-
-
-def _run(cmd, debug, suppress_stdout=False):
-    """Print then run a command, showing stderr (and optionally stdout) only in debug mode."""
-    printCMD(cmd)
-    stdout = subprocess.DEVNULL if (suppress_stdout and not debug) else None
-    subprocess.run(cmd, stderr=_stderr_for(debug), stdout=stdout)
-
-
 def _rebuild_index_if_stale(marker_file, contamdb, build_cmd, debug):
     """(Re)build an aligner index if its marker file is missing or older than contamdb."""
     marker = Path(marker_file)
     if not marker.exists() or marker.stat().st_ctime < Path(contamdb).stat().st_ctime:
-        _run(build_cmd, debug, suppress_stdout=True)
+        run_cmd(build_cmd, debug, quiet_stdout=True)
 
 
 def _cleanup_workdir(workdir, debug, custom_workdir):

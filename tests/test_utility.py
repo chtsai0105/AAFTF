@@ -19,6 +19,7 @@ from AAFTF.utility import (
     countfastq,
     fastastats,
     filter_fasta,
+    run_cmd,
     samtools_sort_cmd,
     softwrap,
     write_fasta,
@@ -270,7 +271,7 @@ class TestAlignToSortedBam:
         sub = tmp_path / "work"
         sub.mkdir()
         (sub / "in.sam").write_text(_SAM)
-        align_to_sorted_bam(["cat", "in.sam"], "out.bam", cwd=str(sub), stderr=subprocess.DEVNULL)
+        align_to_sorted_bam(["cat", "in.sam"], "out.bam", cwd=str(sub))
         assert (tmp_path / "out.bam").stat().st_size > 0
         assert (tmp_path / "out.bam.bai").exists()
         assert not (sub / "out.bam").exists()
@@ -278,12 +279,36 @@ class TestAlignToSortedBam:
     def test_bam_read_count_ignores_secondary_and_supplementary(self, tmp_path):
         (tmp_path / "in.sam").write_text(_SAM_MIXED)
         bam = tmp_path / "out.bam"
-        align_to_sorted_bam(["cat", str(tmp_path / "in.sam")], str(bam), stderr=subprocess.DEVNULL)
+        align_to_sorted_bam(["cat", str(tmp_path / "in.sam")], str(bam))
         assert bam_read_count(str(bam)) == (1, 1)
 
     def test_failing_aligner_exits_and_removes_partial_bam(self, tmp_path):
         bam = tmp_path / "out.bam"
         with pytest.raises(SystemExit) as exc:
-            align_to_sorted_bam(["false"], str(bam), stderr=subprocess.DEVNULL)
+            align_to_sorted_bam(["false"], str(bam))
         assert exc.value.code == 1
         assert not bam.exists()
+
+
+class TestRunCmd:
+    def test_prints_and_returns_result(self, capsys):
+        result = run_cmd(["true"])
+        assert result.returncode == 0
+        assert "true" in capsys.readouterr().out
+
+    def test_stderr_hidden_unless_debug(self, capfd):
+        run_cmd(["sh", "-c", "echo oops >&2"])
+        assert "oops" not in capfd.readouterr().err
+        run_cmd(["sh", "-c", "echo oops >&2"], debug=True)
+        assert "oops" in capfd.readouterr().err
+
+    def test_quiet_stdout(self, capfd):
+        run_cmd(["echo", "hello"], quiet_stdout=True)
+        # only the printed "CMD: echo hello" line should appear, not echo's own output
+        assert "hello" not in capfd.readouterr().out.splitlines()
+
+    def test_stdout_to_file(self, tmp_path):
+        out = tmp_path / "out.txt"
+        with open(out, "w") as fh:
+            run_cmd(["echo", "hello"], stdout=fh)
+        assert out.read_text() == "hello\n"

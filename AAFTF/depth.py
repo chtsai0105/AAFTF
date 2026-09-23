@@ -34,7 +34,7 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, checkfile, countfastq, printCMD, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, checkfile, countfastq, printCMD, run_cmd, status
 
 # ---------------------------------------------------------------------------
 # Constants for quantized coverage classes
@@ -360,8 +360,6 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
         type was not provided.  bam_combined is the single BAM to use for
         mosdepth (merged when both types are present).
     """
-    stderr_dest = None if debug else subprocess.DEVNULL
-
     bam_illumina = None
     bam_longreads = None
 
@@ -373,8 +371,7 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
             genome_local = str(Path(workdir, Path(genome).name))
             shutil.copyfile(genome, genome_local)
             bwa_index_cmd = ["bwa", "index", genome_local]
-            printCMD(bwa_index_cmd)
-            ret = subprocess.run(bwa_index_cmd, stderr=stderr_dest)
+            ret = run_cmd(bwa_index_cmd, debug)
             if ret.returncode != 0:
                 status("ERROR: bwa index failed")
                 sys.exit(1)
@@ -387,13 +384,13 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
             if reads_right:
                 map_cmd.append(reads_right)
 
-        align_to_sorted_bam(map_cmd, bam_illumina, cpus, stderr=stderr_dest)
+        align_to_sorted_bam(map_cmd, bam_illumina, cpus, debug=debug)
 
     # --- Long reads ---
     if longreads:
         bam_longreads = str(Path(workdir, "longreads.sorted.bam"))
         map_cmd = ["minimap2", "-ax", longread_preset, "-t", str(cpus), genome, longreads]
-        align_to_sorted_bam(map_cmd, bam_longreads, cpus, stderr=stderr_dest)
+        align_to_sorted_bam(map_cmd, bam_longreads, cpus, debug=debug)
 
     # --- Combine ---
     if bam_illumina and bam_longreads:
@@ -408,9 +405,8 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
             bam_illumina,
             bam_longreads,
         ]
-        printCMD(merge_cmd)
-        subprocess.run(merge_cmd, stderr=None if debug else subprocess.DEVNULL)
-        subprocess.run(["samtools", "index", bam_combined], stderr=None if debug else subprocess.DEVNULL)
+        run_cmd(merge_cmd, debug)
+        run_cmd(["samtools", "index", bam_combined], debug)
     elif bam_illumina:
         bam_combined = bam_illumina
     else:
@@ -428,11 +424,9 @@ def run_flagstat(bam_file):
     Returns:
         String containing the flagstat output lines.
     """
-    result = subprocess.run(
-        ["samtools", "flagstat", bam_file],
-        capture_output=True,
-        text=True,
-    )
+    cmd = ["samtools", "flagstat", bam_file]
+    printCMD(cmd)
+    result = subprocess.run(cmd, capture_output=True, text=True)
     return result.stdout
 
 
@@ -468,8 +462,7 @@ def run_mosdepth(bam_file, workdir, cpus, labels=None, quantize_str=_DEFAULT_QUA
         cmd += ["--quantize", quantize_str]
         quantized_bed = mosdepth_prefix.with_name(mosdepth_prefix.name + ".quantized.bed.gz")
     cmd += [str(mosdepth_prefix), str(Path(bam_file).resolve())]
-    printCMD(cmd)
-    subprocess.run(cmd, stderr=None if debug else subprocess.DEVNULL, env=run_env)
+    run_cmd(cmd, debug, env=run_env)
     summary_file = mosdepth_prefix.with_name(mosdepth_prefix.name + ".mosdepth.summary.txt")
     return summary_file, quantized_bed
 

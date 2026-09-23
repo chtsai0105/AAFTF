@@ -2,7 +2,6 @@
 
 import os
 import shutil
-import subprocess
 import sys
 import urllib
 import uuid
@@ -11,7 +10,7 @@ from pathlib import Path
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, calc_nx, checkfile, execute, fastastats, filter_fasta, printCMD, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, calc_nx, checkfile, execute, fastastats, filter_fasta, printCMD, run_cmd, status
 
 
 # logging - we may need to think about whether this has
@@ -93,8 +92,7 @@ def run(
     sour_sketch = Path(assembly_working).name + ".sig"
 
     sour_compute = ["sourmash", "compute", "-k", kmer, "--scaled=1000", "--singleton", assembly_working]
-    printCMD(sour_compute)
-    subprocess.run(sour_compute, cwd=workdir, stderr=subprocess.DEVNULL)
+    run_cmd(sour_compute, debug, cwd=workdir)
     sour_classify = ["sourmash", "lca", "classify", "--db", SOUR, "--query", sour_sketch]
     printCMD(sour_classify)
     # output csv: ID,status,superkingdom,phylum,class,order,family,genus,species,strain
@@ -143,8 +141,7 @@ def run(
             # index
             bwa_index = ["bwa", "index", Path(sourTax).name]
             status("Building BWA index")
-            printCMD(bwa_index)
-            subprocess.run(bwa_index, cwd=workdir, stderr=subprocess.DEVNULL)
+            run_cmd(bwa_index, debug, cwd=workdir)
             # mapped reads to assembly using BWA
             bwa_cmd = [
                 "bwa",
@@ -158,7 +155,7 @@ def run(
                 bwa_cmd.append(revReads)
 
             status("Aligning reads to assembly with BWA")
-            align_to_sorted_bam(bwa_cmd, str(Path(workdir, blobBAM)), bamthreads, cwd=workdir, stderr=subprocess.DEVNULL)
+            align_to_sorted_bam(bwa_cmd, str(Path(workdir, blobBAM)), bamthreads, cwd=workdir, debug=debug)
 
         # now calculate coverage from BAM file
         status("Calculating read coverage per contig")

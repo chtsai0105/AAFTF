@@ -16,10 +16,9 @@ import sys
 import urllib.request
 import uuid
 from pathlib import Path
-from subprocess import DEVNULL, call
 
 from AAFTF.resources import FCSADAPTOR
-from AAFTF.utility import SafeRemove, printCMD, status
+from AAFTF.utility import SafeRemove, run_cmd, status
 
 
 def run(
@@ -88,14 +87,7 @@ def run(
             sys.exit(1)
 
     cmd = [fcsexe, "--fasta-input", infile, "--output-dir", workdir, tax, "--container-engine", containerengine, "--image", image]
-    printCMD(cmd)
-    try:
-        if debug:
-            call(cmd)
-        else:
-            call(cmd, stderr=DEVNULL)
-    except NameError:
-        print(f"error in calling executable {cmd}")
+    run_cmd(cmd, debug)
 
     Path(workdir, "cleaned_sequences").mkdir()
     cleanresult = str(Path(workdir, "cleaned_sequences", infilename))

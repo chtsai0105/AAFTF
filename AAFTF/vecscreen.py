@@ -279,6 +279,7 @@ def _run_vecscreen_rounds(eukCleaned, workdir, prefix, cpus, stringency, contigs
                 "-out",
                 report,
             ]
+            printCMD(cmd)
             call(cmd)
         status(f"Parsing VecScreen round {rnd + 1}: {filepref} for {report}")
 

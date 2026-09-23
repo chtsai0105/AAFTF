@@ -190,7 +190,7 @@ def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None,
     return cmd
 
 
-def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, stderr=None):
+def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, debug=False):
     """Pipe an aligner's SAM output straight into ``samtools sort``.
 
     Args:
@@ -199,7 +199,7 @@ def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, stderr=None):
             (not ``cwd``).
         threads: samtools sort threads.
         cwd: Working directory for both commands.
-        stderr: stderr destination for both commands (e.g. subprocess.DEVNULL).
+        debug: Show both commands' stderr (hidden otherwise).
 
     The BAM is indexed (``<bam_out>.bai``) as it is written. Exits the program
     if either command fails, removing any partial BAM/index so a rerun does not
@@ -207,6 +207,7 @@ def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, stderr=None):
     """
     bam_path = Path(bam_out).resolve()
     sort_cmd = samtools_sort_cmd("-", str(bam_path), threads, write_index=True)
+    stderr = None if debug else subprocess.DEVNULL
     printCMD(align_cmd)
     printCMD(sort_cmd)
     p1 = subprocess.Popen(align_cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=stderr)
@@ -262,6 +263,26 @@ def printCMD(cmd):
     print(wrapper.fill(stringcmd))
 
 
+def run_cmd(cmd, debug=False, cwd=None, stdout=None, env=None, quiet_stdout=False):
+    """Print a command, then run it with stderr hidden unless ``debug``.
+
+    Args:
+        cmd: Command list.
+        debug: Show the command's stderr (and stdout, if ``quiet_stdout``).
+        cwd: Working directory.
+        stdout: stdout destination (e.g. an open file); inherited when None.
+        env: Environment for the command; inherited when None.
+        quiet_stdout: Also hide stdout unless ``debug``.
+
+    Returns:
+        subprocess.CompletedProcess.
+    """
+    printCMD(cmd)
+    if quiet_stdout and not debug:
+        stdout = subprocess.DEVNULL
+    return subprocess.run(cmd, cwd=cwd, stdout=stdout, stderr=None if debug else subprocess.DEVNULL, env=env)
+
+
 def status(string):
     """Print out status."""
     print("\033[92m[{:}]\033[00m {:}".format(datetime.datetime.now().strftime("%b %d %I:%M %p"), string))
@@ -287,10 +308,7 @@ def Fzip_inplace(input, cpus):
         cmd = ["pigz", "-f", "-p", str(cpus), input]
     else:
         cmd = ["gzip", "-f", input]
-    try:
-        runSubprocess(cmd, ".", log)
-    except NameError:
-        subprocess.call(cmd)
+    run_cmd(cmd)
 
 
 def SafeRemove(input):

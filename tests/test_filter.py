@@ -209,7 +209,7 @@ class TestFilterContamdbCreation:
 
         with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
             with patch("AAFTF.filter.countfastq", return_value=100):
-                with patch("AAFTF.filter.subprocess.run"):
+                with patch("AAFTF.utility.subprocess.run"):
                     run(**vars(args))
 
         contamdb = workdir / "contamdb.fa"
@@ -226,7 +226,7 @@ class TestFilterContamdbCreation:
 
         with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
             with patch("AAFTF.filter.countfastq", return_value=100):
-                with patch("AAFTF.filter.subprocess.run"):
+                with patch("AAFTF.utility.subprocess.run"):
                     run(**vars(args))
 
         contamdb = Path(args.workdir) / "contamdb.fa"
@@ -242,7 +242,7 @@ class TestFilterContamdbCreation:
 
         with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
             with patch("AAFTF.filter.countfastq", return_value=100):
-                with patch("AAFTF.filter.subprocess.run"):
+                with patch("AAFTF.utility.subprocess.run"):
                     run(**vars(args))
 
         contamdb = Path(args.workdir) / "contamdb.fa"
@@ -264,7 +264,7 @@ def _run_filter_bbduk(tmp_path, left, right=None, **extra):
 
     with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
         with patch("AAFTF.filter.countfastq", return_value=100):
-            with patch("AAFTF.filter.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+            with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
                 run(**vars(args))
     return cmds, args
 
@@ -360,8 +360,8 @@ def _run_filter_bwa(tmp_path, left, right=None, **extra):
 
     with patch("AAFTF.filter.urllib.request.urlretrieve", side_effect=_mock_urlretrieve):
         with patch("AAFTF.filter.countfastq", return_value=100):
-            with patch("AAFTF.filter.subprocess.run", side_effect=_fake_run):
-                with patch("AAFTF.filter.subprocess.Popen", side_effect=lambda cmd, **kw: (popen_cmds.append(cmd), mock_proc)[1]):
+            with patch("AAFTF.utility.subprocess.run", side_effect=_fake_run):
+                with patch("AAFTF.utility.subprocess.Popen", side_effect=lambda cmd, **kw: (popen_cmds.append(cmd), mock_proc)[1]):
                     with patch("AAFTF.filter.bam_read_count", return_value=(50, 50)):
                         with patch("AAFTF.filter.SafeRemove"):
                             run(**vars(args))

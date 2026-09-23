@@ -209,7 +209,7 @@ def _run_spades(tmp_path, left, right=None, create_output=True, **extra):
 
     from AAFTF.assemble import run_spades
 
-    with patch("AAFTF.assemble.subprocess.run", side_effect=_fake_run):
+    with patch("AAFTF.utility.subprocess.run", side_effect=_fake_run):
         run_spades(**vars(args))
     return cmds, args
 
@@ -306,7 +306,7 @@ def _run_megahit(tmp_path, left, right=None, create_output=True, **extra):
 
     from AAFTF.assemble import run_megahit
 
-    with patch("AAFTF.assemble.subprocess.run", side_effect=_fake_run):
+    with patch("AAFTF.utility.subprocess.run", side_effect=_fake_run):
         run_megahit(**vars(args))
     return cmds, args
 
@@ -362,7 +362,7 @@ class TestAssembleRunUnicycler:
 
         from AAFTF.assemble import run_unicycler
 
-        with patch("AAFTF.assemble.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
             run_unicycler(**vars(args))
 
         assert "--short1" in cmds[0]
@@ -375,7 +375,7 @@ class TestAssembleRunUnicycler:
 
         from AAFTF.assemble import run_unicycler
 
-        with patch("AAFTF.assemble.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
             run_unicycler(**vars(args))
 
         assert "--unpaired" in cmds[0]
@@ -387,7 +387,7 @@ class TestAssembleRunUnicycler:
 
         from AAFTF.assemble import run_unicycler
 
-        with patch("AAFTF.assemble.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
             run_unicycler(**vars(args))
 
         assert cmds[0][0] == "unicycler"
@@ -403,19 +403,19 @@ class TestAssembleUnimplementedMethods:
         args = _make_asm_args(tmp_path, method="masurca")
         from AAFTF.assemble import run
 
-        with patch("AAFTF.assemble.subprocess.run"):
+        with patch("AAFTF.utility.subprocess.run"):
             run(**vars(args))  # should not raise
 
     def test_nextdenovo_no_crash(self, tmp_path):
         args = _make_asm_args(tmp_path, method="nextdenovo")
         from AAFTF.assemble import run
 
-        with patch("AAFTF.assemble.subprocess.run"):
+        with patch("AAFTF.utility.subprocess.run"):
             run(**vars(args))
 
     def test_unknown_method_no_crash(self, tmp_path):
         args = _make_asm_args(tmp_path, method="unknownasm")
         from AAFTF.assemble import run
 
-        with patch("AAFTF.assemble.subprocess.run"):
+        with patch("AAFTF.utility.subprocess.run"):
             run(**vars(args))
