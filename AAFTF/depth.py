@@ -388,14 +388,12 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
                 map_cmd.append(reads_right)
 
         align_to_sorted_bam(map_cmd, bam_illumina, cpus, stderr=stderr_dest)
-        subprocess.run(["samtools", "index", bam_illumina], stderr=stderr_dest)
 
     # --- Long reads ---
     if longreads:
         bam_longreads = str(Path(workdir, "longreads.sorted.bam"))
         map_cmd = ["minimap2", "-ax", longread_preset, "-t", str(cpus), genome, longreads]
         align_to_sorted_bam(map_cmd, bam_longreads, cpus, stderr=stderr_dest)
-        subprocess.run(["samtools", "index", bam_longreads], stderr=stderr_dest)
 
     # --- Combine ---
     if bam_illumina and bam_longreads:

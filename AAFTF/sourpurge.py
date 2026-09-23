@@ -160,8 +160,6 @@ def run(
             status("Aligning reads to assembly with BWA")
             align_to_sorted_bam(bwa_cmd, str(Path(workdir, blobBAM)), bamthreads, cwd=workdir, stderr=subprocess.DEVNULL)
 
-            subprocess.run(["samtools", "index", str(Path(workdir, blobBAM))], stderr=subprocess.DEVNULL)
-
         # now calculate coverage from BAM file
         status("Calculating read coverage per contig")
         FastaBed = str(Path(workdir, "assembly.bed"))

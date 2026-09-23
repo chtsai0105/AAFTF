@@ -14,6 +14,7 @@ from AAFTF.utility import (
     RevComp,
     SafeRemove,
     align_to_sorted_bam,
+    bam_read_count,
     calcN50,
     checkfile,
     countfastq,
@@ -281,8 +282,14 @@ class TestSamtoolsSortCmd:
         cmd = samtools_sort_cmd("in.sam", "out.bam", 2, memory_per_thread="1G", tmp_prefix="tmp")
         assert cmd == ["samtools", "sort", "-@", "2", "-m", "1G", "-o", "out.bam", "-T", "tmp", "in.sam"]
 
+    def test_write_index_requests_bai(self):
+        cmd = samtools_sort_cmd("-", "out.bam", 1, write_index=True)
+        assert cmd == ["samtools", "sort", "-@", "1", "--write-index", "-o", "out.bam##idx##out.bam.bai", "-"]
+
 
 _SAM = "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nr1\t0\tc1\t10\t60\t4M\t*\t0\t0\tACGT\tIIII\n"
+# 2 reads: r1 mapped (plus a supplementary and a secondary record), r2 unmapped
+_SAM_MIXED = _SAM + "r1\t2048\tc1\t50\t60\t4M\t*\t0\t0\tACGT\tIIII\nr1\t256\tc1\t30\t0\t4M\t*\t0\t0\tACGT\tIIII\nr2\t4\t*\t0\t0\t*\t*\t0\t0\tACGT\tIIII\n"
 
 
 @pytest.mark.skipif(shutil.which("samtools") is None, reason="samtools not installed")
@@ -294,7 +301,14 @@ class TestAlignToSortedBam:
         (sub / "in.sam").write_text(_SAM)
         align_to_sorted_bam(["cat", "in.sam"], "out.bam", cwd=str(sub), stderr=subprocess.DEVNULL)
         assert (tmp_path / "out.bam").stat().st_size > 0
+        assert (tmp_path / "out.bam.bai").exists()
         assert not (sub / "out.bam").exists()
+
+    def test_bam_read_count_ignores_secondary_and_supplementary(self, tmp_path):
+        (tmp_path / "in.sam").write_text(_SAM_MIXED)
+        bam = tmp_path / "out.bam"
+        align_to_sorted_bam(["cat", str(tmp_path / "in.sam")], str(bam), stderr=subprocess.DEVNULL)
+        assert bam_read_count(str(bam)) == (1, 1)
 
     def test_failing_aligner_exits_and_removes_partial_bam(self, tmp_path):
         bam = tmp_path / "out.bam"

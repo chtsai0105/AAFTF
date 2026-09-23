@@ -243,7 +243,6 @@ def run(
 
     if Path(alignBAM).is_file():
         # display mapping stats in terminal
-        _run(["samtools", "index", alignBAM], debug)
         mapped, unmapped = bam_read_count(alignBAM)
         status(f"{mapped:,} reads mapped to contamination database")
         status(f"{unmapped:,} reads unmapped and writing to file")

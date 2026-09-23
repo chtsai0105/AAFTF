@@ -162,11 +162,11 @@ def write_fasta(fh, header, seq, wrap=60):
 
 
 # ---------------------------------------------------------------------------
-# samtools helpers (samtools >= 1.3 required; pixi pins >= 1.24)
+# samtools helpers (samtools >= 1.13 required; pixi pins >= 1.24)
 # ---------------------------------------------------------------------------
 
 
-def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None, tmp_prefix=None):
+def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None, tmp_prefix=None, write_index=False):
     """Return a ``samtools sort`` command list.
 
     Args:
@@ -175,11 +175,15 @@ def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None,
         threads: Number of sort threads.
         memory_per_thread: Memory per thread string, e.g. ``'1G'``.
         tmp_prefix: Prefix for temporary sort files (passed as -T).
+        write_index: Also write ``<output_bam>.bai`` while sorting.
     """
     cmd = ["samtools", "sort", "-@", str(threads)]
     if memory_per_thread:
         cmd += ["-m", str(memory_per_thread)]
-    cmd += ["-o", output_bam]
+    if write_index:
+        cmd += ["--write-index", "-o", f"{output_bam}##idx##{output_bam}.bai"]
+    else:
+        cmd += ["-o", output_bam]
     if tmp_prefix:
         cmd += ["-T", tmp_prefix]
     cmd.append(input_file)
@@ -197,11 +201,12 @@ def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, stderr=None):
         cwd: Working directory for both commands.
         stderr: stderr destination for both commands (e.g. subprocess.DEVNULL).
 
-    Exits the program if either command fails, removing any partial BAM so a
-    rerun does not mistake it for a finished alignment.
+    The BAM is indexed (``<bam_out>.bai``) as it is written. Exits the program
+    if either command fails, removing any partial BAM/index so a rerun does not
+    mistake it for a finished alignment.
     """
     bam_path = Path(bam_out).resolve()
-    sort_cmd = samtools_sort_cmd("-", str(bam_path), threads)
+    sort_cmd = samtools_sort_cmd("-", str(bam_path), threads, write_index=True)
     printCMD(align_cmd)
     printCMD(sort_cmd)
     p1 = subprocess.Popen(align_cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=stderr)
@@ -210,20 +215,23 @@ def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, stderr=None):
     p2.communicate()
     if p1.wait() != 0 or p2.returncode != 0:
         bam_path.unlink(missing_ok=True)
+        Path(f"{bam_path}.bai").unlink(missing_ok=True)
         status(f"ERROR: {align_cmd[0]} | samtools sort failed for {bam_out}")
         sys.exit(1)
 
 
 def bam_read_count(bamfile):
-    """Count the number of reads in a BAM file using samtools."""
-    cmd = ["samtools", "idxstats", bamfile]
-    mapped = 0
-    unmapped = 0
-    for line in execute(cmd, "."):
-        rname, rlen, nm, nu = line.rstrip().split()
-        mapped += int(nm)
-        unmapped += int(nu)
-    return (mapped, unmapped)
+    """Return (mapped, unmapped) counts of reads in a BAM file.
+
+    Uses ``samtools flagstat`` primary counts, so secondary and supplementary
+    alignments are not counted as extra reads.
+    """
+    stats = {}
+    for line in execute(["samtools", "flagstat", "-O", "tsv", bamfile], "."):
+        passed, _failed, label = line.rstrip("\n").split("\t")
+        stats[label] = passed
+    primary, mapped = int(stats["primary"]), int(stats["primary mapped"])
+    return mapped, primary - mapped
 
 
 def RevComp(s):

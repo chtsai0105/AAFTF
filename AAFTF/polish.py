@@ -221,7 +221,6 @@ def run_nextpolish2(infile, forReads, revReads, longreads, cpus, workdir, polish
     hifi_bam = "hifi.map.bam"
     minimap_cmd = ["minimap2", "-ax", "map-hifi", "-t", str(cpus), asm_name, longreads]
     align_to_sorted_bam(minimap_cmd, str(Path(workdir, hifi_bam)), cpus, cwd=workdir, stderr=stderr_dest)
-    subprocess.run(["samtools", "index", hifi_bam], cwd=workdir, stderr=stderr_dest)
 
     out_fasta = "nextpolish2_corrected.fasta"
     nextpolish2_cmd = ["nextPolish2", "-t", str(cpus), "-o", out_fasta, hifi_bam, asm_name, yak_db]
