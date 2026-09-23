@@ -12,7 +12,7 @@ from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from AAFTF.utility import SafeRemove, calcN50, execute, status, write_fasta
+from AAFTF.utility import SafeRemove, calc_nx, execute, status, write_fasta
 
 
 def run(
@@ -77,8 +77,8 @@ def run(
         for Header, Seq in SimpleFastaParser(infile):
             fasta_lengths.append(len(Seq))
             AllSeqs.setdefault(Header, len(Seq))
-    n50 = calcN50(fasta_lengths, num=0.50)
-    n75 = calcN50(fasta_lengths, num=0.75)
+    n50, _ = calc_nx(fasta_lengths, 0.5)
+    n75, _ = calc_nx(fasta_lengths, 0.75)
     status(f"Assembly is {len(fasta_lengths):,} contigs; {sum(fasta_lengths):,} bp; N50 is {n50:,} bp; N75 is {n75:,} bp")
 
     # get list of tuples of sequences sorted by size (shortest --> longest)

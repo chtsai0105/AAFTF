@@ -14,7 +14,7 @@ from AAFTF.utility import (
     SafeRemove,
     align_to_sorted_bam,
     bam_read_count,
-    calcN50,
+    calc_nx,
     checkfile,
     countfastq,
     fastastats,
@@ -29,36 +29,36 @@ pytestmark = pytest.mark.unit
 
 
 # ---------------------------------------------------------------------------
-# calcN50
+# calc_nx
 # ---------------------------------------------------------------------------
 
 
-class TestCalcN50:
-    """calcN50(lengths) uses the default num=0.5 for N50."""
+class TestCalcNx:
+    # lengths [20, 80, 150] → total=250; 50% = 125 → 150 alone covers it
+    def test_n50_l50(self):
+        assert calc_nx([20, 80, 150]) == (150, 1)
 
-    # lengths [20, 80, 150] → total=250, 50 %=125
-    # cumsum from largest: 150 ≥ 125 → N50=150
-    def test_n50_basic(self):
-        assert calcN50([20, 80, 150]) == 150
-
-    # 90 %=225 → cumsum 150 < 225, 150+80=230 ≥ 225 → N90=80
-    def test_n90(self):
-        assert calcN50([20, 80, 150], num=0.9) == 80
+    # 90% = 225 → 150 < 225, 150+80 = 230 ≥ 225
+    def test_n90_l90(self):
+        assert calc_nx([20, 80, 150], 0.9) == (80, 2)
 
     def test_single_contig(self):
-        assert calcN50([500]) == 500
+        assert calc_nx([500]) == (500, 1)
 
     def test_equal_contigs(self):
-        # [100]*4 → total=400, 50 %=200; cumsum: 100 < 200, 200 ≥ 200 → N50=100
-        assert calcN50([100, 100, 100, 100]) == 100
-
-    def test_two_contigs(self):
-        # [300, 100] → total=400, 50%=200; cumsum: 300 ≥ 200 → N50=300
-        assert calcN50([300, 100]) == 300
+        # [100]*4 → total=400, 50% = 200 → reached at the 2nd contig
+        assert calc_nx([100, 100, 100, 100]) == (100, 2)
 
     def test_input_order_irrelevant(self):
-        # Function sorts internally
-        assert calcN50([150, 20, 80]) == calcN50([20, 80, 150])
+        assert calc_nx([150, 20, 80]) == calc_nx([20, 80, 150])
+
+    def test_input_not_modified(self):
+        lengths = [20, 150, 80]
+        calc_nx(lengths)
+        assert lengths == [20, 150, 80]
+
+    def test_empty(self):
+        assert calc_nx([]) == (0, 0)
 
 
 # ---------------------------------------------------------------------------

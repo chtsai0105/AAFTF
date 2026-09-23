@@ -238,17 +238,20 @@ def bam_read_count(bamfile):
 COMPLEMENT = str.maketrans("ACGTURYKMSWBDHVNXacgturykmswbdhvnx", "TGCAAYRMKSWVBDHNXtgcaayrmkswvbdhnx")
 
 
-def calcN50(lengths, num=0.5):
-    """Calculate the N50 from a set of integers."""
-    lengths.sort()
-    total_len = sum(lengths)
-    n50 = 0
-    cumulsum = 0
-    for n in reversed(lengths):
-        cumulsum += n
-        if n50 == 0 and cumulsum >= total_len * num:
-            n50 = n
-    return n50
+def calc_nx(lengths, fraction=0.5):
+    """Return (NX, LX) for a set of contig lengths.
+
+    NX is the length of the contig at which the longest contigs first cover
+    ``fraction`` of the total length; LX is how many contigs that takes.
+    Returns (0, 0) for an empty input. The input is not modified.
+    """
+    target = sum(lengths) * fraction
+    cumulative = 0
+    for count, length in enumerate(sorted(lengths, reverse=True), 1):
+        cumulative += length
+        if cumulative >= target:
+            return length, count
+    return 0, 0
 
 
 def printCMD(cmd):

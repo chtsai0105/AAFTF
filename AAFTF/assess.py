@@ -10,7 +10,7 @@ from pathlib import Path
 
 from Bio import SeqIO
 
-from AAFTF.utility import COMPLEMENT, status
+from AAFTF.utility import COMPLEMENT, calc_nx, status
 
 
 def run(input, report=None, telomere_monomer="TAAC{3,5}", telomere_n_repeat=2, telomere_window=200, **kwargs):
@@ -62,22 +62,8 @@ def genome_asm_stats(fasta_file, output_handle, telomere_repeat, n_minimum, telo
     lengths.sort()
     total_len = sum(lengths)
     GC = 100.0 * (GC / total_len)
-    l50 = 0
-    n50 = 0
-    l90 = 0
-    n90 = 0
-    cumulsum = 0
-    i = 1
-    for n in reversed(lengths):
-        cumulsum += n
-        if n50 == 0 and cumulsum >= total_len * 0.5:
-            n50 = n
-            l50 = i
-        if n90 == 0 and cumulsum >= total_len * 0.9:
-            n90 = n
-            l90 = i
-
-        i += 1
+    n50, l50 = calc_nx(lengths, 0.5)
+    n90, l90 = calc_nx(lengths, 0.9)
     report = f"Assembly statistics for: {fasta_file}\n"
     report += f"{'CONTIG COUNT':>15}  =  {len(lengths)}\n"
     report += f"{'TOTAL LENGTH':>15}  =  {total_len}\n"

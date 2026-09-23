@@ -11,7 +11,7 @@ from pathlib import Path
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, calcN50, checkfile, execute, fastastats, filter_fasta, printCMD, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, calc_nx, checkfile, execute, fastastats, filter_fasta, printCMD, status
 
 
 # logging - we may need to think about whether this has
@@ -170,7 +170,7 @@ def run(
                     bedout.write(f"{record.id}\t{0}\t{len(record.seq)}\n")
                     lengths.append(len(record.seq))
 
-        N50 = calcN50(lengths)
+        N50, _ = calc_nx(lengths)
         Coverage = {}
         coverageBed = str(Path(workdir, "coverage.bed"))
         cov_cmd = ["samtools", "bedcov", Path(FastaBed).name, blobBAM]
