@@ -1,5 +1,6 @@
 """Run the sourmash fast matching kmer tool to look for obvious contaminants."""
 
+import logging
 import shutil
 import sys
 from pathlib import Path
@@ -7,7 +8,9 @@ from pathlib import Path
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import aaftf_db_dir, align_to_sorted_bam, calc_nx, checkfile, cleanup_workdir, download_file, execute, fastastats, filter_fasta, make_workdir, next_step_name, run_cmd, status
+from AAFTF.utility import aaftf_db_dir, align_to_sorted_bam, calc_nx, checkfile, cleanup_workdir, download_file, execute, fastastats, filter_fasta, make_workdir, next_step_name, run_cmd
+
+logger = logging.getLogger(__name__)
 
 
 # logging - we may need to think about whether this has
@@ -41,7 +44,7 @@ def run(
     if right:
         revReads = str(Path(right).resolve())
     if not forReads:
-        status("Unable to located FASTQ raw reads, low coverage will be skipped. Provide -l,--left (and if paired -r,--right) to enable low coverage filtering.")
+        logger.info("Unable to located FASTQ raw reads, low coverage will be skipped. Provide -l,--left (and if paired -r,--right) to enable low coverage filtering.")
         # sys.exit(1)
 
     # parse database locations
@@ -55,13 +58,13 @@ def run(
 
         DB = aaftf_db_dir()
         if not DB:
-            status(f"$AAFTF_DB/{dbfile} not found, pass --sourdb")
+            logger.info(f"$AAFTF_DB/{dbfile} not found, pass --sourdb")
             sys.exit(1)
         SOUR = str(Path(DB, dbfile))
         try:
             download_file(dburl, SOUR)
         except Exception:
-            status(f"{SOUR} sourmash database download of {dburl} failed. Manually download and rename to {DB}/{dbfile}")
+            logger.info(f"{SOUR} sourmash database download of {dburl} failed. Manually download and rename to {DB}/{dbfile}")
             sys.exit(1)
     else:
         SOUR = str(Path(sourdb).resolve())
@@ -71,10 +74,10 @@ def run(
     blobBAM = "remapped.bam"
     shutil.copyfile(input, str(Path(workdir, assembly_working)))
     numSeqs, assemblySize = fastastats(str(Path(workdir, assembly_working)))
-    status(f"Assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
+    logger.info(f"Assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
 
     # now filter for taxonomy with sourmash lca classify
-    status("Running SourMash to get taxonomy classification for each contig")
+    logger.info("Running SourMash to get taxonomy classification for each contig")
     sour_sketch = Path(assembly_working).name + ".sig"
 
     sour_compute = ["sourmash", "compute", "-k", kmer, "--scaled=1000", "--singleton", assembly_working]
@@ -100,20 +103,20 @@ def run(
                 idx = cols.index("nomatch")
                 Taxonomy[cols[0]] = cols[idx + 1 :]
     UniqueTax = set(UniqueTax)
-    status("Found {:} taxonomic classifications for contigs:\n{:}".format(len(UniqueTax), "\n".join(UniqueTax)))
+    logger.info("Found {:} taxonomic classifications for contigs:\n{:}".format(len(UniqueTax), "\n".join(UniqueTax)))
     if taxonomy:
         sys.exit(1)
     Tax2Drop = []
     for k, v in Taxonomy.items():
         v = [x for x in v if x]  # remove empty items from list
         if debug:
-            status(f"{k}\t{v}")
+            logger.info(f"{k}\t{v}")
         if len(v) > 0:
             if not any(i in v for i in phylum):
                 Tax2Drop.append(k)
 
     # drop contigs from taxonomy before calculating coverage
-    status(f"Dropping {len(Tax2Drop)} contigs from taxonomy screen")
+    logger.info(f"Dropping {len(Tax2Drop)} contigs from taxonomy screen")
     sourTax = str(Path(workdir, "sourmashed-tax-screen.fasta"))
     tax_drop = set(Tax2Drop)
     filter_fasta(str(Path(workdir, assembly_working)), sourTax, lambda seq_id: seq_id not in tax_drop)
@@ -125,7 +128,7 @@ def run(
         if not Path(workdir, blobBAM).is_file():
             # index
             bwa_index = ["bwa", "index", Path(sourTax).name]
-            status("Building BWA index")
+            logger.info("Building BWA index")
             run_cmd(bwa_index, debug, cwd=workdir)
             # mapped reads to assembly using BWA
             bwa_cmd = [
@@ -139,11 +142,11 @@ def run(
             if revReads:
                 bwa_cmd.append(revReads)
 
-            status("Aligning reads to assembly with BWA")
+            logger.info("Aligning reads to assembly with BWA")
             align_to_sorted_bam(bwa_cmd, str(Path(workdir, blobBAM)), bamthreads, cwd=workdir, debug=debug)
 
         # now calculate coverage from BAM file
-        status("Calculating read coverage per contig")
+        logger.info("Calculating read coverage per contig")
         FastaBed = str(Path(workdir, "assembly.bed"))
         lengths = []
         with open(FastaBed, "w") as bedout:
@@ -179,13 +182,13 @@ def run(
         minpct = mincovpct / 100
         # should we make this a variable? 5% was something arbitrary
         min_coverage = float(n50AvgCov * minpct)
-        status(f"Average coverage for N50 contigs is {int(n50AvgCov)}X")
+        logger.info(f"Average coverage for N50 contigs is {int(n50AvgCov)}X")
 
         # Start list of contigs to drop
         for k, v in Coverage.items():
             if v[1] <= min_coverage:
                 Contigs2Drop.append(k)
-        status(f"Found {len(Contigs2Drop):,} contigs with coverage less than {min_coverage:.2f}X ({mincovpct}%)")
+        logger.info(f"Found {len(Contigs2Drop):,} contigs with coverage less than {min_coverage:.2f}X ({mincovpct}%)")
 
     if debug:
         print("Contigs dropped due to coverage: {:}".format(",".join(Contigs2Drop)))
@@ -193,9 +196,9 @@ def run(
 
     DropFinal = Contigs2Drop + Tax2Drop
     DropFinal = set(DropFinal)
-    status(f"Dropping {len(DropFinal):,} total contigs based on taxonomy and coverage")
+    logger.info(f"Dropping {len(DropFinal):,} total contigs based on taxonomy and coverage")
     numSeqs, assemblySize = filter_fasta(sourTax, outfile, lambda seq_id: seq_id not in DropFinal)
-    status(f"Sourpurged assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
+    logger.info(f"Sourpurged assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
     nextOut = next_step_name(outfile, ".rmdup.fasta")
 
     if checkfile(sourmashTSV):
@@ -209,4 +212,4 @@ def run(
     cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
-        status(f"Your next command might be:\n\tAAFTF rmdup -i {outfile} -o {nextOut}\n")
+        logger.info(f"Your next command might be:\nAAFTF rmdup -i {outfile} -o {nextOut}")

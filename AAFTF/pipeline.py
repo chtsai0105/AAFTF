@@ -1,5 +1,6 @@
 """Support pipelining of AAFTF to simplify all-in-on runs."""
 
+import logging
 import sys
 from argparse import Namespace
 
@@ -13,7 +14,9 @@ import AAFTF.sort as aaftf_sort
 import AAFTF.sourpurge as sourpurge
 import AAFTF.trim as trim
 import AAFTF.vecscreen as vecscreen
-from AAFTF.utility import checkfile, getRAM, status
+from AAFTF.utility import checkfile, getRAM
+
+logger = logging.getLogger(__name__)
 
 
 def run(
@@ -57,7 +60,7 @@ def run(
     def check_step_success(output_file, step_name):
         """Check if step completed successfully."""
         if not checkfile(output_file):
-            status(f"AAFTF {step_name} failed")
+            logger.info(f"AAFTF {step_name} failed")
             sys.exit(1)
         return True
 
@@ -68,9 +71,9 @@ def run(
         trim.run(**vars(trim_args))
     else:
         if right:
-            status("AAFTF trim output found: {:} {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
+            logger.info("AAFTF trim output found: {:} {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
         else:
-            status("AAFTF trim output found: {:}".format(basename + "_1P.fastq.gz"))
+            logger.info("AAFTF trim output found: {:}".format(basename + "_1P.fastq.gz"))
     check_step_success(basename + "_1P.fastq.gz", "trim")
 
     # run mitochondrial assembly on bbduk trimmed reads
@@ -92,9 +95,9 @@ def run(
             )
             mito.run(**vars(mito_args))
         else:
-            status("AAFTF mito output: {}".format(basename + ".mito.fasta"))
+            logger.info("AAFTF mito output: {}".format(basename + ".mito.fasta"))
     else:
-        status("AAFTF mito requires PE reads, " + "skipping mitochondrial de novo assembly")
+        logger.info("AAFTF mito requires PE reads, " + "skipping mitochondrial de novo assembly")
 
     # run filtering with bbduk
     if not checkfile(basename + "_filtered_1.fastq.gz"):
@@ -112,9 +115,9 @@ def run(
         aaftf_filter.run(**vars(filter_args))
     else:
         if right:
-            status("AAFTF filter output found: {:} {:}".format(basename + "_filtered_1.fastq.gz", basename + "_filtered_2.fastq.gz"))
+            logger.info("AAFTF filter output found: {:} {:}".format(basename + "_filtered_1.fastq.gz", basename + "_filtered_2.fastq.gz"))
         else:
-            status("AAFTF filter output found: {:}".format(basename + "_filtered_1.fastq.gz"))
+            logger.info("AAFTF filter output found: {:}".format(basename + "_filtered_1.fastq.gz"))
     check_step_success(basename + "_filtered_1.fastq.gz", "filter")
 
     # run assembly with specified method
@@ -136,7 +139,7 @@ def run(
         asm_args = create_namespace(assembleOpts, required_args=asm_extra)
         assemble.run(**vars(asm_args))
     else:
-        status(f"AAFTF assemble output found: {assembly_file}")
+        logger.info(f"AAFTF assemble output found: {assembly_file}")
     check_step_success(assembly_file, "assemble")
 
     # run vecscreen
@@ -146,7 +149,7 @@ def run(
         vec_args = create_namespace(vecOpts, required_args={"percent_id": False, "stringency": "high", "infile": assembly_file, "outfile": vecscreen_file, "pipe": True})
         vecscreen.run(**vars(vec_args))
     else:
-        status(f"AAFTF vecscreen output found: {vecscreen_file}")
+        logger.info(f"AAFTF vecscreen output found: {vecscreen_file}")
     check_step_success(vecscreen_file, "vecscreen")
 
     # run sourmash purge
@@ -168,7 +171,7 @@ def run(
         )
         sourpurge.run(**vars(sour_args))
     else:
-        status(f"AAFTF sourpurge output found: {sourpurge_file}")
+        logger.info(f"AAFTF sourpurge output found: {sourpurge_file}")
     check_step_success(sourpurge_file, "sourpurge")
 
     # run remove duplicates
@@ -178,7 +181,7 @@ def run(
         rmdup_args = create_namespace(rmdupOpts, required_args={"input": sourpurge_file, "out": rmdup_file, "minlen": mincontiglen, "percent_id": 95, "percent_cov": 95, "exhaustive": False, "pipe": True})
         rmdup.run(**vars(rmdup_args))
     else:
-        status(f"AAFTF rmdup output found: {rmdup_file}")
+        logger.info(f"AAFTF rmdup output found: {rmdup_file}")
     check_step_success(rmdup_file, "rmdup")
 
     # run polish to error-correct
@@ -202,7 +205,7 @@ def run(
         )
         polish.run(**vars(polish_args))
     else:
-        status(f"AAFTF polish output found: {polish_file}")
+        logger.info(f"AAFTF polish output found: {polish_file}")
     check_step_success(polish_file, "polish")
 
     # sort and rename
@@ -212,7 +215,7 @@ def run(
         sort_args = create_namespace(sortOpts, required_args={"input": polish_file, "out": final_file, "name": "scaffold", "minlen": mincontiglen, "pipe": True})
         aaftf_sort.run(**vars(sort_args))
     else:
-        status(f"AAFTF sort output found: {final_file}")
+        logger.info(f"AAFTF sort output found: {final_file}")
     check_step_success(final_file, "sort")
 
     # assess the assembly

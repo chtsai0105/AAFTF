@@ -1,10 +1,21 @@
 """Shared pytest fixtures for the AAFTF test suite."""
 
 import gzip
+import logging
 import shutil
 from argparse import Namespace
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _reset_aaftf_logger():
+    """Undo setup_logging() (called by every CLI test via main()) so caplog keeps working in later tests."""
+    yield
+    aaftf_logger = logging.getLogger("AAFTF")
+    aaftf_logger.handlers.clear()
+    aaftf_logger.setLevel(logging.NOTSET)
+    aaftf_logger.propagate = True
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -45,7 +56,7 @@ TELO_T2T = _FWD + _BODY + _REV  # 200 bp
 # No telomere
 TELO_NONE = "AAATTTGGGCCC" * 16 + "AAAA" * 2  # 200 bp
 
-TELOMERE_FASTA = f">scaffold_t2t\n{TELO_T2T}\n" f">scaffold_fwd\n{TELO_FWD_ONLY}\n" f">scaffold_rev\n{TELO_REV_ONLY}\n" f">scaffold_none\n{TELO_NONE}\n"
+TELOMERE_FASTA = f">scaffold_t2t\n{TELO_T2T}\n>scaffold_fwd\n{TELO_FWD_ONLY}\n>scaffold_rev\n{TELO_REV_ONLY}\n>scaffold_none\n{TELO_NONE}\n"
 
 # ---------------------------------------------------------------------------
 # mosdepth summary data
@@ -57,7 +68,7 @@ TELOMERE_FASTA = f">scaffold_t2t\n{TELO_T2T}\n" f">scaffold_fwd\n{TELO_FWD_ONLY}
 _NUCLEAR_ROWS = "\n".join(f"scaffold_{i}\t10000\t100000\t10.0\t0\t50" for i in range(1, 10))
 MOSDEPTH_SUMMARY = "chrom\tlength\tbases\tmean\tmin\tmax\n" + _NUCLEAR_ROWS + "\nscaffold_outlier\t1000\t1000000\t1000.0\t0\t2000" + "\ntotal\t91000\t1900000\t20.88\t0\t2000\n"
 
-MOSDEPTH_DIST = "total\t0\t1.00000\n" "total\t1\t0.98000\n" "total\t2\t0.96000\n" "total\t5\t0.90000\n"
+MOSDEPTH_DIST = "total\t0\t1.00000\ntotal\t1\t0.98000\ntotal\t2\t0.96000\ntotal\t5\t0.90000\n"
 
 # ---------------------------------------------------------------------------
 # FASTQ helpers

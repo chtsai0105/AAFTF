@@ -10,12 +10,15 @@ The default libraries for screening are located in resources.py
 and include common Euk, Prok, and MITO contaminants.
 """
 
+import logging
 import shutil
 import sys
 from pathlib import Path
 
 from AAFTF.resources import FCSADAPTOR
-from AAFTF.utility import aaftf_db_dir, cleanup_workdir, download_file, make_workdir, run_cmd, status
+from AAFTF.utility import aaftf_db_dir, cleanup_workdir, download_file, make_workdir, run_cmd
+
+logger = logging.getLogger(__name__)
 
 
 def run(
@@ -59,7 +62,7 @@ def run(
                 url = "/".join([FCSADAPTOR["SIFURL"].rstrip("/"), FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]])
                 download_file(url, image)
         if shutil.which("singularity") is None and shutil.which("apptainer") is None:
-            status("ERROR: --container_engine singularity requires 'singularity' or 'apptainer' on PATH.")
+            logger.error("--container_engine singularity requires 'singularity' or 'apptainer' on PATH.")
             sys.exit(1)
     elif containerengine == "docker":
         # docker image reference (registry:tag), not a local file; docker itself
@@ -67,7 +70,7 @@ def run(
         if image is None:
             image = FCSADAPTOR["DOCKERIMAGE"] % (FCSADAPTOR["VERSION"])
         if shutil.which("docker") is None:
-            status("ERROR: --container_engine docker requires 'docker' on PATH.")
+            logger.error("--container_engine docker requires 'docker' on PATH.")
             sys.exit(1)
 
     cmd = [fcsexe, "--fasta-input", infile, "--output-dir", workdir, tax, "--container-engine", containerengine, "--image", image]
@@ -76,11 +79,11 @@ def run(
     Path(workdir, "cleaned_sequences").mkdir()
     cleanresult = str(Path(workdir, "cleaned_sequences", infilename))
     if debug:
-        status(f"copy from: {cleanresult} -> {outfile}")
+        logger.info(f"copy from: {cleanresult} -> {outfile}")
     Path(cleanresult).rename(outfile)
     fcsreport = str(Path(workdir, "fcs_adaptor_report.txt"))
     with open(fcsreport) as fh:
-        status("FCS report:")
+        logger.info("FCS report:")
         for line in fh:
             print(line, end="")
     # make a copy of the report to show

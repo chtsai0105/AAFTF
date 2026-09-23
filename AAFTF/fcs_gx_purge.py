@@ -1,11 +1,14 @@
 """Run the fcs-gx tool to look for contaminants."""
 
+import logging
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from AAFTF.utility import checkfile, cleanup_workdir, fastastats, filter_fasta, make_workdir, next_step_name, printCMD, status
+from AAFTF.utility import checkfile, cleanup_workdir, fastastats, filter_fasta, make_workdir, next_step_name, printCMD
+
+logger = logging.getLogger(__name__)
 
 # logging - we may need to think about whether this has
 # separate name for the different runfolder
@@ -27,14 +30,14 @@ def run(
 
     # parse database locations
     if not db or not Path(f"{db}.gxi").is_file():
-        status(f"{db}.gxi not found, needs to have setup the fcs_gx db - https://github.com/ncbi/fcs/wiki/FCS-GX")
+        logger.info(f"{db}.gxi not found, needs to have setup the fcs_gx db - https://github.com/ncbi/fcs/wiki/FCS-GX")
         sys.exit(1)
 
     numSeqs, assemblySize = fastastats(str(Path(input)))
-    status(f"Assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
+    logger.info(f"Assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
 
     # now filter for taxonomy with sourmash lca classify
-    status("Running fcs_gx to get taxonomy classification for each contig")
+    logger.info("Running fcs_gx to get taxonomy classification for each contig")
 
     # python scripts/run_gx.py --bin-dir dist --gx-db /sw/db/gxdb --tax-id 4842 --fasta
 
@@ -62,7 +65,7 @@ def run(
 
     fcsgxTSV = str(Path(workdir, f"{fname}.{taxid}.fcs_gx_report.txt"))
     if not Path(fcsgxTSV).is_file():
-        status(f"fcs_gx did not produce file {fcsgxTSV}")
+        logger.info(f"fcs_gx did not produce file {fcsgxTSV}")
         return
     with open(fcsgxTSV) as fcsgx_out:
         for line in fcsgx_out:
@@ -72,13 +75,13 @@ def run(
                 Seq2Drop[cols[0]] = 1
 
     # drop contigs from taxonomy before calculating coverage
-    status(f"Dropping {len(Seq2Drop)} contigs from fcs-gx taxonomy screen")
+    logger.info(f"Dropping {len(Seq2Drop)} contigs from fcs-gx taxonomy screen")
     numSeqs, assemblySize = filter_fasta(input, outfile, lambda seq_id: seq_id not in Seq2Drop)
 
     if debug:
         print("Contigs dropped due to taxonomy: {:}".format(",".join(Seq2Drop)))
 
-    status(f"fcs-gx assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
+    logger.info(f"fcs-gx assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
     nextOut = next_step_name(outfile, ".rmdup.fasta")
 
     if checkfile(fcsgxTSV):
@@ -91,4 +94,4 @@ def run(
     cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
-        status(f"Your next command might be:\n\tAAFTF rmdup -i {outfile} -o {nextOut}\n")
+        logger.info(f"Your next command might be:\nAAFTF rmdup -i {outfile} -o {nextOut}")

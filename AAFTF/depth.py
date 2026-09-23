@@ -13,6 +13,7 @@ quantized mode and three additional plots are produced alongside the report:
   <prefix>.depth_histogram.<format> — histogram + boxplot of per-scaffold depths
 """
 
+import logging
 import math
 import os
 import shutil
@@ -32,7 +33,9 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from AAFTF.utility import align_to_sorted_bam, checkfile, cleanup_workdir, countfastq, make_workdir, open_maybe_gz, printCMD, require_tools, run_cmd, status
+from AAFTF.utility import align_to_sorted_bam, checkfile, cleanup_workdir, countfastq, make_workdir, open_maybe_gz, printCMD, require_tools, run_cmd
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants for quantized coverage classes
@@ -87,15 +90,15 @@ def run(
     # Validate inputs
     # ------------------------------------------------------------------
     if not left and not longreads:
-        status("ERROR: provide at least --left (Illumina) or --longreads")
+        logger.error("provide at least --left (Illumina) or --longreads")
         sys.exit(1)
 
     if longreads and not longread_preset:
-        status("ERROR: --longread_preset is required when --longreads is provided (map-ont, map-pb, or map-hifi)")
+        logger.error("--longread_preset is required when --longreads is provided (map-ont, map-pb, or map-hifi)")
         sys.exit(1)
 
     if not checkfile(input):
-        status(f"ERROR: assembly file not found or empty: {input}")
+        logger.error(f"assembly file not found or empty: {input}")
         sys.exit(1)
 
     genome = str(Path(input).resolve())
@@ -105,7 +108,7 @@ def run(
 
     for label, fpath in [("--left", reads_left), ("--right", reads_right), ("--longreads", longreads)]:
         if fpath and not checkfile(fpath):
-            status(f"ERROR: read file not found or empty ({label}): {fpath}")
+            logger.error(f"read file not found or empty ({label}): {fpath}")
             sys.exit(1)
 
     # ------------------------------------------------------------------
@@ -119,8 +122,8 @@ def run(
     require_tools(sorted(required))
 
     if not no_plot and not HAS_MATPLOTLIB:
-        status("WARNING: matplotlib not available — coverage plots will be skipped.")
-        status("         Install with: conda install -c conda-forge matplotlib")
+        logger.warning("matplotlib not available — coverage plots will be skipped.")
+        logger.info("Install with: conda install -c conda-forge matplotlib")
         no_plot = True
 
     # ------------------------------------------------------------------
@@ -134,11 +137,11 @@ def run(
     # ------------------------------------------------------------------
     # Count input reads
     # ------------------------------------------------------------------
-    status("Counting input reads...")
+    logger.info("Counting input reads...")
     read_counts = {}  # -1 marks a file that could not be read; reported as "unknown"
     for key, fastq in (("left", reads_left), ("right", reads_right), ("long", longreads)):
         if fastq:
-            status(f"  Counting reads in {Path(fastq).name}")
+            logger.info(f"Counting reads in {Path(fastq).name}")
             try:
                 read_counts[key] = countfastq(fastq)
             except (OSError, subprocess.CalledProcessError):
@@ -147,7 +150,7 @@ def run(
     # ------------------------------------------------------------------
     # Map reads
     # ------------------------------------------------------------------
-    status("Mapping reads to assembly...")
+    logger.info("Mapping reads to assembly...")
     bam_illumina, bam_longreads, bam_combined = map_reads(
         genome,
         reads_left,
@@ -162,20 +165,20 @@ def run(
     )
 
     if not bam_combined or not Path(bam_combined).exists():
-        status("ERROR: mapping produced no BAM file")
+        logger.error("mapping produced no BAM file")
         sys.exit(1)
 
     # ------------------------------------------------------------------
     # samtools flagstat
     # ------------------------------------------------------------------
-    status("Running samtools flagstat...")
+    logger.info("Running samtools flagstat...")
     flagstat_illumina = run_flagstat(bam_illumina) if bam_illumina else None
     flagstat_longreads = run_flagstat(bam_longreads) if bam_longreads else None
 
     # ------------------------------------------------------------------
     # mosdepth (quantized when plotting is enabled, standard otherwise)
     # ------------------------------------------------------------------
-    status("Running mosdepth...")
+    logger.info("Running mosdepth...")
     labels = None
     colors = None
     if not no_plot:
@@ -189,7 +192,7 @@ def run(
     )
 
     if not Path(summary_file).exists():
-        status(f"ERROR: mosdepth summary not produced: {summary_file}")
+        logger.error(f"mosdepth summary not produced: {summary_file}")
         sys.exit(1)
 
     total_row, contig_rows = parse_mosdepth_summary(summary_file)
@@ -230,7 +233,7 @@ def run(
     # ------------------------------------------------------------------
     # Write report
     # ------------------------------------------------------------------
-    status(f"Writing coverage report to {report_file}")
+    logger.info(f"Writing coverage report to {report_file}")
     with open(report_file, "w") as fout:
         sep = "=" * 65
         fout.write(sep + "\n")
@@ -297,16 +300,16 @@ def run(
                 flag = ""
             fout.write(f"  {c['chrom']:<{cw[0]}} {c['length']:>{cw[1]},} {c['mean']:>{cw[2]}.2f}  {flag}\n")
 
-    status(f"Coverage report written to: {report_file}")
+    logger.info(f"Coverage report written to: {report_file}")
 
     # ------------------------------------------------------------------
     # Coverage plots
     # ------------------------------------------------------------------
     if quantized_bed and Path(quantized_bed).exists():
-        status("Reading quantized coverage BED...")
+        logger.info("Reading quantized coverage BED...")
         contig_data = _read_quantized_bed(quantized_bed)
         plot_prefix = _get_plot_prefix(input, out)
-        status("Generating coverage plots...")
+        logger.info("Generating coverage plots...")
         _plot_coverage_heatmap(contig_data, contig_length_sorted, labels, colors, plot_prefix, plot_format)
         _plot_coverage_barplot(contig_data, contig_depth_sorted, labels, colors, plot_prefix, plot_format)
         _plot_depth_histogram(contig_rows, mean_depth, plot_prefix, plot_format)
@@ -317,7 +320,7 @@ def run(
     cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
-        status(f"Your next command might be:\n\tAAFTF assess -i {input}\n")
+        logger.info(f"Your next command might be:\nAAFTF assess -i {input}")
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +366,7 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
             bwa_index_cmd = ["bwa", "index", genome_local]
             ret = run_cmd(bwa_index_cmd, debug)
             if ret.returncode != 0:
-                status("ERROR: bwa index failed")
+                logger.error("bwa index failed")
                 sys.exit(1)
             read_group = r"@RG\tID:illumina\tSM:illumina\tPL:illumina"
             map_cmd = ["bwa", "mem", "-t", str(cpus), "-R", read_group, genome_local, reads_left]
@@ -693,14 +696,14 @@ def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colors, plot_pref
                 fig = _make_page(scaffold_idx_list, page_idx + 1, len(pages))
                 pdf.savefig(fig)
                 plt.close(fig)
-        status(f"Coverage heatmap written to: {path}")
+        logger.info(f"Coverage heatmap written to: {path}")
     else:
         for i, page in enumerate(pages):
             suffix = f"_p{i + 1:02d}" if len(pages) > 1 else ""
             path = f"{plot_prefix}.depth_heatmap{suffix}.{plot_format}"
             fig = _make_page(page, i + 1, len(pages))
             _save_figure(fig, path, plot_format)
-            status(f"Coverage heatmap written to: {path}")
+            logger.info(f"Coverage heatmap written to: {path}")
 
 
 def _plot_coverage_barplot(contig_data, scaffold_rows, labels, colors, plot_prefix, plot_format):
@@ -774,14 +777,14 @@ def _plot_coverage_barplot(contig_data, scaffold_rows, labels, colors, plot_pref
                 fig = _make_page(page, i + 1, len(pages))
                 pdf.savefig(fig)
                 plt.close(fig)
-        status(f"Coverage barplot written to: {path}")
+        logger.info(f"Coverage barplot written to: {path}")
     else:
         for i, page in enumerate(pages):
             suffix = f"_p{i + 1:02d}" if len(pages) > 1 else ""
             path = f"{plot_prefix}.depth_barplot{suffix}.{plot_format}"
             fig = _make_page(page, i + 1, len(pages))
             _save_figure(fig, path, plot_format)
-            status(f"Coverage barplot written to: {path}")
+            logger.info(f"Coverage barplot written to: {path}")
 
 
 def _plot_depth_histogram(contig_rows, mean_depth, plot_prefix, plot_format):
@@ -846,4 +849,4 @@ def _plot_depth_histogram(contig_rows, mean_depth, plot_prefix, plot_format):
 
     path = f"{plot_prefix}.depth_histogram.{plot_format}"
     _save_figure(fig, path, plot_format)
-    status(f"Depth histogram written to: {path}")
+    logger.info(f"Depth histogram written to: {path}")

@@ -6,6 +6,7 @@ parameters but this entire package is intended to be a general
 solution for draft Illumina genome processing en masse.
 """
 
+import logging
 import os
 import re
 import shutil
@@ -13,7 +14,9 @@ import sys
 import uuid
 from pathlib import Path
 
-from AAFTF.utility import fastastats, run_cmd, status
+from AAFTF.utility import fastastats, run_cmd
+
+logger = logging.getLogger(__name__)
 
 
 def run(
@@ -43,13 +46,13 @@ def run(
     elif method == "megahit":
         run_megahit(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, tmpdir=tmpdir, left=left, right=right, out=out, debug=debug, pipe=pipe)
     elif method == "masurca":
-        status("Masurca assembly is not yet implemented in AAFTF")
+        logger.info("Masurca assembly is not yet implemented in AAFTF")
     elif method == "nextdenovo":
-        status("NextDenovo assembly is not yet implemented in AAFTF")
+        logger.info("NextDenovo assembly is not yet implemented in AAFTF")
     elif method == "unicycler":
         run_unicycler(workdir=workdir, cpus=cpus, left=left, right=right, longreads=longreads, merged=merged, out=out, debug=debug, pipe=pipe)
     else:
-        status(f"Unknown assembler method {method}")
+        logger.info(f"Unknown assembler method {method}")
 
 
 def run_spades(workdir=None, cpus=1, memory="32", isolate=True, careful=True, assembler_args=None, tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
@@ -88,7 +91,7 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=True, careful=True, as
     if Path(workdir).is_dir():
         runcmd = ["spades.py", "-o", workdir, "--threads", str(cpus), "--mem", memory, "--restart-from last"]
 
-    status("Assembling FASTQ data using Spades")
+    logger.info("Assembling FASTQ data using Spades")
     run_cmd(runcmd, debug, quiet_stdout=True)
 
     finalOut = _derive_finalOut(out, forReads, ".spades.fasta")
@@ -124,7 +127,7 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
     if Path(workdir).is_dir():
         runcmd = ["dipspades.py", "-o", workdir, "--continue"]
 
-    status("Assembling FASTQ data using Spades")
+    logger.info("Assembling FASTQ data using Spades")
     run_cmd(runcmd, debug, quiet_stdout=True)
 
     finalOut = _derive_finalOut(out, forReads, ".dipspades.fasta")
@@ -133,7 +136,7 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
     if Path(workdir, "consensus_contigs.fasta").is_file():
         shutil.copyfile(str(Path(workdir, "dipspades", "paired_consensus_contigs.fasta")), prefix + ".dipspades_consensus_paired.fasta")
         shutil.copyfile(str(Path(workdir, "dipspades", "paired_consensus_contigs.fasta")), prefix + ".dipspades_consensus_unpaired.fasta")
-        status("Dipspades assembly copied over: {:}".format(prefix + ".dipspades_consensus_unpaired.fasta"), prefix + ".dipspades_consensus_paired.fasta")
+        logger.info("Dipspades assembly copied over: {:}".format(prefix + ".dipspades_consensus_unpaired.fasta"), prefix + ".dipspades_consensus_paired.fasta")
 
     missing_msg = "Spades assembly output missing -- check Dipspades logfile in {:}.".format(str(Path(workdir, "dipspades", "dipspades.log")))
     _finish_assembly(Path(workdir, "consensus_contigs.fasta"), finalOut, "Dipspades", cpus, pipe, missing_msg=missing_msg)
@@ -163,9 +166,9 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
         runcmd.extend(["-1", forReads, "-2", revReads])
 
     if Path(workdir).is_dir():
-        status(f"Cannot re-run with existing folder {workdir}")
+        logger.info(f"Cannot re-run with existing folder {workdir}")
 
-    status("Assembling FASTQ data using megahit")
+    logger.info("Assembling FASTQ data using megahit")
     run_cmd(runcmd, debug, quiet_stdout=True)
 
     finalOut = _derive_finalOut(out, forReads, ".megahit.fasta")
@@ -204,7 +207,7 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     #            '--mem', memory,
     #            '--restart-from last']
 
-    status("Assembling FASTQ data using Unicycler")
+    logger.info("Assembling FASTQ data using Unicycler")
     run_cmd(runcmd, debug, quiet_stdout=True)
 
     finalOut = _derive_finalOut(out, forReads, ".unicycler.fasta")
@@ -216,7 +219,7 @@ def _resolve_reads(left, right):
     forReads = str(Path(left).resolve()) if left else None
     revReads = str(Path(right).resolve()) if right else None
     if not forReads:
-        status("Unable to located FASTQ raw reads, provide --left")
+        logger.info("Unable to located FASTQ raw reads, provide --left")
         sys.exit(1)
     return forReads, revReads
 
@@ -236,11 +239,11 @@ def _finish_assembly(src, finalOut, tool_name, cpus, pipe, missing_msg=None):
     """Copy the assembler's raw output to finalOut, report stats, and print the next-step hint."""
     if Path(src).is_file():
         shutil.copyfile(str(src), finalOut)
-        status(f"{tool_name} assembly finished: {finalOut}")
+        logger.info(f"{tool_name} assembly finished: {finalOut}")
         numSeqs, assemblySize = fastastats(finalOut)
-        status(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
+        logger.info(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
     else:
-        status(missing_msg or f"{tool_name} assembly output missing -- check {tool_name} logfile.")
+        logger.info(missing_msg or f"{tool_name} assembly output missing -- check {tool_name} logfile.")
 
     if not pipe:
-        status(f"Your next command might be:\n\tAAFTF vecscreen -i {finalOut} -c {cpus}\n")
+        logger.info(f"Your next command might be:\nAAFTF vecscreen -i {finalOut} -c {cpus}")

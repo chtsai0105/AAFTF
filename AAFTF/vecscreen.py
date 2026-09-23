@@ -11,6 +11,7 @@ and include common Euk, Prok, and MITO contaminants.
 """
 
 import csv
+import logging
 import os
 from pathlib import Path
 from subprocess import DEVNULL, call
@@ -19,7 +20,9 @@ from subprocess import DEVNULL, call
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import aaftf_db_dir, cleanup_workdir, concat_files, download_file, make_workdir, next_step_name, printCMD, status, write_fasta
+from AAFTF.utility import aaftf_db_dir, cleanup_workdir, concat_files, download_file, make_workdir, next_step_name, printCMD, write_fasta
+
+logger = logging.getLogger(__name__)
 
 BlastPercent_ID_ContamMatch = "90.0"
 BlastPercent_ID_MitoMatch = "98.6"
@@ -85,7 +88,7 @@ def run(
     mitoHits = _screen_mitochondria(eukCleaned, workdir, prefix, cpus, contigs_to_remove)
     outfile_vec = _run_vecscreen_rounds(eukCleaned, workdir, prefix, cpus, stringency, contigs_to_remove)
 
-    status(f"{len(contigs_to_remove):,} contigs will be removed:")
+    logger.info(f"{len(contigs_to_remove):,} contigs will be removed:")
     for k, v in sorted(contigs_to_remove.items()):
         print(f"\t{k} --> dbhit={v[0]}; hit={v[1]}; pident={v[2]}")
 
@@ -97,14 +100,14 @@ def run(
 
     nextOut = next_step_name(final_outfile, ".sourpurge.fasta")
     if not pipe:
-        status("Your next command might be:\n\t" + "AAFTF sourpurge -i {:} -o {:} -c {:} --phylum {:} \n".format(final_outfile, nextOut, cpus, "Ascomycota"))
+        logger.info("Your next command might be:\n" + "AAFTF sourpurge -i {:} -o {:} -c {:} --phylum {:}".format(final_outfile, nextOut, cpus, "Ascomycota"))
 
     cleanup_workdir(workdir, debug, custom_workdir)
 
 
 def _build_contam_databases(workdir, DB):
     """Download (if needed) and build a BLAST nucleotide DB for each contamination screen in DB_Links (sourmash entries excluded)."""
-    status("Building BLAST databases for contamination screen.")
+    logger.info("Building BLAST databases for contamination screen.")
     for d in DB_Links:
         if d.startswith("sourmash"):
             continue
@@ -151,12 +154,12 @@ def _screen_euk_prok_contamination(infile, workdir, prefix, cpus, percentid_cuto
     # sstart send evalue bitscore
     regions_to_trim = {}
     for contam in ["CONTAM_EUKS", "CONTAM_PROKS"]:
-        status(f"{contam} Contamination Screen")
+        logger.info(f"{contam} Contamination Screen")
         for row in _run_blastn_screen(infile, workdir, prefix, contam, cpus, percentid_cutoff):
             if (float(row[2]) >= 98.0 and int(row[3]) >= 50) or (float(row[2]) >= 94.0 and int(row[3]) >= 100) or (float(row[2]) >= 90.0 and int(row[3]) >= 200):
                 start, end = sorted([int(row[6]), int(row[7])])
                 regions_to_trim.setdefault(row[0], []).append((start, end, contam, row[1], float(row[2])))
-        status(f"{contam} screening finished")
+        logger.info(f"{contam} screening finished")
     return regions_to_trim
 
 
@@ -177,7 +180,7 @@ def _write_euk_cleaned(infile, regions_to_trim, workdir, prefix):
             else:
                 Seq = str(record.seq)
                 regions = regions_to_trim[record.id]
-                status(f"Splitting {record.id} for contamination: {regions}")
+                logger.info(f"Splitting {record.id} for contamination: {regions}")
                 lastpos = 0
                 for i, x in enumerate(regions):
                     # x[0] is a 1-based BLAST start; subtract one so the
@@ -196,13 +199,13 @@ def _screen_mitochondria(eukCleaned, workdir, prefix, cpus, contigs_to_remove):
 
     Returns the list of contig ids identified as mitochondrial.
     """
-    status("Mitochondria Contamination Screen")
+    logger.info("Mitochondria Contamination Screen")
     mitoHits = []
     for row in _run_blastn_screen(eukCleaned, workdir, prefix, "MITO", cpus, BlastPercent_ID_MitoMatch):
         if int(row[3]) >= 120:
             contigs_to_remove[row[0]] = ("MitoScreen", row[1], float(row[2]))
             mitoHits.append(row[0])
-    status("Mito screening finished.")
+    logger.info("Mito screening finished.")
     return mitoHits
 
 
@@ -212,7 +215,7 @@ def _run_vecscreen_rounds(eukCleaned, workdir, prefix, cpus, stringency, contigs
     ``contigs_to_remove`` is mutated in place by ``_parse_clean_blastn``.
     Returns the path to the final, fully vector-cleaned FASTA.
     """
-    status("Starting VecScreen, will remove terminal matches and split internal matches")
+    logger.info("Starting VecScreen, will remove terminal matches and split internal matches")
     rnd = 0
     count = 1
     cleanfile = eukCleaned
@@ -253,10 +256,10 @@ def _run_vecscreen_rounds(eukCleaned, workdir, prefix, cpus, stringency, contigs
             ]
             printCMD(cmd)
             call(cmd)
-        status(f"Parsing VecScreen round {rnd + 1}: {filepref} for {report}")
+        logger.info(f"Parsing VecScreen round {rnd + 1}: {filepref} for {report}")
 
         (count, cleanfile) = _parse_clean_blastn(eukCleaned, str(Path(workdir, filepref)), report, stringency, contigs_to_remove)
-        status(f"count is {count} cleanfile is {cleanfile}")
+        logger.info(f"count is {count} cleanfile is {cleanfile}")
         if count > 0:  # vector matches remain; re-screen the newly trimmed/split sequences
             rnd += 1
             eukCleaned = cleanfile
@@ -275,8 +278,8 @@ def _write_final_outputs(outfile_vec, contigs_to_remove, mitoHits, outfile, mito
             elif record.id in mitoHits:
                 write_fasta(mh, record.description, str(record.seq))
                 n_mito += 1
-    status(f"Writing {n_clean:,} cleaned contigs to: {outfile}")
-    status(f"Writing {n_mito:,} mitochondrial contigs to: {mitochondria}")
+    logger.info(f"Writing {n_clean:,} cleaned contigs to: {outfile}")
+    logger.info(f"Writing {n_mito:,} mitochondrial contigs to: {mitochondria}")
 
 
 def _parse_clean_blastn(fastafile, prefix, blastn, stringent, contigs_to_remove=None):
@@ -397,12 +400,12 @@ def _write_trimmed_and_split(fastafile, vec_hits, cleaned):
             keep_regions = list(_group(slicer, 2))
 
             if len(keep_regions) < 2:
-                status(f"Terminal trimming {record.id} to {keep_regions}")
+                logger.info(f"Terminal trimming {record.id} to {keep_regions}")
                 newSeq = seq_str[keep_regions[0][0] : keep_regions[0][1]]
                 if len(newSeq) >= 200:
                     write_fasta(output_handle, record.id, newSeq)
             else:
-                status(f"Splitting contig {record.id} into {keep_regions}")
+                logger.info(f"Splitting contig {record.id} into {keep_regions}")
                 for num, (start, end) in enumerate(keep_regions):
                     newSeq = seq_str[start:end]
                     if len(newSeq) >= 200:

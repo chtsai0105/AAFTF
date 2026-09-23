@@ -1,10 +1,12 @@
 """Check that AAFTF's external tool and Python package dependencies are installed."""
 
 import importlib
+import logging
 import shutil
 import sys
 
-from AAFTF.utility import status
+logger = logging.getLogger(__name__)
+
 
 # external binaries used via subprocess across the AAFTF modules
 REQUIRED_TOOLS = {
@@ -56,7 +58,7 @@ def run(**kwargs):
     missing_optional = _print_tool_table("Checking optional external tools...", _check_tools(OPTIONAL_TOOLS))
 
     print()
-    status("Checking required Python packages...")
+    logger.info("Checking required Python packages...")
     missing_packages = []
     for dist_name, found in _check_python_packages(REQUIRED_PYTHON_PACKAGES):
         if found:
@@ -67,14 +69,14 @@ def run(**kwargs):
 
     print()
     if missing_required or missing_packages:
-        status(f"ERROR: {len(missing_required)} required tool(s) and {len(missing_packages)} required package(s) missing.")
+        logger.error(f"{len(missing_required)} required tool(s) and {len(missing_packages)} required package(s) missing.")
         if missing_optional:
-            status(f"NOTE: {len(missing_optional)} optional tool(s) also missing (only needed for specific subcommands).")
+            logger.info(f"NOTE: {len(missing_optional)} optional tool(s) also missing (only needed for specific subcommands).")
         sys.exit(1)
     else:
-        status("All required dependencies are installed.")
+        logger.info("All required dependencies are installed.")
         if missing_optional:
-            status(f"NOTE: {len(missing_optional)} optional tool(s) missing (only needed for specific subcommands).")
+            logger.info(f"NOTE: {len(missing_optional)} optional tool(s) missing (only needed for specific subcommands).")
 
 
 def _check_tools(tools):
@@ -97,7 +99,7 @@ def _check_python_packages(packages):
 
 
 def _print_tool_table(title, results):
-    status(title)
+    logger.info(title)
     missing = []
     for tool, path, used_by in results:
         if path:

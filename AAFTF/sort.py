@@ -1,13 +1,17 @@
 """This module sorts FASTA sequences by size and renames headers."""
 
+import logging
+
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from AAFTF.utility import status, write_fasta
+from AAFTF.utility import write_fasta
+
+logger = logging.getLogger(__name__)
 
 
 def run(input, out, minlen=0, name="scaffold", **kwargs):
     """Sort contig/scaffold file longest to shortest and rename."""
-    status("Sorting sequences by length longest --> shortest")
+    logger.info("Sorting sequences by length longest --> shortest")
     AllSeqs = {}
     with open(input) as fasta_in:
         for Header, Seq in SimpleFastaParser(fasta_in):
@@ -19,4 +23,4 @@ def run(input, out, minlen=0, name="scaffold", **kwargs):
         for i, (Header, Seq) in enumerate(sortSeqs):
             write_fasta(fasta_out, f"{name}_{i + 1}", Seq)
 
-    status(f"Output written to: {out}")
+    logger.info(f"Output written to: {out}")

@@ -4,23 +4,14 @@ This will match contaminant database and PhiX using read mapping kmer
 tools. See resources.py for these defaults.
 """
 
+import logging
 import sys
 from pathlib import Path
 
 from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
-from AAFTF.utility import (
-    aaftf_db_dir,
-    align_to_sorted_bam,
-    bam_read_count,
-    basename_from_reads,
-    cleanup_workdir,
-    concat_files,
-    countfastq,
-    download_file,
-    make_workdir,
-    run_cmd,
-    status,
-)
+from AAFTF.utility import aaftf_db_dir, align_to_sorted_bam, bam_read_count, basename_from_reads, cleanup_workdir, concat_files, countfastq, download_file, make_workdir, run_cmd
+
+logger = logging.getLogger(__name__)
 
 
 # flake8: noqa: C901
@@ -62,7 +53,7 @@ def run(
 
     contamdb = str(Path(workdir, "contamdb.fa"))
     filelist = "\n".join(contam_filenames)
-    status(f"Generating combined contamination database {contamdb} from:\n{filelist}")
+    logger.info(f"Generating combined contamination database {contamdb} from:\n{filelist}")
     newest_source = max(Path(f).stat().st_ctime for f in contam_filenames)
     if not Path(contamdb).exists() or Path(contamdb).stat().st_ctime < newest_source:
         concat_files(contam_filenames, contamdb)
@@ -74,12 +65,12 @@ def run(
     if right:
         revReads = str(Path(right).resolve())
     if not forReads:
-        status("Must provide --left, unable to locate FASTQ reads")
+        logger.info("Must provide --left, unable to locate FASTQ reads")
         sys.exit(1)
     total = countfastq(forReads)
     if revReads:
         total = total * 2
-    status(f"Loading {total:,} total reads")
+    logger.info(f"Loading {total:,} total reads")
 
     # seems like this needs to be stripping trailing extension?
     if not basename:
@@ -91,7 +82,7 @@ def run(
     clean_reads = basename + "_filtered"
     refmatch_bbduk = [contamdb, "phix", "artifacts", "lambda"]
     if aligner == "bbduk":
-        status("Kmer filtering reads using BBDuk")
+        logger.info("Kmer filtering reads using BBDuk")
         MEM = f"-Xmx{memory}g"
         leftcleanfname = f"{clean_reads}_1.fastq.gz"
         if revReads:
@@ -125,25 +116,25 @@ def run(
         clean = countfastq(leftcleanfname)
         if revReads:
             clean = clean * 2  # might want to actually count - but should be always 2x
-        status(f"{(total - clean):,} reads mapped to contamination database")
-        status(f"{clean:,} reads unmapped and writing to file")
+        logger.info(f"{(total - clean):,} reads mapped to contamination database")
+        logger.info(f"{clean:,} reads unmapped and writing to file")
 
         if revReads:
-            status(f"Filtering complete:\n\tFor: {clean_reads}_1.fastq.gz\n\tRev: {clean_reads}_2.fastq.gz")
+            logger.info(f"Filtering complete:\nFor: {clean_reads}_1.fastq.gz\nRev: {clean_reads}_2.fastq.gz")
             if not pipe:
-                status(f"Your next command might be:\n\tAAFTF assemble -l {clean_reads}_1.fastq.gz -r {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
+                logger.info(f"Your next command might be:\nAAFTF assemble -l {clean_reads}_1.fastq.gz -r {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
         else:
-            status(f"Filtering complete:\n\tSingle: {clean_reads}_U.fastq.gz")
+            logger.info(f"Filtering complete:\nSingle: {clean_reads}_U.fastq.gz")
             if not pipe:
-                status(f"Your next command might be:\n\tAAFTF assemble --merged {clean_reads}_U.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
+                logger.info(f"Your next command might be:\nAAFTF assemble --merged {clean_reads}_U.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
         return
 
     elif aligner == "bowtie2":
         # likely not used and less accurate than bbmap?
         if not Path(alignBAM).is_file():
-            status("Aligning reads to contamination database using bowtie2")
+            logger.info("Aligning reads to contamination database using bowtie2")
             _rebuild_index_if_stale(contamdb + ".1.bt2", contamdb, ["bowtie2-build", contamdb, contamdb], debug)
 
             bowtie_cmd = ["bowtie2", "-x", Path(contamdb).name, "-p", str(cpus), "--very-sensitive"]
@@ -157,7 +148,7 @@ def run(
     elif aligner == "bwa":
         # likely less accurate than bbduk so may not be used
         if not Path(alignBAM).is_file():
-            status("Aligning reads to contamination database using BWA")
+            logger.info("Aligning reads to contamination database using BWA")
             _rebuild_index_if_stale(contamdb + ".amb", contamdb, ["bwa", "index", contamdb], debug)
 
             bwa_cmd = ["bwa", "mem", "-t", str(cpus), Path(contamdb).name, forReads]
@@ -169,7 +160,7 @@ def run(
     elif aligner == "minimap2":
         # likely not used but may be useful for pacbio/nanopore?
         if not Path(alignBAM).is_file():
-            status("Aligning reads to contamination database using minimap2")
+            logger.info("Aligning reads to contamination database using minimap2")
 
             minimap2_cmd = ["minimap2", "-ax", "sr", "-t", str(cpus), Path(contamdb).name, forReads]
             if revReads:
@@ -177,13 +168,13 @@ def run(
 
             align_to_sorted_bam(minimap2_cmd, alignBAM, bamthreads, cwd=workdir, debug=debug)
     else:
-        status("Must specify bowtie2, bwa, or minimap2 for filtering")
+        logger.info("Must specify bowtie2, bwa, or minimap2 for filtering")
 
     if Path(alignBAM).is_file():
         # display mapping stats in terminal
         mapped, unmapped = bam_read_count(alignBAM)
-        status(f"{mapped:,} reads mapped to contamination database")
-        status(f"{unmapped:,} reads unmapped and writing to file")
+        logger.info(f"{mapped:,} reads mapped to contamination database")
+        logger.info(f"{unmapped:,} reads unmapped and writing to file")
         # now output unmapped reads from bamfile
         # this needs to be -f 5 so unmapped-pairs
         if forReads and revReads:
@@ -194,13 +185,13 @@ def run(
         cleanup_workdir(workdir, debug, custom_workdir)
 
         if revReads:
-            status(f"Filtering complete:\n\tFor: {clean_reads}_1.fastq.gz\n\tRev: {clean_reads}_2.fastq.gz")
+            logger.info(f"Filtering complete:\nFor: {clean_reads}_1.fastq.gz\nRev: {clean_reads}_2.fastq.gz")
             if not pipe:
-                status(f"Your next command might be:\n\tAAFTF assemble -l {clean_reads}_1.fastq.gz -r {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
+                logger.info(f"Your next command might be:\nAAFTF assemble -l {clean_reads}_1.fastq.gz -r {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
         else:
-            status(f"Filtering complete:\n\tSingle: {clean_reads}.fastq.gz")
+            logger.info(f"Filtering complete:\nSingle: {clean_reads}.fastq.gz")
             if not pipe:
-                status(f"Your next command might be:\n\tAAFTF assemble -l {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta\n")
+                logger.info(f"Your next command might be:\nAAFTF assemble -l {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
 
 def _rebuild_index_if_stale(marker_file, contamdb, build_cmd, debug):

@@ -4,7 +4,6 @@ Verifies the fix for the stale start/end variable bug where the else-branch
 for multi-hit contigs was using coordinate values from the previous row.
 """
 
-
 import pytest
 
 pytestmark = pytest.mark.unit
@@ -60,7 +59,7 @@ class TestVecscreenCoordinatesParsing:
         s1, e1, *_ = result["contig_1"][0]
         s2, e2, *_ = result["contig_1"][1]
         assert s1 == 10 and e1 == 109
-        assert s2 == 500 and e2 == 599, f"Expected (500, 599) for second hit but got ({s2}, {e2}). " "This would fail with the stale-coordinate bug."
+        assert s2 == 500 and e2 == 599, f"Expected (500, 599) for second hit but got ({s2}, {e2}). This would fail with the stale-coordinate bug."
 
     def test_reversed_coords_are_normalised(self):
         """Coordinates where qstart > qend must be sorted."""

@@ -5,12 +5,15 @@
 # https://github.com/arq5x/poretools/blob/master/poretools/poretools_main.py
 
 import argparse as ap
+import logging
 import sys
 
 # AAFTF imports
 from AAFTF._menu import SUBCOMMAND_REGISTRARS
 from AAFTF._version import __version__
-from AAFTF.utility import CustomHelpFormatter, status
+from AAFTF.utility import CustomHelpFormatter, setup_logging
+
+logger = logging.getLogger("AAFTF.main")
 
 myversion = __version__
 
@@ -46,8 +49,9 @@ def main():
         parser.print_help(sys.stderr)
         sys.exit(1)
 
+    setup_logging(debug=getattr(args, "debug", False), quiet=getattr(args, "quiet", False))
     try:
-        status(f"Running AAFTF v{myversion}")
+        logger.info(f"Running AAFTF v{myversion}")
         args.func(**vars(args))
     except OSError as e:
         if e.errno != 32:  # ignore SIGPIPE

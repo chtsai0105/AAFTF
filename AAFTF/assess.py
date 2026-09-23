@@ -4,12 +4,15 @@ This simply gives GC%, N50, L50, Min, Max
 contig statistics.
 """
 
+import logging
 import re
 from pathlib import Path
 
 from Bio import SeqIO
 
-from AAFTF.utility import COMPLEMENT, calc_nx, open_maybe_gz, status
+from AAFTF.utility import COMPLEMENT, calc_nx, open_maybe_gz
+
+logger = logging.getLogger(__name__)
 
 
 def run(input, report=None, telomere_monomer="TAAC{3,5}", telomere_n_repeat=2, telomere_window=200, **kwargs):
@@ -18,7 +21,7 @@ def run(input, report=None, telomere_monomer="TAAC{3,5}", telomere_n_repeat=2, t
     This function will also attempt to find the telomere repeats and count these.
     """
     if not Path(input).exists():
-        status(f"Inputfile {input} was not readable, check parameters")
+        logger.info(f"Inputfile {input} was not readable, check parameters")
 
     output_handle = None
 

@@ -100,7 +100,7 @@ def calculate_n50(contig_lengths):
 ### Error Handling
 - Use try/except blocks for external tool execution
 - Provide informative error messages with context
-- Use `status()` function from utility for user feedback
+- Report progress with a module-level `logger = logging.getLogger(__name__)` (`logger.info`, `logger.warning`, `logger.error`); `AAFTF_main.main()` configures it via `setup_logging()` from `-q/--quiet` and `-v/--debug`. Don't add "ERROR:"/"WARNING:" prefixes or leading/trailing whitespace to messages — the formatter adds the level name
 - Handle file existence checks with `checkfile()` utility
 
 ### Code Structure
@@ -130,7 +130,7 @@ def calculate_n50(contig_lengths):
 - Handle file paths with `os.path` operations for cross-platform compatibility
 
 ### Logging and Output
-- Use `status()` function for user-facing messages
+- Use `logger.info/warning/error` for user-facing messages
 - Use `printCMD()` to show commands being executed
 - Provide progress feedback for long-running operations
 - Use debug flags for verbose output during development
@@ -162,28 +162,27 @@ Since AAFTF primarily integrates external bioinformatics tools, testing focuses 
 ```python
 """Module description."""
 
-import os
-import subprocess
+import logging
 import sys
 
-from AAFTF.utility import status, checkfile, printCMD
+from AAFTF.utility import checkfile, run_cmd
 
-def run(parser, args):
+logger = logging.getLogger(__name__)
+
+
+def run(input, debug=False, pipe=False, **kwargs):
     """Main entry point for subcommand."""
     # Validate inputs
-    if not checkfile(args.input):
-        status("Error: Input file not found")
-        return
+    if not checkfile(input):
+        logger.error(f"Input file not found: {input}")
+        sys.exit(1)
 
-    # Process workflow
-    status("Starting processing...")
+    logger.info("Starting processing...")
 
-    # Execute external tools
-    cmd = ['tool', '--input', args.input]
-    printCMD(cmd)
-    subprocess.run(cmd)
+    # Execute external tools (prints the command; stderr shown only with --debug)
+    run_cmd(["tool", "--input", input], debug)
 
-    status("Processing complete")
+    logger.info("Processing complete")
 ```
 
 This project follows bioinformatics best practices with emphasis on reproducibility, proper tool integration, and clear user feedback.

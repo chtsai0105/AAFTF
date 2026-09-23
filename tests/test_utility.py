@@ -31,6 +31,7 @@ from AAFTF.utility import (
     run_cmd,
     safe_remove,
     samtools_sort_cmd,
+    setup_logging,
     softwrap,
     write_fasta,
 )
@@ -423,10 +424,10 @@ class TestRequireTools:
     def test_present_tools_pass(self):
         require_tools(["sh"])
 
-    def test_missing_tool_exits(self, capsys):
+    def test_missing_tool_exits(self, caplog):
         with pytest.raises(SystemExit):
             require_tools(["sh", "definitely_not_a_tool_xyz"])
-        assert "definitely_not_a_tool_xyz" in capsys.readouterr().out
+        assert "definitely_not_a_tool_xyz" in caplog.text
 
 
 class TestOpenAndConcat:
@@ -483,3 +484,30 @@ class TestDownloadFile:
         with pytest.raises(Exception):
             download_file((tmp_path / "missing.txt").as_uri(), str(dest))
         assert not dest.exists() and not (tmp_path / "dest.txt.tmp").exists()
+
+
+class TestSetupLogging:
+    def _emit(self, capsys, **kwargs):
+        import logging
+
+        setup_logging(**kwargs)
+        log = logging.getLogger("AAFTF.test")
+        log.debug("dbg")
+        log.info("inf")
+        log.warning("wrn")
+        return capsys.readouterr().err
+
+    def test_default_shows_info_and_prefixes_warnings(self, capsys):
+        err = self._emit(capsys)
+        assert "inf" in err and "dbg" not in err
+        assert "WARNING: wrn" in err
+
+    def test_quiet_shows_only_warnings(self, capsys):
+        err = self._emit(capsys, quiet=True)
+        assert "inf" not in err and "WARNING: wrn" in err
+
+    def test_debug_shows_debug(self, capsys):
+        assert "dbg" in self._emit(capsys, debug=True)
+
+    def test_no_color_when_not_a_terminal(self, capsys):
+        assert "\033[" not in self._emit(capsys)

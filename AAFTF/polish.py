@@ -7,12 +7,15 @@ Three polishing engines are supported via --method:
                  k-mer (yak) database (requires --longreads HiFi + short reads)
 """
 
+import logging
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from AAFTF.utility import align_to_sorted_bam, cleanup_workdir, make_workdir, next_step_name, printCMD, require_tools, run_cmd, status
+from AAFTF.utility import align_to_sorted_bam, cleanup_workdir, make_workdir, next_step_name, printCMD, require_tools, run_cmd
+
+logger = logging.getLogger(__name__)
 
 
 def run(
@@ -31,7 +34,7 @@ def run(
 ):
     """Execute polishing step provided with reads and a contig assembly FASTA file."""
     method = method.lower()
-    status(f"calling {method} with input memory {memory}GB and num cpus {cpus}")
+    logger.info(f"calling {method} with input memory {memory}GB and num cpus {cpus}")
 
     forReads, revReads = (None,) * 2
     if left:
@@ -42,13 +45,13 @@ def run(
         longreads = str(Path(longreads).resolve())
 
     if method == "racon" and not longreads:
-        status("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads")
+        logger.info("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads")
         sys.exit(1)
     if method == "nextpolish2" and not longreads:
-        status("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads (nextpolish2 requires HiFi long reads)")
+        logger.info("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads (nextpolish2 requires HiFi long reads)")
         sys.exit(1)
     if method in ("pypolca", "masurca", "polypolish", "nextpolish2") and not forReads:
-        status("Unable to locate FASTQ raw reads, pass via -l,--left and/or -r,--right")
+        logger.info("Unable to locate FASTQ raw reads, pass via -l,--left and/or -r,--right")
         sys.exit(1)
 
     workdir, custom_workdir = make_workdir(workdir, "polish")
@@ -79,24 +82,24 @@ def run(
     elif method == "racon":
         ret, out_path = run_racon(infile, longreads, cpus, workdir, polish_log, debug)
     else:
-        status(f"Unknown polishing method: {method}")
+        logger.info(f"Unknown polishing method: {method}")
         sys.exit(1)
 
     # Validate the polisher's output and copy it to the requested destination
     # — done once here rather than duplicated in every run_<method>() function.
     if ret != 0 or not Path(out_path).exists() or Path(out_path).stat().st_size == 0:
-        status(f"ERROR: {method} failed (exit {ret}); check log: {Path(workdir, polish_log)}")
+        logger.error(f"{method} failed (exit {ret}); check log: {Path(workdir, polish_log)}")
         sys.exit(1)
     shutil.copyfile(out_path, polishedFasta)
-    status("AAFTF polish completed.")
-    status(f"{method} polished assembly: {polishedFasta}")
+    logger.info("AAFTF polish completed.")
+    logger.info(f"{method} polished assembly: {polishedFasta}")
 
     nextOut = next_step_name(polishedFasta, ".final.fasta")
 
     cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
-        status("Your next command might be:\n" + f"\tAAFTF sort -i {polishedFasta} -o {nextOut}\n")
+        logger.info(f"Your next command might be:\nAAFTF sort -i {polishedFasta} -o {nextOut}")
 
 
 def run_polypolish(infile, forReads, revReads, cpus, workdir, polish_log, debug):
@@ -110,7 +113,7 @@ def run_polypolish(infile, forReads, revReads, cpus, workdir, polish_log, debug)
     destination, and status reporting are all handled centrally by run().
     """
     if not revReads:
-        status("ERROR: --method polypolish requires paired reads (-l/--left and -r/--right)")
+        logger.error("--method polypolish requires paired reads (-l/--left and -r/--right)")
         sys.exit(1)
 
     assembly = str(Path(workdir, Path(infile).name))

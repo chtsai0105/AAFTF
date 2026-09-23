@@ -4,6 +4,7 @@ This uses minimap to map small contigs against the database of contigs in an
 assembly and removes those which are redundant.
 """
 
+import logging
 import operator
 import os
 import sys
@@ -11,7 +12,9 @@ from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from AAFTF.utility import calc_nx, cleanup_workdir, execute, make_workdir, next_step_name, status, write_fasta
+from AAFTF.utility import calc_nx, cleanup_workdir, execute, make_workdir, next_step_name, write_fasta
+
+logger = logging.getLogger(__name__)
 
 
 def run(
@@ -63,8 +66,8 @@ def run(
     workdir, custom_workdir = make_workdir(workdir, "rmdup")
 
     if debug:
-        status(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} " f"percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive} pipe={pipe}")
-    status("Looping through assembly shortest --> longest searching for duplicated contigs using minimap2")
+        logger.info(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} " f"percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive} pipe={pipe}")
+    logger.info("Looping through assembly shortest --> longest searching for duplicated contigs using minimap2")
     fasta_lengths = []
     AllSeqs = {}
     with open(input) as infile:
@@ -73,14 +76,14 @@ def run(
             AllSeqs.setdefault(Header, len(Seq))
     n50, _ = calc_nx(fasta_lengths, 0.5)
     n75, _ = calc_nx(fasta_lengths, 0.75)
-    status(f"Assembly is {len(fasta_lengths):,} contigs; {sum(fasta_lengths):,} bp; N50 is {n50:,} bp; N75 is {n75:,} bp")
+    logger.info(f"Assembly is {len(fasta_lengths):,} contigs; {sum(fasta_lengths):,} bp; N50 is {n50:,} bp; N75 is {n75:,} bp")
 
     # get list of tuples of sequences sorted by size (shortest --> longest)
     sortSeqs = sorted(AllSeqs.items(), key=operator.itemgetter(1), reverse=False)
     if exhaustive:
         n75 = sortSeqs[-1][1]
     those2check = [x for x in sortSeqs if x[1] < n75]
-    status(f"Will check {len(those2check):,} contigs for duplication --> those that are < {n75:,} && > {minlen:,}")
+    logger.info(f"Will check {len(those2check):,} contigs for duplication --> those that are < {n75:,} && > {minlen:,}")
     # loop through sorted list of tuples
     ignore = []
     for i, x in enumerate(sortSeqs):
@@ -93,7 +96,7 @@ def run(
             sys.stdout.write("\n")
             break
         if debug:
-            status(f"Working on {x[0]} len={x[1]} remove_tally={len(ignore)}")
+            logger.info(f"Working on {x[0]} len={x[1]} remove_tally={len(ignore)}")
         else:
             text = f"\rProgress: {i} of {len(those2check)}; remove tally={len(ignore):,}; current={x[0]}; length={x[1]}     "
             sys.stdout.write(text)
@@ -115,10 +118,10 @@ def run(
                     write_fasta(clean_out, Header, Seq)
                     numSeqs += 1
                     assemblySize += len(Seq)
-    status(f"Cleaned assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
+    logger.info(f"Cleaned assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
     nextOut = next_step_name(out, ".polish.fasta")
 
     if not pipe:
-        status(f"Your next command might be:\n\tAAFTF polish -i {out} -l PE_R1.fastq.gz -r PE_R2.fastq.gz -o {nextOut}\n")
+        logger.info(f"Your next command might be:\nAAFTF polish -i {out} -l PE_R1.fastq.gz -r PE_R2.fastq.gz -o {nextOut}")
 
     cleanup_workdir(workdir, debug, custom_workdir)

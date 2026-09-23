@@ -74,7 +74,7 @@ class TestParseMosdepthSummary:
 
     def test_handles_missing_total_row(self, tmp_path):
         # Summary with no 'total' line
-        content = "chrom\tlength\tbases\tmean\tmin\tmax\n" "scaffold_1\t1000\t50000\t50.0\t0\t100\n"
+        content = "chrom\tlength\tbases\tmean\tmin\tmax\nscaffold_1\t1000\t50000\t50.0\t0\t100\n"
         p = tmp_path / "no_total.txt"
         p.write_text(content)
         total, contigs = parse_mosdepth_summary(str(p))

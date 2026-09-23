@@ -1,5 +1,6 @@
 """Run the Mitochondria assembly tool NOVOPlasty."""
 
+import logging
 import os
 import shutil
 import subprocess
@@ -10,7 +11,9 @@ from pathlib import Path
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
 from AAFTF.resources import Mitoseqs
-from AAFTF.utility import COMPLEMENT, cleanup_workdir, estimate_read_length, execute, make_workdir, printCMD, require_tools, status, write_fasta
+from AAFTF.utility import COMPLEMENT, cleanup_workdir, estimate_read_length, execute, make_workdir, printCMD, require_tools, write_fasta
+
+logger = logging.getLogger(__name__)
 
 
 def run(
@@ -73,7 +76,7 @@ def run(
                 outfile.write(line)
 
     # now we can finally run NOVOplasty.pl
-    status("De novo assembling mitochondrial genome using NOVOplasty")
+    logger.info("De novo assembling mitochondrial genome using NOVOplasty")
     cmd = ["NOVOPlasty.pl", "-c", "novo-config.txt"]
     printCMD(cmd)
     novolog = str(Path(workdir, "novoplasty.log"))
@@ -96,14 +99,14 @@ def run(
             draftMito = str(Path(workdir, f))
             break
     if draftMito is None:
-        status("NOVOplasty did not produce an assembly - check log for errors")
+        logger.info("NOVOplasty did not produce an assembly - check log for errors")
         return
     if circular:
-        status("NOVOplasty assembled complete circular genome")
+        logger.info("NOVOplasty assembled complete circular genome")
         if starting:
-            status(f"Rotating assembly to start with {starting}")
+            logger.info(f"Rotating assembly to start with {starting}")
         else:
-            status("Rotating assembly to start with Cytochrome b (cob) gene")
+            logger.info("Rotating assembly to start with Cytochrome b (cob) gene")
         _orient_to_start(draftMito, out, folder=workdir, start=starting)
     else:
         numContigs = 0
@@ -115,9 +118,9 @@ def run(
                     contigLength += len(seq)
                     write_fasta(outfile, f"contig_{numContigs}", seq)
         # weird formatting here for PEP8
-        status(f"NOVOplasty assembled {numContigs} contigs consisting of {contigLength:,} bp," + "but was unable to circularize genome")
+        logger.info(f"NOVOplasty assembled {numContigs} contigs consisting of {contigLength:,} bp," + "but was unable to circularize genome")
 
-    status(f"AAFTF mito complete: {out}")
+    logger.info(f"AAFTF mito complete: {out}")
     cleanup_workdir(workdir, debug, custom_workdir)
 
 
@@ -169,7 +172,7 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
             # this offset out of range; Python's negative-index slicing
             # would silently wrap and produce a bogus rotation instead of
             # erroring, so treat it the same as a failed rotation.
-            status(f"ERROR: unable to rotate because computed rotation offset {ref_start} is out of range for sequence of length {len(initial_seq)}\n")
+            logger.error(f"unable to rotate because computed rotation offset {ref_start} is out of range for sequence of length {len(initial_seq)}")
             with open(fasta_out, "w") as outfile:
                 write_fasta(outfile, "mt", initial_seq)
             return
@@ -179,11 +182,11 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
         with open(fasta_out, "w") as outfile:
             write_fasta(outfile, "mt", rotated)
     elif len(alignments) == 0:
-        status("ERROR: unable to rotate because did " + "not find --starting sequence\n")
+        logger.error("unable to rotate because did " + "not find --starting sequence")
         with open(fasta_out, "w") as outfile:
             write_fasta(outfile, "mt", initial_seq)
     elif len(alignments) > 1:
-        status("ERROR: unable to rotate because found multiple alignments\n")
+        logger.error("unable to rotate because found multiple alignments")
         for x in alignments:
             sys.stderr.write(f"{x}\n")
         with open(fasta_out, "w") as outfile:

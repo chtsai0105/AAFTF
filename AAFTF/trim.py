@@ -5,11 +5,14 @@ This uses either fastp, includes merging step for paired reads, OR
 trimmomatic. Expects adaptor sequence files to be in trimmomatic installed folder.
 """
 
+import logging
 import shutil
 import sys
 from pathlib import Path
 
-from AAFTF.utility import basename_from_reads, countfastq, run_cmd, safe_remove, status
+from AAFTF.utility import basename_from_reads, countfastq, run_cmd, safe_remove
+
+logger = logging.getLogger(__name__)
 
 TRIMMOMATIC_TRUSEQSE = "adapters/TruSeq3-SE.fa"
 TRIMMOMATIC_TRUSEQPE = "adapters/TruSeq3-PE.fa"
@@ -55,7 +58,7 @@ def run(
     total = countfastq(left)
     if right:
         total = total * 2
-    status(f"Loading {total:,} total reads")
+    logger.info(f"Loading {total:,} total reads")
 
     if method == "bbduk":
         run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe)
@@ -78,14 +81,14 @@ def run(
     elif method == "fastp":
         run_fastp(left, right, basename, cpus, minlen, avgqual, merge, dedup, cutfront, cuttail, cutright, debug, pipe)
     else:
-        status(f"Unknown trimming method: {method}")
+        logger.info(f"Unknown trimming method: {method}")
 
 
 def run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe):
     """Trim reads with BBDuk."""
     MEM = f"-Xmx{memory}g"
 
-    status("Adapter trimming using BBDuk")
+    logger.info("Adapter trimming using BBDuk")
     bbduk_base = [
         "bbduk.sh",
         MEM,
@@ -153,7 +156,7 @@ def run_trimmomatic(
     if trimmomatic_path:
         jarfile = trimmomatic_path
     else:
-        status("Trimmomatic cannot be found - " + "please provide location of trimmomatic.jar file.")
+        logger.info("Trimmomatic cannot be found - " + "please provide location of trimmomatic.jar file.")
         sys.exit(1)
 
     path_to_adaptors = trimmomatic_adaptors
@@ -187,7 +190,7 @@ def run_trimmomatic(
                 findpath = new_path
 
         if not Path(path_to_adaptors).exists():
-            status("Cannot find adaptors file please specify manually")
+            logger.info("Cannot find adaptors file please specify manually")
             return
 
     if left and right:
@@ -229,26 +232,26 @@ def run_trimmomatic(
             f"MINLEN:{minlen}",
         ]
     else:
-        status("Must provide left and right pairs or single read set")
+        logger.info("Must provide left and right pairs or single read set")
         return
 
-    status("Running trimmomatic adapter and quality trimming")
+    logger.info("Running trimmomatic adapter and quality trimming")
     run_cmd(cmd, debug)
     if right:
         safe_remove(basename + "_1U.fastq.gz")
         safe_remove(basename + "_2U.fastq.gz")
-        status("Trimming finished:\n\tFor: {:}\n\tRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
+        logger.info("Trimming finished:\nFor: {:}\nRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
         if not pipe:
-            status("Your next command might be:\n\t" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
+            logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
     else:
-        status("Trimming finished:\n\tSingle: {:}".format(basename + "_1U.fastq.gz"))
+        logger.info("Trimming finished:\nSingle: {:}".format(basename + "_1U.fastq.gz"))
         if not pipe:
-            status("Your next command might be:\n\t" + "AAFTF filter -l {:} -o {:} -c {:}\n".format(basename + "_1U.fastq.gz", basename, cpus))
+            logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -o {:} -c {:}".format(basename + "_1U.fastq.gz", basename, cpus))
 
 
 def run_fastp(left, right, basename, cpus, minlen, avgqual, merge, dedup, cutfront, cuttail, cutright, debug, pipe):
     """Trim reads with fastp."""
-    status("Adapter trimming using fastp")
+    logger.info("Adapter trimming using fastp")
     cmd = [
         "fastp",
         "--low_complexity_filter",
@@ -314,13 +317,13 @@ def _report_trimmed(basename, right, pipe, cpus):
     if right:
         clean = countfastq(f"{basename}_1P.fastq.gz")
         clean = clean * 2
-        status(f"{clean:,} reads remaining and writing to file")
-        status("Trimming finished:\n\tFor: {:}\n\tRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
+        logger.info(f"{clean:,} reads remaining and writing to file")
+        logger.info("Trimming finished:\nFor: {:}\nRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
         if not pipe:
-            status("Your next command might be:\n\t" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
+            logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
     else:
         clean = countfastq(f"{basename}_1U.fastq.gz")
-        status(f"{clean:,} reads remaining and writing to file")
-        status("Trimming finished:\n\tSingle: {:}".format(basename + "_1U.fastq.gz"))
+        logger.info(f"{clean:,} reads remaining and writing to file")
+        logger.info("Trimming finished:\nSingle: {:}".format(basename + "_1U.fastq.gz"))
         if not pipe:
-            status("Your next command might be:\n\t" + "AAFTF filter -l {:} -o {:} -c {:}\n".format(basename + "_1U.fastq.gz", basename, cpus))
+            logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -o {:} -c {:}".format(basename + "_1U.fastq.gz", basename, cpus))

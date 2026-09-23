@@ -5,10 +5,11 @@ after the contigs are modified.
 """
 
 import csv
+import logging
 import re
 import sys
 
-from AAFTF.utility import status
+logger = logging.getLogger(__name__)
 
 
 def run(table, report, output, **kwargs):
@@ -30,7 +31,7 @@ def parse_tbl(tbl_file_handle):
                 sequence_name = m.group(1)
                 features[sequence_name] = []
             else:
-                status(f"Unexpected line {line} in tbl file")
+                logger.info(f"Unexpected line {line} in tbl file")
                 continue
         m = re.match(r"^([<>]?\d+)\t([<>]?\d+)(\t(\S+))?", line)
         if m:
@@ -66,7 +67,7 @@ def parse_adjustments(adj_file_handle):
     csvreader = csv.reader(adj_file_handle, delimiter="\t")
     for row in csvreader:
         if len(row) < 4:
-            status(f"Skipping line: {row}")
+            logger.info(f"Skipping line: {row}")
             continue
         seqid = row[0]
         try:
@@ -80,7 +81,7 @@ def parse_adjustments(adj_file_handle):
                         adjustments[seqid] = []
                     adjustments[seqid].append([int(original_length), action, int(trim_start), int(trim_end)])
         except ValueError:
-            status(f"Skipping line: {row}")
+            logger.info(f"Skipping line: {row}")
             continue
     return adjustments
 
@@ -101,7 +102,7 @@ def fix_tbl(tbl_fh, adjustment_fh, output_handle):
                     elif trim_end == original_length:
                         adj["trim_right"] = trim_start
                     else:
-                        status(f"Cannot trim effectively the adjustment is internal to the contig {seqid}:{trim_start}..{trim_end} in len={original_length}")
+                        logger.info(f"Cannot trim effectively the adjustment is internal to the contig {seqid}:{trim_start}..{trim_end} in len={original_length}")
         for feature in feats:
             if feature[0] is not None and feature[0] != "":
                 fstart = feature[0]

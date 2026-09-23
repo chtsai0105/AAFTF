@@ -1,8 +1,8 @@
 """Utility scripts for parsing FASTA/FASTQ files and other shared helpers."""
 
 import argparse as ap
-import datetime
 import gzip
+import logging
 import os
 import re
 import shutil
@@ -17,6 +17,8 @@ from pathlib import Path
 import psutil
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.SeqIO.QualityIO import FastqGeneralIterator
+
+logger = logging.getLogger(__name__)
 
 
 class CustomHelpFormatter(ap.HelpFormatter):
@@ -231,7 +233,7 @@ def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, debug=False):
     if p1.wait() != 0 or p2.returncode != 0:
         bam_path.unlink(missing_ok=True)
         Path(f"{bam_path}.bai").unlink(missing_ok=True)
-        status(f"ERROR: {align_cmd[0]} | samtools sort failed for {bam_out}")
+        logger.error(f"{align_cmd[0]} | samtools sort failed for {bam_out}")
         sys.exit(1)
 
 
@@ -301,8 +303,8 @@ def require_tools(tools, hint=None):
     """Exit with an error naming any of ``tools`` that are not on PATH."""
     missing = [tool for tool in tools if shutil.which(tool) is None]
     if missing:
-        status(f"ERROR: required tool(s) not found on PATH: {', '.join(missing)}")
-        status(hint or "Install them (e.g. `conda install -c bioconda <tool>`) and make sure the correct environment is activated.")
+        logger.error(f"required tool(s) not found on PATH: {', '.join(missing)}")
+        logger.info(hint or "Install them (e.g. `conda install -c bioconda <tool>`) and make sure the correct environment is activated.")
         sys.exit(1)
 
 
@@ -333,7 +335,7 @@ def aaftf_db_dir(required=False):
     if db_dir:
         return str(Path(db_dir).resolve())
     if required:
-        status("ERROR: No database directory specified.\n  Set the AAFTF_DB environment variable.\n  Example:\n    export AAFTF_DB=/path/to/aaftf_db\n    AAFTF download")
+        logger.error("No database directory specified.\nSet the AAFTF_DB environment variable.\nExample:\nexport AAFTF_DB=/path/to/aaftf_db\nAAFTF download")
         sys.exit(1)
     return None
 
@@ -373,10 +375,10 @@ def download_file(url, dest, force=False):
         ``dest``.
     """
     if Path(dest).exists() and not force:
-        status(f"  Already present: {dest}")
+        logger.info(f"Already present: {dest}")
         return dest
 
-    status(f"  Downloading {Path(dest).name} ...")
+    logger.info(f"Downloading {Path(dest).name} ...")
     Path(dest).parent.mkdir(parents=True, exist_ok=True)
 
     tmp = f"{dest}.tmp"
@@ -385,22 +387,49 @@ def download_file(url, dest, force=False):
         with URL_OPENER.open(req, timeout=300) as response:
             final_url = response.geturl()
             if final_url != url:
-                status(f"  Redirected to {final_url}")
+                logger.info(f"Redirected to {final_url}")
             with open(tmp, "wb") as outfh:
                 shutil.copyfileobj(response, outfh)
         os.replace(tmp, dest)
     except Exception as e:
-        status(f"  ERROR downloading {url}: {e}")
+        logger.error(f"downloading {url}: {e}")
         safe_remove(tmp)
         raise
 
-    status(f"  Saved {dest}")
+    logger.info(f"Saved {dest}")
     return dest
 
 
-def status(string):
-    """Print out status."""
-    print("\033[92m[{:}]\033[00m {:}".format(datetime.datetime.now().strftime("%b %d %I:%M %p"), string))
+class _StatusFormatter(logging.Formatter):
+    """Format records as ``[Mon DD HH:MM AM] message``; warnings and errors get a level prefix."""
+
+    def __init__(self, color):
+        super().__init__(datefmt="%b %d %I:%M %p")
+        self.color = color
+
+    def format(self, record):
+        stamp = f"[{self.formatTime(record, self.datefmt)}]"
+        if self.color:
+            stamp = f"\033[92m{stamp}\033[00m"
+        message = record.getMessage()
+        if record.levelno >= logging.WARNING:
+            message = f"{record.levelname}: {message}"
+        return f"{stamp} {message}"
+
+
+def setup_logging(debug=False, quiet=False):
+    """Send AAFTF log messages to stderr.
+
+    Args:
+        debug: Also show debug messages (``-v/--debug``).
+        quiet: Show only warnings and errors (``-q/--quiet``); ``debug`` wins if both are set.
+    """
+    handler = logging.StreamHandler()
+    handler.setFormatter(_StatusFormatter(color=handler.stream.isatty()))
+    package_logger = logging.getLogger("AAFTF")
+    package_logger.handlers[:] = [handler]
+    package_logger.setLevel(logging.DEBUG if debug else logging.WARNING if quiet else logging.INFO)
+    package_logger.propagate = False
 
 
 # from https://stackoverflow.com/questions/4417546/

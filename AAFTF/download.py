@@ -7,13 +7,16 @@ AAFTF commands will reuse these cached files instead of re-downloading
 them on first use.
 """
 
+import logging
 import os
 import sys
 import urllib.request
 from pathlib import Path
 
 from AAFTF.resources import FCSADAPTOR, Contaminant_Accessions, DB_Links
-from AAFTF.utility import URL_OPENER, aaftf_db_dir, download_file, status
+from AAFTF.utility import URL_OPENER, aaftf_db_dir, download_file
+
+logger = logging.getLogger(__name__)
 
 
 def _human_size(num_bytes):
@@ -58,7 +61,7 @@ def _list_db(db_dir):
     """List every database ``download`` would fetch: local size if already downloaded, else the remote size."""
     db_path = Path(db_dir)
 
-    status(f"Database files in {db_dir}:")
+    logger.info(f"Database files in {db_dir}:")
     downloaded_total = 0
     pending_total = 0
     pending_unknown = False
@@ -107,7 +110,7 @@ def run(force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourd
         return
 
     Path(db_dir).mkdir(parents=True, exist_ok=True)
-    status(f"AAFTF database directory: {db_dir}")
+    logger.info(f"AAFTF database directory: {db_dir}")
 
     errors = []
 
@@ -137,13 +140,13 @@ def run(force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourd
             errors.append(f"FCS resources: {e}")
 
     if errors:
-        status("\nSome downloads failed:")
+        logger.info("Some downloads failed:")
         for err in errors:
-            status(f"  - {err}")
-        status("\nYou can re-run 'AAFTF download' later; already-downloaded " "files will be skipped unless you pass --force.")
+            logger.info(f"- {err}")
+        logger.info("You can re-run 'AAFTF download' later; already-downloaded " "files will be skipped unless you pass --force.")
         sys.exit(1)
 
-    status("Setup complete. Future AAFTF runs will use cached files from " f"{db_dir}")
+    logger.info("Setup complete. Future AAFTF runs will use cached files from " f"{db_dir}")
 
 
 def _download_db_links(db_dir, keys=None, force=False):
@@ -161,9 +164,9 @@ def _download_db_links(db_dir, keys=None, force=False):
 
     for key in keys:
         if key not in DB_Links:
-            status(f"  WARNING: unknown DB_Links key '{key}', skipping")
+            logger.warning(f"unknown DB_Links key '{key}', skipping")
             continue
-        status(f"Downloading {key} ...")
+        logger.info(f"Downloading {key} ...")
         for url_or_meta in DB_Links[key]:
             if isinstance(url_or_meta, dict):
                 url = url_or_meta["url"]
@@ -182,9 +185,9 @@ def _download_contaminants(db_dir, force=False):
         db_dir: Target directory.
         force: If True, overwrite existing files.
     """
-    status("Downloading contaminant accessions ...")
+    logger.info("Downloading contaminant accessions ...")
     for name, urls in Contaminant_Accessions.items():
-        status(f"  {name} ...")
+        logger.info(f"{name} ...")
         for url in urls:
             filename = Path(url).name
             dest = str(Path(db_dir, filename))
@@ -209,12 +212,12 @@ def _download_sourmash(db_dir, sourdb_type="gbk", force=False):
         indices = list(type_map.values())
     else:
         if sourdb_type not in type_map:
-            status(f"  ERROR: unknown sourdb_type '{sourdb_type}'. " f"Choose from {list(type_map.keys()) + ['all']}")
+            logger.error(f"unknown sourdb_type '{sourdb_type}'. " f"Choose from {list(type_map.keys()) + ['all']}")
             return
         indices = [type_map[sourdb_type]]
 
     for idx in indices:
-        status(f"Downloading sourmash database ({idx}) ...")
+        logger.info(f"Downloading sourmash database ({idx}) ...")
         for entry in DB_Links[idx]:
             dest = str(Path(db_dir, entry["filename"]))
             download_file(entry["url"], dest, force=force)
@@ -227,13 +230,13 @@ def _download_fcs(db_dir, force=False):
         db_dir: Target directory.
         force: If True, overwrite existing files.
     """
-    status("Downloading NCBI FCS-adaptor resources ...")
+    logger.info("Downloading NCBI FCS-adaptor resources ...")
 
     # Wrapper script
     script_url = FCSADAPTOR["EXEURL"] % FCSADAPTOR["VERSION"]
     script_dest = str(Path(db_dir, "run_fcsadaptor.sh"))
     if Path(script_dest).exists() and not force:
-        status(f"  Already present: {script_dest}")
+        logger.info(f"Already present: {script_dest}")
     else:
         download_file(script_url, script_dest, force=force)
         os.chmod(script_dest, 0o555)
@@ -242,7 +245,7 @@ def _download_fcs(db_dir, force=False):
     image_name = FCSADAPTOR["SIFLOCAL"] % FCSADAPTOR["VERSION"]
     image_dest = str(Path(db_dir, image_name))
     if Path(image_dest).exists() and not force:
-        status(f"  Already present: {image_dest}")
+        logger.info(f"Already present: {image_dest}")
     else:
         image_url = str(Path(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]))
         download_file(image_url, image_dest, force=force)
