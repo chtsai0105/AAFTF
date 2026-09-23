@@ -10,7 +10,7 @@ from pathlib import Path
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
 from AAFTF.resources import Mitoseqs
-from AAFTF.utility import GuessRL, RevComp, execute, getRAM, printCMD, softwrap, status, which_path
+from AAFTF.utility import RevComp, estimate_read_length, execute, printCMD, softwrap, status
 
 
 def run(
@@ -23,6 +23,7 @@ def run(
     seed=None,
     starting=None,
     reference=None,
+    memory=8,
     pipe=False,
     **kwargs,
 ):
@@ -30,7 +31,7 @@ def run(
     # first check if NOVOplasty and minimap2 are installed, else exit
     programs = ["NOVOPlasty.pl", "minimap2"]
     for x in programs:
-        if not which_path(x):
+        if not shutil.which(x):
             status(f"ERROR: {x} is not installed, exiting")
             sys.exit(1)
     # first we need to generate working directory
@@ -41,7 +42,7 @@ def run(
         Path(workdir).mkdir(parents=True)
 
     # now estimate read lengths of FASTQ
-    read_len = GuessRL(left)
+    read_len = estimate_read_length(left)
 
     # check for seed sequence, otherwise write one
     if not seed:
@@ -64,7 +65,7 @@ def run(
         unique_id,  # project
         str(minlen),  # minlen
         str(maxlen),  # maxlen
-        str(int(getRAM() * 0.75)),  # maxRAM
+        str(memory),  # maxRAM
         seedFasta,  # seed fasta seq
         str(read_len),  # read length
         str(Path(left).resolve()),  # forward read

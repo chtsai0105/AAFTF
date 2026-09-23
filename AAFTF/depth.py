@@ -36,7 +36,7 @@ except ImportError:
 
 from packaging.version import Version
 
-from AAFTF.utility import SafeRemove, checkfile, countfastq, get_samtools_version, printCMD, samtools_sort_cmd, status, which
+from AAFTF.utility import SafeRemove, checkfile, countfastq, get_samtools_version, printCMD, samtools_sort_cmd, status
 
 # ---------------------------------------------------------------------------
 # Constants for quantized coverage classes
@@ -121,7 +121,7 @@ def run(
     if longreads:
         required.add("minimap2")
     for tool in sorted(required):
-        if not which(tool):
+        if not shutil.which(tool):
             status(f"ERROR: required tool '{tool}' not found in PATH. Install via conda: conda install -c bioconda {tool}")
             sys.exit(1)
 

@@ -1,24 +1,20 @@
-"""Utility scripts for parsing fasta and downloading datasets."""
+"""Utility scripts for parsing FASTA/FASTQ files and other shared helpers."""
 
 import argparse as ap
 import datetime
-import errno
 import gzip
 import os
 import re
 import shutil
 import subprocess
 import textwrap
+from itertools import islice
 from pathlib import Path
 
+import psutil
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.SeqIO.QualityIO import FastqGeneralIterator
 from packaging.version import Version
-
-try:
-    from urllib.request import urlopen
-except ImportError:
-    from urllib2 import urlopen
 
 
 class CustomHelpFormatter(ap.HelpFormatter):
@@ -43,62 +39,20 @@ class CustomHelpFormatter(ap.HelpFormatter):
         help = action.help
         pattern = r"\(default: .+\)"
         if re.search(pattern, action.help) is None:
-            if action.default not in [ap.SUPPRESS, None, False]:
+            if action.default is not ap.SUPPRESS and action.default is not None and action.default is not False:
                 defaulting_nargs = [ap.OPTIONAL, ap.ZERO_OR_MORE]
                 if action.option_strings or action.nargs in defaulting_nargs:
                     help += " (default: %(default)s)"
         return help
 
 
-def download(url, file_name):
-    """Tool for downloading data from a URL."""
-    try:
-        u = urlopen(url)
-        f = open(file_name, "wb")
-        # meta = u.info()
-        # file_size = 0
-        # for x in meta.items():
-        #    if x[0].lower() == 'content-length':
-        #        file_size = int(x[1])
-        file_size_dl = 0
-        block_sz = 8192
-        while True:
-            buffer = u.read(block_sz)
-            if not buffer:
-                break
-            file_size_dl += len(buffer)
-            f.write(buffer)
-        f.close()
-    except OSError as e:
-        if e.errno != errno.ECONNRESET:
-            raise
-        pass
-
-
-def myround(x, base=10):
-    """Round a number to specific base."""
-    return int(base * round(float(x) / base))
-
-
-def GuessRL(input):
-    """Guess the line lengths in Fasta File."""
-    # read first 500 records, get length then exit
-    lengths = []
-    if input.endswith(".gz"):
-        with gzip.open(input, "rt") as infile:
-            for title, seq, qual in FastqGeneralIterator(infile):
-                if len(lengths) < 500:
-                    lengths.append(len(seq))
-                else:
-                    break
-    else:
-        with open(input) as infile:
-            for title, seq, qual in FastqGeneralIterator(infile):
-                if len(lengths) < 500:
-                    lengths.append(len(seq))
-                else:
-                    break
-    return myround(max(set(lengths)))
+def estimate_read_length(input):
+    """Guess the read length in a FASTQ file, rounded to the nearest 10bp."""
+    opener = gzip.open if input.endswith(".gz") else open
+    with opener(input, "rt") as infile:
+        records = islice(FastqGeneralIterator(infile), 500)
+        max_len = max(len(seq) for _, seq, _ in records)
+    return round(max_len, -1)
 
 
 def checkfile(input):
@@ -109,55 +63,26 @@ def checkfile(input):
         return st.st_size
 
     if Path(input).is_file():
-        filesize = _getSize(input)
-        if int(filesize) < 1:
-            return False
-        else:
-            return True
-    elif Path(input).is_symlink():
-        return True
-    else:
-        return False
+        return _getSize(input) >= 1
+    return False
 
 
-def getRAM():
-    """Get the RAM available on system.
+def getRAM(max_lim=0):
+    """Get the available RAM on system, in GB, kept safely under the true value.
+
+    Rounded down to the nearest 10 once available RAM exceeds 10 GB;
+    otherwise rounded down to 1 decimal with a small safety margin
+    subtracted, clamped at 0. This never exceeds the true available RAM.
 
     This is a simplistic approach which does not take into account shared
     HPC allocations.
+
+    Args:
+        max_lim: Optional upper bound (GB) to cap the result at.
     """
-    # first try simple os method
-    try:
-        mem_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-        mem = int(mem_bytes / (1024.0**3))
-    except ValueError:
-        import resource
-        import sys
-
-        rusage_denom = 1024.0
-        if sys.platform == "darwin":
-            # ... it seems that in OSX the output is different units ...
-            rusage_denom = rusage_denom * rusage_denom
-        mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / rusage_denom
-    return mem
-
-
-def which_path(file_name):
-    """List full path for a file."""
-    for path in os.environ["PATH"].split(os.pathsep):
-        full_path = str(Path(path, file_name))
-        if Path(full_path).exists() and os.access(full_path, os.X_OK):
-            return full_path
-    return None
-
-
-def line_count(fname):
-    """Count the number of lines in a file."""
-    with open(fname) as f:
-        i = -1
-        for i, line in enumerate(f):
-            pass
-    return i + 1
+    avail_gb = psutil.virtual_memory().available / (1024.0**3)
+    safe_gb = avail_gb // 10 * 10 if avail_gb > 10 else max(round(avail_gb, 1) - 0.1, 0)
+    return min(safe_gb, max_lim) if max_lim else safe_gb
 
 
 def countfasta(input):
@@ -358,7 +283,7 @@ def execute(cmd, dir):
 
 def Fzip_inplace(input, cpus):
     """Function to run zip as fast as it can, pigz -> gzip."""
-    if which_path("pigz"):
+    if shutil.which("pigz"):
         cmd = ["pigz", "-f", "-p", str(cpus), input]
     else:
         cmd = ["gzip", "-f", input]
@@ -376,26 +301,6 @@ def SafeRemove(input):
         Path(input).unlink()
     else:
         return
-
-
-def which(program):
-    """Report the location of an executable."""
-    import os
-
-    def is_exe(fpath):
-        return Path(fpath).is_file() and os.access(fpath, os.X_OK)
-
-    has_dir = os.sep in program or (os.altsep and os.altsep in program)
-    if has_dir:
-        if is_exe(program):
-            return program
-    else:
-        for path in os.environ["PATH"].split(os.pathsep):
-            path = path.strip('"')
-            exe_file = str(Path(path, program))
-            if is_exe(exe_file):
-                return exe_file
-    return None
 
 
 def open_pipe(command, mode="r", buff=1024 * 1024):
@@ -419,8 +324,8 @@ def open_pipe(command, mode="r", buff=1024 * 1024):
 NORMAL = 0
 PROCESS = 1
 PARALLEL = 2
-WHICH_GZIP = which("gzip")
-WHICH_PIGZ = which("pigz")
+WHICH_GZIP = shutil.which("gzip")
+WHICH_PIGZ = shutil.which("pigz")
 
 # streaming parallel pigz open via
 # https://github.com/DarkoVeberic/utl/blob/master/futile/futile.py

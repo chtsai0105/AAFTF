@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
-from AAFTF.utility import SafeRemove, bam_read_count, countfastq, getRAM, printCMD, samtools_sort_cmd, samtools_view_bam_cmd, status
+from AAFTF.utility import SafeRemove, bam_read_count, countfastq, printCMD, samtools_sort_cmd, samtools_view_bam_cmd, status
 
 
 # flake8: noqa: C901
@@ -28,7 +28,7 @@ def run(
     screen_local=None,
     basename=None,
     aligner="bbduk",
-    memory=None,
+    memory=8,
     debug=False,
     pipe=False,
     **kwargs,
@@ -155,10 +155,7 @@ def run(
     refmatch_bbduk = [contamdb, "phix", "artifacts", "lambda"]
     if aligner == "bbduk":
         status("Kmer filtering reads using BBDuk")
-        if memory:
-            MEM = f"-Xmx{memory}g"
-        else:
-            MEM = f"-Xmx{round(0.6 * getRAM())}g"
+        MEM = f"-Xmx{memory}g"
         leftcleanfname = f"{clean_reads}_1.fastq.gz"
         if revReads:
             # Paired mode (in=/in2=) hits a bug in this BBDuk build's

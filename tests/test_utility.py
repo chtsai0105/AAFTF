@@ -14,39 +14,11 @@ from AAFTF.utility import (
     countfasta,
     countfastq,
     fastastats,
-    line_count,
-    myround,
     softwrap,
-    which,
 )
 from tests.conftest import make_fastq_text
 
 pytestmark = pytest.mark.unit
-
-
-# ---------------------------------------------------------------------------
-# myround
-# ---------------------------------------------------------------------------
-
-
-class TestMyround:
-    def test_round_up_to_base10(self):
-        assert myround(15, 10) == 20
-
-    def test_round_down_to_base10(self):
-        assert myround(14, 10) == 10
-
-    def test_exact_multiple_unchanged(self):
-        assert myround(20, 10) == 20
-
-    def test_base5(self):
-        assert myround(12, 5) == 10
-
-    def test_base5_round_up(self):
-        assert myround(13, 5) == 15
-
-    def test_zero(self):
-        assert myround(0, 10) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -152,19 +124,15 @@ class TestCheckfile:
     def test_missing_file_is_false(self, tmp_path):
         assert checkfile(str(tmp_path / "nonexistent.fa")) is False
 
+    def test_symlink_to_nonempty_file_is_true(self, tmp_path, fasta_file):
+        link = tmp_path / "link.fa"
+        link.symlink_to(fasta_file)
+        assert checkfile(str(link)) is True
 
-# ---------------------------------------------------------------------------
-# line_count
-# ---------------------------------------------------------------------------
-
-
-class TestLineCount:
-    def test_known_line_count(self, line_file):
-        assert line_count(str(line_file)) == 5
-
-    def test_fasta_line_count(self, fasta_file):
-        # SMALL_FASTA has 3 header lines + 3 sequence lines = 6
-        assert line_count(str(fasta_file)) == 6
+    def test_broken_symlink_is_false(self, tmp_path):
+        link = tmp_path / "broken_link.fa"
+        link.symlink_to(tmp_path / "nonexistent_target.fa")
+        assert checkfile(str(link)) is False
 
 
 # ---------------------------------------------------------------------------
@@ -202,21 +170,6 @@ class TestCountFastq:
         p = tmp_path / "one.fastq"
         p.write_text(make_fastq_text(1))
         assert countfastq(str(p)) == 1
-
-
-# ---------------------------------------------------------------------------
-# which
-# ---------------------------------------------------------------------------
-
-
-class TestWhich:
-    def test_python_found(self):
-        # python3 or python should be in PATH in any test environment
-        result = which("python3") or which("python")
-        assert result is not None
-
-    def test_nonexistent_tool_returns_none(self):
-        assert which("definitely_not_a_real_tool_xyzzy_12345") is None
 
 
 # ---------------------------------------------------------------------------

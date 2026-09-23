@@ -31,6 +31,7 @@ dependencies = [
     "biopython>=1.88",
     "matplotlib>=3",
     "packaging",
+    "psutil>=5",
 ]
 
 [project.optional-dependencies]

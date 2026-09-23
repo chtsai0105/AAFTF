@@ -5,11 +5,12 @@ This uses either fastp, includes merging step for paired reads, OR
 trimmomatic. Expects adaptor sequence files to be in trimmomatic installed folder.
 """
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from AAFTF.utility import Fzip_inplace, SafeRemove, countfastq, getRAM, printCMD, status, which_path
+from AAFTF.utility import Fzip_inplace, SafeRemove, countfastq, printCMD, status
 
 TRIMMOMATIC_TRUSEQSE = "adapters/TruSeq3-SE.fa"
 TRIMMOMATIC_TRUSEQPE = "adapters/TruSeq3-PE.fa"
@@ -30,7 +31,7 @@ def run(
     basename=None,
     method="bbduk",
     cpus=1,
-    memory=None,
+    memory=4,
     minlen=75,
     avgqual=10,
     trimmomatic_adaptors="TruSeq3-PE.fa",
@@ -88,10 +89,7 @@ def run(
 
 def run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe):
     """Trim reads with BBDuk."""
-    if memory:
-        MEM = f"-Xmx{memory}g"
-    else:
-        MEM = f"-Xmx{round(0.6 * getRAM())}g"
+    MEM = f"-Xmx{memory}g"
 
     status("Adapter trimming using BBDuk")
     bbduk_base = [
@@ -327,7 +325,7 @@ def run_fastp(left, right, basename, cpus, minlen, avgqual, merge, dedup, cutfro
 
 def _find_trimmomatic():
     """Finds the trimmomatic jar file."""
-    trim_path = which_path("trimmomatic")
+    trim_path = shutil.which("trimmomatic")
     if trim_path:
         with open(str(Path(trim_path).resolve())) as trim_shell:
             firstLine = trim_shell.readline()

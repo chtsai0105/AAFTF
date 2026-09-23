@@ -1,9 +1,10 @@
 """Check that AAFTF's external tool and Python package dependencies are installed."""
 
 import importlib
+import shutil
 import sys
 
-from AAFTF.utility import status, which_path
+from AAFTF.utility import status
 
 # external binaries used via subprocess across the AAFTF modules
 REQUIRED_TOOLS = {
@@ -79,7 +80,7 @@ def run(**kwargs):
 def _check_tools(tools):
     results = []
     for tool, used_by in sorted(tools.items()):
-        path = which_path(tool)
+        path = shutil.which(tool)
         results.append((tool, path, used_by))
     return results
 

@@ -76,8 +76,20 @@ def run(
     # run mitochondrial assembly on bbduk trimmed reads
     if right:
         if not checkfile(basename + ".mito.fasta"):
-            mitoOpts = ["left", "right", "out", "minlen", "maxlen", "seed", "starting", "workdir", "pipe", "reference"]
-            mito_args = create_namespace(mitoOpts, required_args={"left": basename + "_1P.fastq.gz", "right": basename + "_2P.fastq.gz", "out": basename + ".mito.fasta", "minlen": 10000, "maxlen": 100000, "pipe": True}, **{x: False for x in mitoOpts if x not in args_dict})
+            mitoOpts = ["left", "right", "out", "minlen", "maxlen", "seed", "starting", "workdir", "pipe", "reference", "memory"]
+            mito_args = create_namespace(
+                mitoOpts,
+                required_args={
+                    "left": basename + "_1P.fastq.gz",
+                    "right": basename + "_2P.fastq.gz",
+                    "out": basename + ".mito.fasta",
+                    "minlen": 10000,
+                    "maxlen": 100000,
+                    "pipe": True,
+                    "memory": int(args_dict["memory"]),
+                },
+                **{x: False for x in mitoOpts if x not in args_dict},
+            )
             mito.run(**vars(mito_args))
         else:
             status("AAFTF mito output: {}".format(basename + ".mito.fasta"))
