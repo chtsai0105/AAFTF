@@ -11,7 +11,6 @@ import subprocess
 import pytest
 
 from AAFTF.utility import (
-    RevComp,
     SafeRemove,
     align_to_sorted_bam,
     bam_read_count,
@@ -60,34 +59,6 @@ class TestCalcN50:
     def test_input_order_irrelevant(self):
         # Function sorts internally
         assert calcN50([150, 20, 80]) == calcN50([20, 80, 150])
-
-
-# ---------------------------------------------------------------------------
-# RevComp
-# ---------------------------------------------------------------------------
-
-
-class TestRevComp:
-    def test_simple(self):
-        assert RevComp("ATCG") == "CGAT"
-
-    def test_complement_only(self):
-        assert RevComp("AAAA") == "TTTT"
-        assert RevComp("CCCC") == "GGGG"
-
-    def test_palindrome(self):
-        assert RevComp("AATTAATT") == "AATTAATT"
-
-    def test_uppercase_conversion(self):
-        # RevComp uppercases input before processing
-        assert RevComp("atcg") == "CGAT"
-
-    def test_longer_sequence(self):
-        assert RevComp("ATCGATCG") == "CGATCGAT"
-
-    def test_all_bases(self):
-        # A↔T, C↔G
-        assert RevComp("ACGT") == "ACGT"
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@ from pathlib import Path
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
 from AAFTF.resources import Mitoseqs
-from AAFTF.utility import RevComp, estimate_read_length, execute, printCMD, status, write_fasta
+from AAFTF.utility import COMPLEMENT, estimate_read_length, execute, printCMD, status, write_fasta
 
 
 def run(
@@ -129,6 +129,11 @@ def run(
         shutil.rmtree(workdir)
 
 
+def _rev_comp(seq):
+    """Reverse complement a DNA string, preserving case."""
+    return seq.translate(COMPLEMENT)[::-1]
+
+
 def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
     """Reorient the MT assembly based on a starting gene (if found)."""
     # if not starting, then use cytochrome oxidase (cob)
@@ -177,7 +182,7 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
             return
         rotated = initial_seq[ref_start:] + initial_seq[:ref_start]
         if ref_strand == "-":
-            rotated = RevComp(rotated)
+            rotated = _rev_comp(rotated)
         with open(fasta_out, "w") as outfile:
             write_fasta(outfile, "mt", rotated)
     elif len(alignments) == 0:

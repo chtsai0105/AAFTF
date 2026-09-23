@@ -1,6 +1,6 @@
 """Unit tests for AAFTF/assess.py.
 
-Tests cover the pure-Python helper functions (revcomp, findTelomere)
+Tests cover the pure-Python helper functions (make_regex_revcomp, findTelomere)
 and the full genome_asm_stats / run() pipeline against known small
 FASTA files.  No external tools are required.
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from AAFTF.assess import findTelomere, genome_asm_stats, revcomp, run
+from AAFTF.assess import findTelomere, genome_asm_stats, make_regex_revcomp, run
 from tests.conftest import (
     TELO_FWD_ONLY,
     TELO_NONE,
@@ -22,29 +22,29 @@ pytestmark = pytest.mark.unit
 
 
 # ---------------------------------------------------------------------------
-# revcomp  (assess.py version — regex-aware)
+# make_regex_revcomp  (regex-aware)
 # ---------------------------------------------------------------------------
 
 
 class TestRevcomp:
-    """assess.revcomp handles regex bracket metacharacters in the monomer."""
+    """make_regex_revcomp handles regex bracket metacharacters in the monomer."""
 
     def test_simple_dna(self):
-        assert revcomp("ATCG") == "CGAT"
+        assert make_regex_revcomp("ATCG") == "CGAT"
 
     def test_all_complement(self):
-        assert revcomp("AAAA") == "TTTT"
-        assert revcomp("CCCC") == "GGGG"
+        assert make_regex_revcomp("AAAA") == "TTTT"
+        assert make_regex_revcomp("CCCC") == "GGGG"
 
     def test_regex_monomer(self):
         # revcomp of "TAA[C]+" should be "[G]+TTA"
-        rc = revcomp("TAA[C]+")
+        rc = make_regex_revcomp("TAA[C]+")
         assert rc == "[G]+TTA"
 
     def test_symmetric(self):
-        # revcomp(revcomp(seq)) should equal seq for plain DNA
+        # make_regex_revcomp(make_regex_revcomp(seq)) should equal seq for plain DNA
         seq = "ATCGATCG"
-        assert revcomp(revcomp(seq)) == seq
+        assert make_regex_revcomp(make_regex_revcomp(seq)) == seq
 
 
 # ---------------------------------------------------------------------------

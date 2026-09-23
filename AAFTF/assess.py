@@ -10,9 +10,7 @@ from pathlib import Path
 
 from Bio import SeqIO
 
-from AAFTF.utility import status
-
-COMPLEMENT_MAP = str.maketrans("ACGTURYKMSWBDHVNacgturykmswbdhvn", "TGCAAYRMKSWVBDHNtgcaayrmkswvbdhn")
+from AAFTF.utility import COMPLEMENT, status
 
 
 def run(input, report=None, telomere_monomer="TAAC{3,5}", telomere_n_repeat=2, telomere_window=200, **kwargs):
@@ -129,12 +127,12 @@ def make_regex_revcomp(pattern):
         if base_unit.startswith("[") and base_unit.endswith("]"):
             inner = base_unit[1:-1]
             if inner.startswith("^"):
-                comp_inner = "^" + inner[1:].translate(COMPLEMENT_MAP)
+                comp_inner = "^" + inner[1:].translate(COMPLEMENT)
             else:
-                comp_inner = inner.translate(COMPLEMENT_MAP)
+                comp_inner = inner.translate(COMPLEMENT)
             comp_base = f"[{comp_inner}]"
         else:
-            comp_base = base_unit.translate(COMPLEMENT_MAP)
+            comp_base = base_unit.translate(COMPLEMENT)
 
         tokens.append((comp_base, quantifier))
         pos = m.end()
