@@ -17,6 +17,7 @@ from AAFTF.utility import (
     calc_nx,
     checkfile,
     countfastq,
+    execute,
     fastastats,
     filter_fasta,
     run_cmd,
@@ -312,3 +313,25 @@ class TestRunCmd:
         with open(out, "w") as fh:
             run_cmd(["echo", "hello"], stdout=fh)
         assert out.read_text() == "hello\n"
+
+
+class TestExecute:
+    def test_yields_lines_and_prints_command(self, capsys):
+        assert list(execute(["printf", "a\\nb\\n"])) == ["a\n", "b\n"]
+        assert "printf" in capsys.readouterr().out
+
+    def test_quiet_does_not_print(self, capsys):
+        list(execute(["true"], quiet=True))
+        assert capsys.readouterr().out == ""
+
+    def test_cwd(self, tmp_path):
+        assert list(execute(["pwd"], cwd=str(tmp_path), quiet=True)) == [f"{tmp_path}\n"]
+
+    def test_failure_raises_after_output(self):
+        with pytest.raises(subprocess.CalledProcessError):
+            list(execute(["sh", "-c", "echo x; exit 3"], quiet=True))
+
+    def test_stopping_early_ends_the_command_without_raising(self):
+        gen = execute(["yes"], quiet=True)
+        assert next(gen) == "y\n"
+        gen.close()  # what a `break` in the caller's loop does

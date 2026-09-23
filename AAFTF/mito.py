@@ -157,8 +157,7 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
 
     alignments = []
     minimap2_cmd = ["minimap2", "-x", "map-ont", "-c", fasta_in, startFile]
-    printCMD(minimap2_cmd)
-    for line in execute(minimap2_cmd, "."):
+    for line in execute(minimap2_cmd):
         cols = line.rstrip().split("\t")
         alignments.append(cols)
     if len(alignments) == 1:

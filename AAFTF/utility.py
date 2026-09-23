@@ -228,7 +228,7 @@ def bam_read_count(bamfile):
     alignments are not counted as extra reads.
     """
     stats = {}
-    for line in execute(["samtools", "flagstat", "-O", "tsv", bamfile], "."):
+    for line in execute(["samtools", "flagstat", "-O", "tsv", bamfile], quiet=True):
         passed, _failed, label = line.rstrip("\n").split("\t")
         stats[label] = passed
     primary, mapped = int(stats["primary"]), int(stats["primary mapped"])
@@ -292,12 +292,32 @@ def status(string):
 # constantly-print-subprocess-output-while-process-is-running
 
 
-def execute(cmd, dir):
-    """Execute a command and wait for result."""
-    popen = subprocess.Popen(cmd, cwd=dir, stdout=subprocess.PIPE, universal_newlines=True, stderr=subprocess.DEVNULL)
-    yield from iter(popen.stdout.readline, "")
-    popen.stdout.close()
-    return_code = popen.wait()
+def execute(cmd, cwd=None, debug=False, quiet=False):
+    """Run a command and yield its stdout line by line.
+
+    Args:
+        cmd: Command list.
+        cwd: Working directory.
+        debug: Show the command's stderr (hidden otherwise).
+        quiet: Don't print the command (e.g. when it runs once per contig).
+
+    Raises:
+        subprocess.CalledProcessError: If the command fails and all its output
+            was read. If the caller stops reading early, the command is
+            stopped and its exit status is ignored.
+    """
+    if not quiet:
+        printCMD(cmd)
+    proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, text=True, stderr=None if debug else subprocess.DEVNULL)
+    finished = False
+    try:
+        yield from proc.stdout
+        finished = True
+    finally:
+        proc.stdout.close()
+        if not finished:
+            proc.kill()
+        return_code = proc.wait()
     if return_code:
         raise subprocess.CalledProcessError(return_code, cmd)
 

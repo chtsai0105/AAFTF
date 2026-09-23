@@ -46,7 +46,7 @@ def run(
     def runMinimap2(query, reference, name):
         """Run minimap2 for matching contigs."""
         garbage = False  # assume this is a good contig
-        for line in execute(["minimap2", "-t", str(cpus), "-x", "asm5", "-N5", reference, query], "."):
+        for line in execute(["minimap2", "-t", str(cpus), "-x", "asm5", "-N5", reference, query], debug=debug, quiet=True):
             qID, qLen, qStart, qEnd, strand, tID, tLen, tStart, tEnd, matches, alnLen, mapQ = line.split("\t")[:12]
             pident = float(matches) / int(alnLen) * 100
             cov = float(alnLen) / int(qLen) * 100

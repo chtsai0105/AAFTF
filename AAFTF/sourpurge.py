@@ -10,7 +10,7 @@ from pathlib import Path
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import SafeRemove, align_to_sorted_bam, calc_nx, checkfile, execute, fastastats, filter_fasta, printCMD, run_cmd, status
+from AAFTF.utility import SafeRemove, align_to_sorted_bam, calc_nx, checkfile, execute, fastastats, filter_fasta, run_cmd, status
 
 
 # logging - we may need to think about whether this has
@@ -94,13 +94,12 @@ def run(
     sour_compute = ["sourmash", "compute", "-k", kmer, "--scaled=1000", "--singleton", assembly_working]
     run_cmd(sour_compute, debug, cwd=workdir)
     sour_classify = ["sourmash", "lca", "classify", "--db", SOUR, "--query", sour_sketch]
-    printCMD(sour_classify)
     # output csv: ID,status,superkingdom,phylum,class,order,family,genus,species,strain
     Taxonomy = {}
     UniqueTax = []
     sourmashTSV = str(Path(workdir, "sourmash.csv"))
     with open(sourmashTSV, "w") as sour_out:
-        for line in execute(sour_classify, workdir):
+        for line in execute(sour_classify, workdir, debug):
             sour_out.write(line)
             if not line or line.startswith("\n") or line.startswith("ID") or line.count(",") < 9:
                 continue
@@ -171,9 +170,8 @@ def run(
         Coverage = {}
         coverageBed = str(Path(workdir, "coverage.bed"))
         cov_cmd = ["samtools", "bedcov", Path(FastaBed).name, blobBAM]
-        printCMD(cov_cmd)
         with open(coverageBed, "w") as bed_out:
-            for line in execute(cov_cmd, workdir):
+            for line in execute(cov_cmd, workdir, debug):
                 bed_out.write(line)
 
                 if not line or line.startswith("\n") or line.count("\t") < 3:
