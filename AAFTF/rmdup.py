@@ -12,7 +12,7 @@ from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from AAFTF.utility import SafeRemove, calcN50, execute, fastastats, softwrap, status
+from AAFTF.utility import SafeRemove, calcN50, execute, softwrap, status
 
 
 def run(
@@ -69,27 +69,19 @@ def run(
         Path(workdir).mkdir()
 
     if debug:
-        status(
-            f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} "
-            f"percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive} pipe={pipe}"
-        )
+        status(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} " f"percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive} pipe={pipe}")
     status("Looping through assembly shortest --> longest searching for duplicated contigs using minimap2")
-    numSeqs, assemblySize = fastastats(input)
     fasta_lengths = []
-    with open(input) as infile:
-        # trunk-ignore(ruff/B007)
-        for Header, Seq in SimpleFastaParser(infile):
-            fasta_lengths.append(len(Seq))
-    n50 = calcN50(fasta_lengths, num=0.50)
-    n75 = calcN50(fasta_lengths, num=0.75)
-    status(f"Assembly is {numSeqs:,} contigs; {assemblySize:,} bp; N50 is {n50:,} bp; N75 is {n75:,} bp")
-
-    # get list of tuples of sequences sorted by size (shortest --> longest)
     AllSeqs = {}
     with open(input) as infile:
         for Header, Seq in SimpleFastaParser(infile):
-            if Header not in AllSeqs:
-                AllSeqs[Header] = len(Seq)
+            fasta_lengths.append(len(Seq))
+            AllSeqs.setdefault(Header, len(Seq))
+    n50 = calcN50(fasta_lengths, num=0.50)
+    n75 = calcN50(fasta_lengths, num=0.75)
+    status(f"Assembly is {len(fasta_lengths):,} contigs; {sum(fasta_lengths):,} bp; N50 is {n50:,} bp; N75 is {n75:,} bp")
+
+    # get list of tuples of sequences sorted by size (shortest --> longest)
     sortSeqs = sorted(AllSeqs.items(), key=operator.itemgetter(1), reverse=False)
     if exhaustive:
         n75 = sortSeqs[-1][1]
@@ -121,12 +113,14 @@ def run(
             ignore.append(x[0])
 
     ignore = set(ignore)
+    numSeqs = assemblySize = 0
     with open(out, "w") as clean_out:
         with open(input) as infile:
             for Header, Seq in SimpleFastaParser(infile):
                 if Header not in ignore:
                     clean_out.write(f">{Header}\n{softwrap(Seq)}\n")
-    numSeqs, assemblySize = fastastats(out)
+                    numSeqs += 1
+                    assemblySize += len(Seq)
     status(f"Cleaned assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
     if "_" in out:
         nextOut = out.split("_")[0] + ".polish.fasta"

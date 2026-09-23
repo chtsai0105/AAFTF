@@ -12,7 +12,6 @@ from itertools import islice
 from pathlib import Path
 
 import psutil
-from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.SeqIO.QualityIO import FastqGeneralIterator
 from packaging.version import Version
 
@@ -85,24 +84,38 @@ def getRAM(max_lim=0):
     return min(safe_gb, max_lim) if max_lim else safe_gb
 
 
-def countfasta(input):
-    """Count the number of records in FastA file."""
-    count = 0
+def fastastats(input):
+    """Return (number of records, total sequence length) of a FASTA file."""
+    count = length = 0
     with open(input) as f:
         for line in f:
             if line.startswith(">"):
                 count += 1
-    return count
+            else:
+                length += len(line.rstrip())
+    return count, length
 
 
-def fastastats(input):
-    """Calculate statistics (num and total length) of FastA file."""
-    count = 0
-    length = 0
-    with open(input) as f:
-        for Header, Seq in SimpleFastaParser(f):
-            count += 1
-            length += len(Seq)
+def filter_fasta(fasta_in, fasta_out, keep):
+    """Copy records whose ID passes ``keep(id)`` to fasta_out, lines unchanged.
+
+    The ID is the first whitespace-delimited word of the header (as Biopython's
+    ``record.id``).
+
+    Returns:
+        Tuple (number of records written, total length written).
+    """
+    count = length = 0
+    write = False
+    with open(fasta_in) as fin, open(fasta_out, "w") as fout:
+        for line in fin:
+            if line.startswith(">"):
+                write = keep(line[1:].split(None, 1)[0])
+                count += write
+            elif write:
+                length += len(line.rstrip())
+            if write:
+                fout.write(line)
     return count, length
 
 

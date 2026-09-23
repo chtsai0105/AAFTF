@@ -6,9 +6,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from Bio import SeqIO
-
-from AAFTF.utility import SafeRemove, checkfile, fastastats, printCMD, status
+from AAFTF.utility import SafeRemove, checkfile, fastastats, filter_fasta, printCMD, status
 
 # logging - we may need to think about whether this has
 # separate name for the different runfolder
@@ -79,15 +77,11 @@ def run(
 
     # drop contigs from taxonomy before calculating coverage
     status(f"Dropping {len(Seq2Drop)} contigs from fcs-gx taxonomy screen")
-    with open(outfile, "w") as ofh:
-        for record in SeqIO.parse(input, "fasta"):
-            if record.id not in Seq2Drop:
-                SeqIO.write(record, ofh, "fasta")
+    numSeqs, assemblySize = filter_fasta(input, outfile, lambda seq_id: seq_id not in Seq2Drop)
 
     if debug:
         print("Contigs dropped due to taxonomy: {:}".format(",".join(Seq2Drop)))
 
-    numSeqs, assemblySize = fastastats(outfile)
     status(f"fcs-gx assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
     if "_" in outfile:
         nextOut = outfile.split("_")[0] + ".rmdup.fasta"

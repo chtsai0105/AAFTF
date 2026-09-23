@@ -11,9 +11,9 @@ from AAFTF.utility import (
     SafeRemove,
     calcN50,
     checkfile,
-    countfasta,
     countfastq,
     fastastats,
+    filter_fasta,
     softwrap,
 )
 from tests.conftest import make_fastq_text
@@ -136,22 +136,40 @@ class TestCheckfile:
 
 
 # ---------------------------------------------------------------------------
-# countfasta / fastastats
+# fastastats / filter_fasta
 # ---------------------------------------------------------------------------
 
 
-class TestCountFasta:
-    def test_count_three_sequences(self, fasta_file):
-        assert countfasta(str(fasta_file)) == 3
-
-    def test_fastastats_count(self, fasta_file):
+class TestFastastats:
+    def test_count(self, fasta_file):
         count, total_len = fastastats(str(fasta_file))
         assert count == 3
 
-    def test_fastastats_total_length(self, fasta_file):
+    def test_total_length(self, fasta_file):
         # SEQ1=20, SEQ2=80, SEQ3=150 → 250
         count, total_len = fastastats(str(fasta_file))
         assert total_len == 250
+
+    def test_wrapped_sequence_length(self, tmp_path):
+        p = tmp_path / "wrapped.fa"
+        p.write_text(">a desc\nACGT\nAC\n>b\nGG\n")
+        assert fastastats(str(p)) == (2, 8)
+
+
+class TestFilterFasta:
+    def test_drops_by_id_and_returns_stats(self, tmp_path):
+        src = tmp_path / "in.fa"
+        src.write_text(">a desc\nACGT\nAC\n>b\nGG\n>c\nTTT\n")
+        out = tmp_path / "out.fa"
+        assert filter_fasta(str(src), str(out), lambda seq_id: seq_id != "b") == (2, 9)
+        assert out.read_text() == ">a desc\nACGT\nAC\n>c\nTTT\n"
+
+    def test_keep_none(self, tmp_path):
+        src = tmp_path / "in.fa"
+        src.write_text(">a\nACGT\n")
+        out = tmp_path / "out.fa"
+        assert filter_fasta(str(src), str(out), lambda seq_id: False) == (0, 0)
+        assert out.read_text() == ""
 
 
 # ---------------------------------------------------------------------------

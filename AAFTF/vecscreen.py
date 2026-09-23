@@ -23,7 +23,7 @@ from subprocess import DEVNULL, call
 from Bio import SeqIO
 
 from AAFTF.resources import DB_Links
-from AAFTF.utility import SafeRemove, countfasta, printCMD, softwrap, status
+from AAFTF.utility import SafeRemove, printCMD, softwrap, status
 
 BlastPercent_ID_ContamMatch = "90.0"
 BlastPercent_ID_MitoMatch = "98.6"
@@ -293,14 +293,17 @@ def _run_vecscreen_rounds(eukCleaned, workdir, prefix, cpus, stringency, contigs
 
 def _write_final_outputs(outfile_vec, contigs_to_remove, mitoHits, outfile, mitochondria):
     """Split the vecscreen output into the cleaned assembly and a mitochondrial-contigs FASTA."""
+    n_clean = n_mito = 0
     with open(outfile, "w") as oh, open(mitochondria, "w") as mh:
         for record in SeqIO.parse(outfile_vec, "fasta"):
             if record.id not in contigs_to_remove:
                 SeqIO.write(record, oh, "fasta")
+                n_clean += 1
             elif record.id in mitoHits:
                 SeqIO.write(record, mh, "fasta")
-    status(f"Writing {countfasta(outfile):,} cleaned contigs to: {outfile}")
-    status(f"Writing {countfasta(mitochondria):,} mitochondrial contigs to: {mitochondria}")
+                n_mito += 1
+    status(f"Writing {n_clean:,} cleaned contigs to: {outfile}")
+    status(f"Writing {n_mito:,} mitochondrial contigs to: {mitochondria}")
 
 
 def _derive_next_out(outfile):
