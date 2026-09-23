@@ -9,7 +9,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from AAFTF.utility import Fzip_inplace, SafeRemove, countfastq, run_cmd, status
+from AAFTF.utility import SafeRemove, countfastq, run_cmd, status
 
 TRIMMOMATIC_TRUSEQSE = "adapters/TruSeq3-SE.fa"
 TRIMMOMATIC_TRUSEQPE = "adapters/TruSeq3-PE.fa"
@@ -206,10 +206,10 @@ def run_trimmomatic(
             quality,
             left,
             right,
-            basename + "_1P.fastq",
-            basename + "_1U.fastq",
-            basename + "_2P.fastq",
-            basename + "_2U.fastq",
+            basename + "_1P.fastq.gz",
+            basename + "_1U.fastq.gz",
+            basename + "_2P.fastq.gz",
+            basename + "_2U.fastq.gz",
             clipstr,
             leadingwindow,
             trailingwindow,
@@ -226,7 +226,7 @@ def run_trimmomatic(
             str(cpus),
             quality,
             left,
-            basename + "_1U.fastq",
+            basename + "_1U.fastq.gz",
             clipstr,
             leadingwindow,
             trailingwindow,
@@ -240,17 +240,12 @@ def run_trimmomatic(
     status("Running trimmomatic adapter and quality trimming")
     run_cmd(cmd, debug)
     if right:
-        status("Compressing trimmed PE FASTQ files")
-        Fzip_inplace(basename + "_1P.fastq", cpus)
-        Fzip_inplace(basename + "_2P.fastq", cpus)
-        SafeRemove(basename + "_1U.fastq")
-        SafeRemove(basename + "_2U.fastq")
+        SafeRemove(basename + "_1U.fastq.gz")
+        SafeRemove(basename + "_2U.fastq.gz")
         status("Trimming finished:\n\tFor: {:}\n\tRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
         if not pipe:
             status("Your next command might be:\n\t" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}\n".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
     else:
-        status("Compressing trimmed SE FASTQ file")
-        Fzip_inplace(basename + "_1U.fastq", cpus)
         status("Trimming finished:\n\tSingle: {:}".format(basename + "_1U.fastq.gz"))
         if not pipe:
             status("Your next command might be:\n\t" + "AAFTF filter -l {:} -o {:} -c {:}\n".format(basename + "_1U.fastq.gz", basename, cpus))

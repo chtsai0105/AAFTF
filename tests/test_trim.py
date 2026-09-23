@@ -404,11 +404,13 @@ class TestTrimRunTrimmomatic:
         with patch("AAFTF.trim._find_trimmomatic", return_value=fake_jar):
             with patch("AAFTF.trim.countfastq", return_value=100):
                 with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-                    with patch("AAFTF.trim.Fzip_inplace"):
-                        with patch("AAFTF.trim.SafeRemove"):
-                            from AAFTF.trim import run
+                    with patch("AAFTF.trim.SafeRemove"):
+                        from AAFTF.trim import run
 
-                            run(**vars(args))
+                        run(**vars(args))
         assert len(cmds) > 0
         assert "PE" in cmds[0]
         assert fake_jar in cmds[0]
+        # trimmomatic writes gzipped output directly (by the .gz extension)
+        assert any(a.endswith("_1P.fastq.gz") for a in cmds[0])
+        assert any(a.endswith("_2P.fastq.gz") for a in cmds[0])

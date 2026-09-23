@@ -322,15 +322,6 @@ def execute(cmd, cwd=None, debug=False, quiet=False):
         raise subprocess.CalledProcessError(return_code, cmd)
 
 
-def Fzip_inplace(input, cpus):
-    """Function to run zip as fast as it can, pigz -> gzip."""
-    if shutil.which("pigz"):
-        cmd = ["pigz", "-f", "-p", str(cpus), input]
-    else:
-        cmd = ["gzip", "-f", input]
-    run_cmd(cmd)
-
-
 def SafeRemove(input):
     """Test and remove a folder or file."""
     if Path(input).is_dir():
