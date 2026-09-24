@@ -143,10 +143,10 @@ def run(force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourd
         logger.info("Some downloads failed:")
         for err in errors:
             logger.info(f"- {err}")
-        logger.info("You can re-run 'AAFTF download' later; already-downloaded " "files will be skipped unless you pass --force.")
+        logger.info("You can re-run 'AAFTF download' later; already-downloaded files will be skipped unless you pass --force.")
         sys.exit(1)
 
-    logger.info("Setup complete. Future AAFTF runs will use cached files from " f"{db_dir}")
+    logger.info(f"Setup complete. Future AAFTF runs will use cached files from {db_dir}")
 
 
 def _download_db_links(db_dir, keys=None, force=False):
@@ -212,7 +212,7 @@ def _download_sourmash(db_dir, sourdb_type="gbk", force=False):
         indices = list(type_map.values())
     else:
         if sourdb_type not in type_map:
-            logger.error(f"unknown sourdb_type '{sourdb_type}'. " f"Choose from {list(type_map.keys()) + ['all']}")
+            logger.error(f"unknown sourdb_type '{sourdb_type}'. Choose from {list(type_map.keys()) + ['all']}")
             return
         indices = [type_map[sourdb_type]]
 

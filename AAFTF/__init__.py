@@ -1,4 +1,6 @@
 """Init placeholder."""
-from AAFTF.utility import getRAM
 
-AVAIL_RAM = getRAM()
+import logging
+
+# Library code only logs; AAFTF_main.main() configures handlers via setup_logging().
+logging.getLogger(__name__).addHandler(logging.NullHandler())

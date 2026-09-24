@@ -9,6 +9,13 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _ample_resources(monkeypatch):
+    """Keep main()'s -c/-m capping from depending on the test machine; capping tests patch these themselves."""
+    monkeypatch.setattr("AAFTF.AAFTF_main.available_cpus", lambda: 1024)
+    monkeypatch.setattr("AAFTF.AAFTF_main.getRAM", lambda max_lim=0: 1024.0)
+
+
+@pytest.fixture(autouse=True)
 def _reset_aaftf_logger():
     """Undo setup_logging() (called by every CLI test via main()) so caplog keeps working in later tests."""
     yield

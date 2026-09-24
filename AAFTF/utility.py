@@ -83,6 +83,22 @@ def checkfile(input):
     return False
 
 
+def available_cpus():
+    """Return how many CPUs this process may use.
+
+    Checks, in order: the SLURM allocation (``SLURM_CPUS_PER_TASK``), the CPU
+    affinity set (respects ``taskset``, SLURM CPU binding and cgroup cpusets),
+    then the machine's CPU count where affinity is unavailable (macOS, Windows).
+    CPU time quotas such as ``docker --cpus`` are not detected.
+    """
+    slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK", "")
+    if slurm_cpus.isdigit() and int(slurm_cpus) > 0:
+        return int(slurm_cpus)
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0))
+    return os.cpu_count() or 1
+
+
 def getRAM(max_lim=0):
     """Get the available RAM on system, in GB, kept safely under the true value.
 

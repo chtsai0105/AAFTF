@@ -13,6 +13,7 @@ import pytest
 from AAFTF.utility import (
     aaftf_db_dir,
     align_to_sorted_bam,
+    available_cpus,
     bam_read_count,
     basename_from_reads,
     calc_nx,
@@ -511,3 +512,24 @@ class TestSetupLogging:
 
     def test_no_color_when_not_a_terminal(self, capsys):
         assert "\033[" not in self._emit(capsys)
+
+
+class TestAvailableCpus:
+    def test_slurm_allocation_wins(self, monkeypatch):
+        monkeypatch.setenv("SLURM_CPUS_PER_TASK", "3")
+        assert available_cpus() == 3
+
+    def test_invalid_slurm_value_ignored(self, monkeypatch):
+        monkeypatch.setenv("SLURM_CPUS_PER_TASK", "0")
+        assert available_cpus() >= 1
+
+    def test_uses_affinity_without_slurm(self, monkeypatch):
+        monkeypatch.delenv("SLURM_CPUS_PER_TASK", raising=False)
+        monkeypatch.setattr("AAFTF.utility.os.sched_getaffinity", lambda pid: {0, 1}, raising=False)
+        assert available_cpus() == 2
+
+    def test_falls_back_to_cpu_count_without_affinity(self, monkeypatch):
+        monkeypatch.delenv("SLURM_CPUS_PER_TASK", raising=False)
+        monkeypatch.delattr("AAFTF.utility.os.sched_getaffinity", raising=False)
+        monkeypatch.setattr("AAFTF.utility.os.cpu_count", lambda: 5)
+        assert available_cpus() == 5

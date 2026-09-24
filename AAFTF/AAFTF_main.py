@@ -11,11 +11,25 @@ import sys
 # AAFTF imports
 from AAFTF._menu import SUBCOMMAND_REGISTRARS
 from AAFTF._version import __version__
-from AAFTF.utility import CustomHelpFormatter, setup_logging
+from AAFTF.utility import CustomHelpFormatter, available_cpus, getRAM, setup_logging
 
 logger = logging.getLogger("AAFTF.main")
 
 myversion = __version__
+
+
+def _cap_to_available(args):
+    """Lower -c/--cpus and -m/--memory to what this machine/job can provide, with a warning."""
+    cpus = getattr(args, "cpus", None)
+    if cpus and cpus > (avail_cpus := available_cpus()):
+        logger.warning(f"-c/--cpus {cpus} is more than the {avail_cpus} CPUs available to this job; using {avail_cpus}")
+        args.cpus = avail_cpus
+
+    memory = getattr(args, "memory", None)
+    if memory is not None and float(memory) > (avail_ram := getRAM()):
+        capped = max(int(avail_ram), 1)
+        logger.warning(f"-m/--memory {memory} GB is more than the {avail_ram:g} GB of RAM available; using {capped} GB")
+        args.memory = type(memory)(capped)  # keep the option's type (int, or str for assemble)
 
 
 def main():
@@ -52,6 +66,7 @@ def main():
     setup_logging(debug=getattr(args, "debug", False), quiet=getattr(args, "quiet", False))
     try:
         logger.info(f"Running AAFTF v{myversion}")
+        _cap_to_available(args)
         args.func(**vars(args))
     except OSError as e:
         if e.errno != 32:  # ignore SIGPIPE

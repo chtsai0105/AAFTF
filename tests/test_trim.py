@@ -134,9 +134,10 @@ class TestTrimParser:
         args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "-c", "8"])
         assert args.cpus == 8
 
-    def test_memory_none_by_default(self):
+    def test_memory_default_is_8gb_int(self):
+        # an int, so bbduk gets -Xmx8g (Java rejects -Xmx8.0g and -XmxNoneg)
         args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
-        assert args.memory is None
+        assert args.memory == 8 and isinstance(args.memory, int)
 
     def test_merge_false_by_default(self):
         args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])

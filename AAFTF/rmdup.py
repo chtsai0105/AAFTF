@@ -66,7 +66,7 @@ def run(
     workdir, custom_workdir = make_workdir(workdir, "rmdup")
 
     if debug:
-        logger.info(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} " f"percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive} pipe={pipe}")
+        logger.info(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive} pipe={pipe}")
     logger.info("Looping through assembly shortest --> longest searching for duplicated contigs using minimap2")
     fasta_lengths = []
     AllSeqs = {}

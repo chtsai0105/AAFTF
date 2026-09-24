@@ -31,6 +31,8 @@ _COMMAND_MODULE = {
     "assess": "AAFTF.assess",
     "sort": "AAFTF.sort",
     "fix_tbl": "AAFTF.fix_tbl",
+    "polish": "AAFTF.polish",
+    "assemble": "AAFTF.assemble",
 }
 
 
@@ -265,3 +267,46 @@ class TestAssessWindowParser:
     def test_custom_telomere_window(self):
         args = _parse_with_main(["AAFTF", "assess", "-i", "g.fa", "--telomere_window", "500"])
         assert args.telomere_window == 500
+
+
+class TestCpusCappedToAvailable:
+    """main() lowers -c/--cpus to the CPUs available to the job, with a warning."""
+
+    def _parse(self, cpus, available):
+        with patch("AAFTF.AAFTF_main.available_cpus", return_value=available):
+            return _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "-c", str(cpus)])
+
+    # main() configures logging to stderr (propagation off), so read captured stderr, not caplog
+    def test_too_many_cpus_capped(self, capsys):
+        assert self._parse(cpus=8, available=2).cpus == 2
+        assert "WARNING: -c/--cpus 8 is more than the 2 CPUs available" in capsys.readouterr().err
+
+    def test_within_available_unchanged(self, capsys):
+        assert self._parse(cpus=2, available=4).cpus == 2
+        assert "CPUs available" not in capsys.readouterr().err
+
+
+class TestMemoryCappedToAvailable:
+    """main() lowers -m/--memory to the RAM available, keeping the option's type."""
+
+    def test_too_much_memory_capped(self, capsys):
+        with patch("AAFTF.AAFTF_main.getRAM", return_value=5.6):
+            args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq", "-m", "16"])
+        assert args.memory == 5
+        assert "WARNING: -m/--memory 16 GB is more than the 5.6 GB of RAM available" in capsys.readouterr().err
+
+    def test_string_memory_stays_a_string(self):
+        with patch("AAFTF.AAFTF_main.getRAM", return_value=10.0):
+            args = _parse_with_main(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
+        assert args.memory == "10"
+
+    def test_within_available_unchanged(self, capsys):
+        with patch("AAFTF.AAFTF_main.getRAM", return_value=64.0):
+            args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
+        assert args.memory == 16
+        assert "RAM available" not in capsys.readouterr().err
+
+    def test_never_below_1gb(self):
+        with patch("AAFTF.AAFTF_main.getRAM", return_value=0.3):
+            args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
+        assert args.memory == 1

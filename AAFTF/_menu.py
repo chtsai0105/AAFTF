@@ -33,7 +33,6 @@ import AAFTF.sort as aaftf_sort
 import AAFTF.sourpurge as sourpurge
 import AAFTF.trim as trim
 import AAFTF.vecscreen as vecscreen
-from AAFTF import AVAIL_RAM
 from AAFTF.utility import CustomHelpFormatter
 
 
@@ -163,7 +162,7 @@ def trim_menu(subparsers):
     optional.add_argument("--method", default="bbduk", choices=["bbduk", "trimmomatic", "fastp"], help="Program to use for adapter trimming")
 
     optional.add_argument("-c", "--cpus", type=int, metavar="int", default=1, help="Number of CPUs/threads to use.")
-    optional.add_argument("-m", "--memory", type=float, metavar="float", dest="memory", default=min(AVAIL_RAM, 8), help="Max Memory (in GB)")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max Memory (in GB)")
     menu_common_args(optional)
 
     trimmomatic_group = parser_trim.add_argument_group(title="Trimmomatic options")
@@ -236,7 +235,7 @@ def mito_menu(subparsers):
 
     optional.add_argument("--reference", help="Run NOVOplasty in reference mode")
 
-    optional.add_argument("-m", "--memory", type=int, dest="memory", default=min(AVAIL_RAM, 8), help="Max Memory (in GB)")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max Memory (in GB)")
 
     menu_common_args(optional)
 
@@ -286,7 +285,7 @@ def filter_menu(subparsers):
 
     optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
 
-    optional.add_argument("-m", "--memory", type=int, dest="memory", default=min(AVAIL_RAM, 8), help="Max Memory (in GB)")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max Memory (in GB)")
 
     menu_common_args(optional)
 
@@ -337,7 +336,7 @@ def assemble_menu(subparsers):
     optional.add_argument("--tmpdir", type=str, help="Assembler temporary dir")
     optional.add_argument("--assembler_args", action="append", help="Additional SPAdes/Megahit arguments")
     optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
-    optional.add_argument("-m", "--memory", type=str, dest="memory", default=min(AVAIL_RAM, 32), help="Memory (in GB) setting for SPAdes")
+    optional.add_argument("-m", "--memory", type=str, dest="memory", default="32", help="Memory (in GB) setting for SPAdes")
 
     menu_common_args(optional)
 
@@ -674,7 +673,7 @@ def polish_menu(subparsers):
 
     pypolca_group = parser_polish.add_argument_group(title="pypolca options")
 
-    pypolca_group.add_argument("-m", "--memory", type=int, default=min(AVAIL_RAM, 16), dest="memory", help="Max Memory (in GB)")
+    pypolca_group.add_argument("-m", "--memory", type=int, default=16, dest="memory", help="Max Memory (in GB)")
 
     parser_polish.set_defaults(func=polish.run)
     return parser_polish
