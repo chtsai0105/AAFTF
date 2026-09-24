@@ -5,7 +5,6 @@ tools. See resources.py for these defaults.
 """
 
 import logging
-import sys
 from pathlib import Path
 
 from aaftf.resources import SEQ_DBS
@@ -62,8 +61,7 @@ def run(
     if right:
         reverse_reads = str(Path(right).resolve())
     if not forward_reads:
-        logger.info("Must provide --left, unable to locate FASTQ reads")
-        sys.exit(1)
+        raise ValueError("Must provide --left, unable to locate FASTQ reads")
     total = count_fastq(forward_reads)
     if reverse_reads:
         total = total * 2

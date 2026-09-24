@@ -3,7 +3,6 @@
 import logging
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 from aaftf.utility import check_file, cleanup_workdir, fasta_stats, filter_fasta, make_workdir, next_step_name, print_cmd
@@ -32,8 +31,7 @@ def run(
 
     # parse database locations
     if not db or not Path(f"{db}.gxi").is_file():
-        logger.info(f"{db}.gxi not found, needs to have setup the fcs_gx db - https://github.com/ncbi/fcs/wiki/FCS-GX")
-        sys.exit(1)
+        raise FileNotFoundError(f"{db}.gxi not found, needs to have setup the fcs_gx db - https://github.com/ncbi/fcs/wiki/FCS-GX")
 
     num_seqs, assembly_size = fasta_stats(str(Path(input)))
     logger.info(f"Assembly is {num_seqs:,} contigs and {assembly_size:,} bp")

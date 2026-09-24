@@ -376,7 +376,7 @@ class TestTrimRunFastp:
 
 
 class TestTrimRunTrimmomatic:
-    def test_no_jar_exits(self, tmp_path):
+    def test_no_jar_raises(self, tmp_path):
         left = str(tmp_path / "s_R1.fastq.gz")
         right = str(tmp_path / "s_R2.fastq.gz")
         args = _make_trim_args(tmp_path, method="trimmomatic", left=left, right=right)
@@ -385,7 +385,7 @@ class TestTrimRunTrimmomatic:
 
         with patch("aaftf.trim._find_trimmomatic", return_value=False):
             with patch("aaftf.trim.count_fastq", return_value=100):
-                with pytest.raises(SystemExit):
+                with pytest.raises(FileNotFoundError):
                     run(**vars(args))
 
     def test_jar_found_builds_pe_command(self, tmp_path):

@@ -154,42 +154,42 @@ class TestPolishParser:
 
 @pytest.mark.unit
 class TestPolishRunGuards:
-    def test_racon_without_longreads_exits(self, tmp_path):
+    def test_racon_without_longreads_raises(self, tmp_path):
         args = _make_args(tmp_path, method="racon", longreads=None, left=None, right=None)
         from aaftf.polish import run
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError):
             run(**vars(args))
 
-    def test_nextpolish2_without_longreads_exits(self, tmp_path):
+    def test_nextpolish2_without_longreads_raises(self, tmp_path):
         args = _make_args(tmp_path, method="nextpolish2", longreads=None)
         from aaftf.polish import run
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError):
             run(**vars(args))
 
-    def test_pypolca_without_reads_exits(self, tmp_path):
+    def test_pypolca_without_reads_raises(self, tmp_path):
         args = _make_args(tmp_path, method="pypolca", left=None, right=None)
         from aaftf.polish import run
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError):
             run(**vars(args))
 
-    def test_polypolish_without_reads_exits(self, tmp_path):
+    def test_polypolish_without_reads_raises(self, tmp_path):
         args = _make_args(tmp_path, method="polypolish", left=None, right=None)
         from aaftf.polish import run
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError):
             run(**vars(args))
 
-    def test_polypolish_without_right_reads_exits(self, tmp_path):
+    def test_polypolish_without_right_reads_raises(self, tmp_path):
         """Polypolish requires paired reads."""
         (tmp_path / "R1.fq").write_text("@r\nA\n+\nI\n")
         args = _make_args(tmp_path, method="polypolish", right=None)
         from aaftf.polish import run
 
         with patch("aaftf.polish.shutil.which", return_value=True):
-            with pytest.raises(SystemExit):
+            with pytest.raises(ValueError):
                 run(**vars(args))
 
 
@@ -221,7 +221,7 @@ def _setup_pypolca_run(tmp_path, outfile=None):
 
 @pytest.mark.unit
 class TestPolishPypolca:
-    def test_nonzero_exit_raises_systemexit(self, tmp_path):
+    def test_nonzero_exit_raises_runtime_error(self, tmp_path):
         args = _setup_pypolca_run(tmp_path)
         mock_result = MagicMock()
         mock_result.returncode = 1
@@ -230,12 +230,11 @@ class TestPolishPypolca:
 
         with patch("aaftf.polish.subprocess.run", return_value=mock_result):
             with patch("aaftf.polish.shutil.which", return_value=True):
-                with pytest.raises(SystemExit) as exc:
+                with pytest.raises(RuntimeError):
                     run(**vars(args))
-        assert exc.value.code == 1
 
-    def test_missing_output_file_raises_systemexit(self, tmp_path):
-        """pypolca exits 0 but creates no output file — must still sys.exit(1)."""
+    def test_missing_output_file_raises_runtime_error(self, tmp_path):
+        """pypolca exits 0 but creates no output file — must still raise."""
         args = _setup_pypolca_run(tmp_path)
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -245,9 +244,8 @@ class TestPolishPypolca:
 
         with patch("aaftf.polish.subprocess.run", return_value=mock_result):
             with patch("aaftf.polish.shutil.which", return_value=True):
-                with pytest.raises(SystemExit) as exc:
+                with pytest.raises(RuntimeError):
                     run(**vars(args))
-        assert exc.value.code == 1
 
     def test_success_copies_corrected_fasta(self, tmp_path):
         """pypolca success: {prefix}_corrected.fasta is copied to the outfile path."""
@@ -378,8 +376,8 @@ def _setup_polypolish_run(tmp_path, outfile=None):
 
 @pytest.mark.unit
 class TestPolishPolypolish:
-    def test_empty_output_raises_systemexit(self, tmp_path):
-        """polypolish polish writes to stdout; an empty result must still sys.exit(1)."""
+    def test_empty_output_raises_runtime_error(self, tmp_path):
+        """polypolish polish writes to stdout; an empty result must still raise."""
         args = _setup_polypolish_run(tmp_path)
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -388,9 +386,8 @@ class TestPolishPolypolish:
 
         with patch("aaftf.polish.subprocess.run", return_value=mock_result):
             with patch("aaftf.polish.shutil.which", return_value=True):
-                with pytest.raises(SystemExit) as exc:
+                with pytest.raises(RuntimeError):
                     run(**vars(args))
-        assert exc.value.code == 1
 
     def test_success_copies_corrected_fasta(self, tmp_path):
         outfile = str(tmp_path / "polished.fasta")
@@ -467,8 +464,8 @@ def _setup_racon_run(tmp_path, outfile=None):
 
 @pytest.mark.unit
 class TestPolishRacon:
-    def test_empty_output_raises_systemexit(self, tmp_path):
-        """racon writes to stdout; an empty result must still sys.exit(1)."""
+    def test_empty_output_raises_runtime_error(self, tmp_path):
+        """racon writes to stdout; an empty result must still raise."""
         args = _setup_racon_run(tmp_path)
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -477,9 +474,8 @@ class TestPolishRacon:
 
         with patch("aaftf.polish.subprocess.run", return_value=mock_result):
             with patch("aaftf.polish.shutil.which", return_value=True):
-                with pytest.raises(SystemExit) as exc:
+                with pytest.raises(RuntimeError):
                     run(**vars(args))
-        assert exc.value.code == 1
 
     def test_success_copies_corrected_fasta(self, tmp_path):
         outfile = str(tmp_path / "polished.fasta")
@@ -560,7 +556,7 @@ def _setup_nextpolish2_run(tmp_path, outfile=None):
 
 @pytest.mark.unit
 class TestPolishNextpolish2:
-    def test_nonzero_exit_raises_systemexit(self, tmp_path):
+    def test_nonzero_exit_raises_runtime_error(self, tmp_path):
         args = _setup_nextpolish2_run(tmp_path)
         mock_result = MagicMock()
         mock_result.returncode = 1
@@ -574,9 +570,8 @@ class TestPolishNextpolish2:
         with patch("aaftf.polish.subprocess.run", return_value=mock_result):
             with patch("aaftf.polish.subprocess.Popen", return_value=mock_popen):
                 with patch("aaftf.polish.shutil.which", return_value=True):
-                    with pytest.raises(SystemExit) as exc:
+                    with pytest.raises(RuntimeError):
                         run(**vars(args))
-        assert exc.value.code == 1
 
     def test_success_copies_corrected_fasta(self, tmp_path):
         outfile = str(tmp_path / "polished.fasta")

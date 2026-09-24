@@ -330,3 +330,29 @@ class TestVersionAndVerboseFlags:
             with pytest.raises(SystemExit) as exc:
                 main()
         assert exc.value.code != 0
+
+
+class TestMainExitCodes:
+    """main() turns subcommand exceptions into shell exit codes instead of tracebacks."""
+
+    def _run(self, side_effect):
+        with patch.object(sys, "argv", ["AAFTF", "sort", "-i", "in.fa", "-o", "out.fa"]):
+            with patch("aaftf.sort.run", side_effect=side_effect):
+                return main()
+
+    def test_success_returns_0(self):
+        assert self._run(None) == 0
+
+    def test_missing_file_returns_2(self):
+        assert self._run(FileNotFoundError("no such file")) == 2
+
+    def test_other_error_returns_1(self, capsys):
+        assert self._run(RuntimeError("tool failed")) == 1
+        assert "tool failed" in capsys.readouterr().err
+
+    def test_keyboard_interrupt_returns_130(self):
+        assert self._run(KeyboardInterrupt()) == 130
+
+    def test_no_arguments_returns_1(self):
+        with patch.object(sys, "argv", ["AAFTF"]):
+            assert main() == 1

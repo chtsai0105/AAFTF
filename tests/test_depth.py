@@ -25,12 +25,12 @@ pytestmark = pytest.mark.unit
 
 
 class TestRunGuards:
-    def test_longreads_without_preset_exits(self, tmp_path):
+    def test_longreads_without_preset_raises(self, tmp_path):
         asm = tmp_path / "asm.fa"
         asm.write_text(">contig1\nACGT\n")
         lr = tmp_path / "lr.fq"
         lr.write_text("@r\nACGT\n+\nIIII\n")
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError):
             run(input=str(asm), longreads=str(lr))
 
 

@@ -342,11 +342,10 @@ class TestAlignToSortedBam:
         align_to_sorted_bam(["cat", str(tmp_path / "in.sam")], str(bam))
         assert bam_read_count(str(bam)) == (1, 1)
 
-    def test_failing_aligner_exits_and_removes_partial_bam(self, tmp_path):
+    def test_failing_aligner_raises_and_removes_partial_bam(self, tmp_path):
         bam = tmp_path / "out.bam"
-        with pytest.raises(SystemExit) as exc:
+        with pytest.raises(RuntimeError):
             align_to_sorted_bam(["false"], str(bam))
-        assert exc.value.code == 1
         assert not bam.exists()
 
 
@@ -435,10 +434,10 @@ class TestRequireTools:
     def test_present_tools_pass(self):
         require_tools(["sh"])
 
-    def test_missing_tool_exits(self, caplog):
-        with pytest.raises(SystemExit):
+    def test_missing_tool_raises(self):
+        with pytest.raises(FileNotFoundError) as exc:
             require_tools(["sh", "definitely_not_a_tool_xyz"])
-        assert "definitely_not_a_tool_xyz" in caplog.text
+        assert "definitely_not_a_tool_xyz" in str(exc.value)
 
 
 class TestOpenAndConcat:
@@ -616,18 +615,18 @@ class TestRequireDatabases:
         (tmp_path / "UniVec").write_text(">v\nACGT\n")
         assert require_databases(["univec"]) == [str(tmp_path.resolve() / "UniVec")]
 
-    def test_missing_exits_with_download_command(self, monkeypatch, tmp_path, caplog):
+    def test_missing_raises_with_download_command(self, monkeypatch, tmp_path):
         monkeypatch.setenv("AAFTF_DB", str(tmp_path))
         (tmp_path / "UniVec").write_text(">v\nACGT\n")
-        with pytest.raises(SystemExit):
+        with pytest.raises(FileNotFoundError) as exc:
             require_databases(["univec", "euks", "proks"], hint="or pass --x")
-        assert "missing database(s): euks, proks" in caplog.text
-        assert "AAFTF download euks proks (or pass --x)" in caplog.text
+        assert "missing database(s): euks, proks" in str(exc.value)
+        assert "AAFTF download euks proks (or pass --x)" in str(exc.value)
 
     def test_never_downloads(self, monkeypatch, tmp_path):
         monkeypatch.setenv("AAFTF_DB", str(tmp_path))
         with patch("aaftf.utility.download_file") as download:
-            with pytest.raises(SystemExit):
+            with pytest.raises(FileNotFoundError):
                 require_databases(["univec"])
         download.assert_not_called()
 

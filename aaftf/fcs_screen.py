@@ -12,7 +12,6 @@ and include common Euk, Prok, and MITO contaminants.
 
 import logging
 import shutil
-import sys
 from pathlib import Path
 
 from aaftf.resources import FCSADAPTOR
@@ -52,16 +51,14 @@ def run(
     if containerengine == "singularity":
         image = image or found["fcs_image"]
         if shutil.which("singularity") is None and shutil.which("apptainer") is None:
-            logger.error("--container_engine singularity requires 'singularity' or 'apptainer' on PATH.")
-            sys.exit(1)
+            raise FileNotFoundError("--container_engine singularity requires 'singularity' or 'apptainer' on PATH.")
     elif containerengine == "docker":
         # docker image reference (registry:tag), not a local file; docker itself
         # resolves/pulls it, so no download step is needed here.
         if image is None:
             image = FCSADAPTOR["DOCKERIMAGE"] % (FCSADAPTOR["VERSION"])
         if shutil.which("docker") is None:
-            logger.error("--container_engine docker requires 'docker' on PATH.")
-            sys.exit(1)
+            raise FileNotFoundError("--container_engine docker requires 'docker' on PATH.")
 
     cmd = [fcsexe, "--fasta-input", infile, "--output-dir", workdir, tax, "--container-engine", containerengine, "--image", image]
     run_cmd(cmd, debug)

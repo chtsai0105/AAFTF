@@ -168,25 +168,25 @@ class TestAssembleParser:
 
 
 class TestAssembleRunGuards:
-    def test_spades_no_left_exits(self, tmp_path):
+    def test_spades_no_left_raises(self, tmp_path):
         args = _make_asm_args(tmp_path, method="spades", left=None)
         from aaftf.assemble import run
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError):
             run(**vars(args))
 
-    def test_megahit_no_left_exits(self, tmp_path):
+    def test_megahit_no_left_raises(self, tmp_path):
         args = _make_asm_args(tmp_path, method="megahit", left=None)
         from aaftf.assemble import run
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError):
             run(**vars(args))
 
-    def test_unicycler_no_left_exits(self, tmp_path):
+    def test_unicycler_no_left_raises(self, tmp_path):
         args = _make_asm_args(tmp_path, method="unicycler", left=None)
         from aaftf.assemble import run
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError):
             run(**vars(args))
 
 

@@ -7,7 +7,6 @@ trimmomatic. Expects adaptor sequence files to be in trimmomatic installed folde
 
 import logging
 import shutil
-import sys
 from pathlib import Path
 
 from aaftf.utility import basename_from_reads, count_fastq, run_cmd, safe_remove
@@ -162,8 +161,7 @@ def run_trimmomatic(
     if trimmomatic_path:
         jarfile = trimmomatic_path
     else:
-        logger.info("Trimmomatic cannot be found - " + "please provide location of trimmomatic.jar file.")
-        sys.exit(1)
+        raise FileNotFoundError("Trimmomatic cannot be found - please provide location of trimmomatic.jar file.")
 
     path_to_adaptors = trimmomatic_adaptors
     clipstr = f"ILLUMINACLIP:{path_to_adaptors}:{trimmomatic_clip}"

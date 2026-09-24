@@ -20,7 +20,12 @@ logger = logging.getLogger("aaftf.main")
 
 
 def main():
-    """Present the main AAFTF module submenus."""
+    """Parse the command line, run the chosen subcommand, and return a shell exit code.
+
+    Returns:
+        0 on success, 1 on any error, 2 when a required file, tool or database is
+        missing (FileNotFoundError), and 130 when interrupted with Ctrl-C.
+    """
     #########################################
     # create the top-level parser
     #########################################
@@ -38,7 +43,7 @@ def main():
     # if no args then print help and exit
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
-        sys.exit(1)
+        return 1
 
     args = parser.parse_args()
 
@@ -47,16 +52,27 @@ def main():
     # "AAFTF" invocation with unrecognized/no subcommand leaves func unset.
     if not hasattr(args, "func"):
         parser.print_help(sys.stderr)
-        sys.exit(1)
+        return 1
 
     setup_logging(debug=getattr(args, "debug", False), quiet=getattr(args, "quiet", False))
     try:
         logger.info(f"Running AAFTF v{__version__}")
         _cap_to_available(args)
         args.func(**vars(args))
-    except OSError as e:
-        if e.errno != 32:  # ignore SIGPIPE
-            raise
+    except KeyboardInterrupt:
+        logger.warning("Terminated by user.")
+        return 130
+    except BrokenPipeError:  # output piped into e.g. `head`, which closed early
+        return 0
+    except FileNotFoundError as e:
+        logger.error("An error occurred: %s", e)
+        logger.debug("Traceback details:", exc_info=True)
+        return 2
+    except Exception as e:
+        logger.error("An error occurred: %s", e)
+        logger.debug("Traceback details:", exc_info=True)
+        return 1
+    return 0
 
 
 def _cap_to_available(args):
@@ -74,4 +90,4 @@ def _cap_to_available(args):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

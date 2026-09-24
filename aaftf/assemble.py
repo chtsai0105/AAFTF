@@ -10,7 +10,6 @@ import logging
 import os
 import re
 import shutil
-import sys
 import uuid
 from pathlib import Path
 
@@ -222,8 +221,7 @@ def _resolve_reads(left, right):
     forward_reads = str(Path(left).resolve()) if left else None
     reverse_reads = str(Path(right).resolve()) if right else None
     if not forward_reads:
-        logger.info("Unable to located FASTQ raw reads, provide --left")
-        sys.exit(1)
+        raise ValueError("Unable to locate FASTQ raw reads, provide --left")
     return forward_reads, reverse_reads
 
 

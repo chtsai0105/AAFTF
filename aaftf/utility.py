@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import textwrap
 import urllib.request
 import uuid
@@ -278,8 +277,7 @@ def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, debug=False):
     if p1.wait() != 0 or p2.returncode != 0:
         bam_path.unlink(missing_ok=True)
         Path(f"{bam_path}.bai").unlink(missing_ok=True)
-        logger.error(f"{align_cmd[0]} | samtools sort failed for {bam_out}")
-        sys.exit(1)
+        raise RuntimeError(f"{align_cmd[0]} | samtools sort failed for {bam_out}")
 
 
 def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None, tmp_prefix=None, write_index=False):
@@ -411,12 +409,11 @@ def run_cmd(cmd, debug=False, cwd=None, stdout=None, env=None, quiet_stdout=Fals
 
 
 def require_tools(tools, hint=None):
-    """Exit with an error naming any of ``tools`` that are not on PATH."""
+    """Raise FileNotFoundError naming any of ``tools`` that are not on PATH."""
     missing = [tool for tool in tools if shutil.which(tool) is None]
     if missing:
-        logger.error(f"required tool(s) not found on PATH: {', '.join(missing)}")
-        logger.info(hint or "Install them (e.g. `conda install -c bioconda <tool>`) and make sure the correct environment is activated.")
-        sys.exit(1)
+        hint = hint or "Install them (e.g. `conda install -c bioconda <tool>`) and make sure the correct environment is activated."
+        raise FileNotFoundError(f"required tool(s) not found on PATH: {', '.join(missing)}\n{hint}")
 
 
 def next_step_name(outfile, suffix):
@@ -457,8 +454,7 @@ def require_databases(names, hint=None):
     if missing:
         searched = ", ".join(str(folder) for folder in db_dirs())
         suggestion = f"Download them first: AAFTF download {' '.join(missing)}" + (f" ({hint})" if hint else "")
-        logger.error(f"missing database(s): {', '.join(missing)} (searched {searched})\n{suggestion}")
-        sys.exit(1)
+        raise FileNotFoundError(f"missing database(s): {', '.join(missing)} (searched {searched})\n{suggestion}")
     return paths
 
 

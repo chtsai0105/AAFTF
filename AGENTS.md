@@ -126,9 +126,10 @@ def calculate_n50(contig_lengths):
 - Support both compressed (.gz) and uncompressed files
 - Use `check_file()` to validate input files
 - Use `safe_remove()` for file cleanup. Create a subcommand's working directory with `workdir, custom_workdir = make_workdir(workdir, "<name>")` and remove it with `cleanup_workdir(workdir, debug, custom_workdir)` (it never deletes a user-supplied `--workdir`)
-- Reference databases are listed in `aaftf.resources.DATABASES` and downloaded **only** by `AAFTF download`. Other subcommands get them with `require_databases([...])`, which returns the stored paths or exits with the `AAFTF download ...` command to run — never download them from a subcommand. (Only `filter`'s `-a/--screen_accessions` / `-u/--screen_urls` fetch sequences themselves.)
+- Reference databases are listed in `aaftf.resources.DATABASES` and downloaded **only** by `AAFTF download`. Other subcommands get them with `require_databases([...])`, which returns the stored paths or raises `FileNotFoundError` naming the `AAFTF download ...` command to run — never download them from a subcommand. (Only `filter`'s `-a/--screen_accessions` / `-u/--screen_urls` fetch sequences themselves.)
 - Every module follows the same top-level layout: (1) module docstring; (2) imports (stdlib, third-party, local; conditional `try: import ...` blocks right after them); (3) `__all__` listing the public constants, classes and functions; (4) constants and module-level variables, public first, then private ones and shared state (`logger`, `_cache`, ...); (5) public ABCs/Protocols; (6) public classes; (7) public functions — `run` first in subcommand modules, the rest in the order they are called; (8) private classes; (9) private helpers, also in call order; (10) the `if __name__ == "__main__":` block. Module-level code must not call anything defined further down (e.g. build objects lazily in a function, as `open_url()` does).
 - Other shared helpers in `aaftf/utility.py` — use these instead of re-implementing: `download_file()` (never leaves a partial file behind; for `download` and filter's -a/-u), `db_file()` (database file location across `$AAFTF_DB` folders / `~/.cache/aaftf`), `require_tools()`, `run_cmd()` / `execute()`, `align_to_sorted_bam()`, `concat_files()`, `open_maybe_gz()`, `next_step_name()`, `basename_from_reads()`, `filter_fasta()` / `write_fasta()`, `calc_nx()`
+- Never call `sys.exit()` in a subcommand or helper — raise instead, and let `aaftf.main.main()` log the message and return the exit code (the console script passes it to `sys.exit`): `FileNotFoundError` for a missing input file, tool or database (exit 2), `ValueError` for bad or missing arguments, `RuntimeError` when an external tool fails or produces no output (both exit 1); Ctrl-C returns 130. Put the whole message (including any hint) in the exception rather than logging it first, so it is not printed twice. The traceback is shown with `-v/--verbose`.
 - Handle file paths with `os.path` operations for cross-platform compatibility
 
 ### Logging and Output
@@ -165,8 +166,6 @@ Since AAFTF primarily integrates external bioinformatics tools, testing focuses 
 """Module description."""
 
 import logging
-import sys
-
 from aaftf.utility import check_file, run_cmd
 
 logger = logging.getLogger(__name__)
@@ -176,8 +175,7 @@ def run(input, debug=False, pipe=False, **kwargs):
     """Main entry point for subcommand."""
     # Validate inputs
     if not check_file(input):
-        logger.error(f"Input file not found: {input}")
-        sys.exit(1)
+        raise FileNotFoundError(f"Input file not found: {input}")
 
     logger.info("Starting processing...")
 

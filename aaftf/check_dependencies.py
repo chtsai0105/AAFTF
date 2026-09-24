@@ -3,7 +3,6 @@
 import importlib
 import logging
 import shutil
-import sys
 
 __all__ = ["REQUIRED_TOOLS", "OPTIONAL_TOOLS", "REQUIRED_PYTHON_PACKAGES", "run"]
 
@@ -71,10 +70,9 @@ def run(**kwargs):
 
     print()
     if missing_required or missing_packages:
-        logger.error(f"{len(missing_required)} required tool(s) and {len(missing_packages)} required package(s) missing.")
         if missing_optional:
             logger.info(f"NOTE: {len(missing_optional)} optional tool(s) also missing (only needed for specific subcommands).")
-        sys.exit(1)
+        raise FileNotFoundError(f"{len(missing_required)} required tool(s) and {len(missing_packages)} required package(s) missing.")
     else:
         logger.info("All required dependencies are installed.")
         if missing_optional:

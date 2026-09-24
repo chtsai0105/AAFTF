@@ -2,7 +2,6 @@
 
 import logging
 import shutil
-import sys
 from pathlib import Path
 
 from Bio import SeqIO
@@ -47,7 +46,6 @@ def run(
         reverse_reads = str(Path(right).resolve())
     if not forward_reads:
         logger.info("Unable to located FASTQ raw reads, low coverage will be skipped. Provide -l,--left (and if paired -r,--right) to enable low coverage filtering.")
-        # sys.exit(1)
 
     # parse database locations
     if not sourdb:
@@ -93,8 +91,8 @@ def run(
                 contig_taxonomy[cols[0]] = cols[idx + 1 :]
     unique_tax = set(unique_tax)
     logger.info("Found {:} taxonomic classifications for contigs:\n{:}".format(len(unique_tax), "\n".join(unique_tax)))
-    if taxonomy:
-        sys.exit(1)
+    if taxonomy:  # --taxonomy only reports the classifications
+        return
     tax_to_drop = []
     for k, v in contig_taxonomy.items():
         v = [x for x in v if x]  # remove empty items from list

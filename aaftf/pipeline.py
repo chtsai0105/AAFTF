@@ -1,7 +1,6 @@
 """Support pipelining of AAFTF to simplify all-in-on runs."""
 
 import logging
-import sys
 from argparse import Namespace
 
 import aaftf.assemble as assemble
@@ -63,8 +62,7 @@ def run(
     def check_step_success(output_file, step_name):
         """Check if step completed successfully."""
         if not check_file(output_file):
-            logger.info(f"AAFTF {step_name} failed")
-            sys.exit(1)
+            raise RuntimeError(f"AAFTF {step_name} failed: {output_file} is missing or empty")
         return True
 
     # run trimming with bbduk

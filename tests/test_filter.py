@@ -194,13 +194,13 @@ class TestFilterParser:
 
 
 class TestFilterRunGuards:
-    def test_no_left_exits(self, tmp_path):
+    def test_no_left_raises(self, tmp_path):
         args = _make_filter_args(tmp_path, left=None)
         from aaftf.filter import run
 
         with patch("aaftf.filter.download_file", side_effect=_mock_download):
             with patch("aaftf.filter.count_fastq", return_value=0):
-                with pytest.raises(SystemExit):
+                with pytest.raises(ValueError):
                     run(**vars(args))
 
 
@@ -415,11 +415,11 @@ class TestFilterDatabases:
                     run(**vars(args))
         return calls
 
-    def test_missing_phix_exits_with_download_command(self, tmp_path, caplog):
+    def test_missing_phix_raises_with_download_command(self, tmp_path):
         Path(db_write_dir(), DATABASES["phix"]["filename"]).unlink()
-        with pytest.raises(SystemExit):
+        with pytest.raises(FileNotFoundError) as exc:
             self._run(tmp_path)
-        assert "AAFTF download phix" in caplog.text
+        assert "AAFTF download phix" in str(exc.value)
 
     def test_databases_are_not_downloaded_by_filter(self, tmp_path):
         assert self._run(tmp_path) == []

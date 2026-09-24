@@ -90,10 +90,10 @@ class TestResolve:
     def test_all_and_duplicates(self):
         assert _resolve(["univec", "all", "UniVec"]) == ["univec"] + [a for a in DATABASES if a != "univec"]
 
-    def test_unknown_name_exits(self, caplog):
-        with pytest.raises(SystemExit):
+    def test_unknown_name_raises(self):
+        with pytest.raises(ValueError) as exc:
             _resolve(["univec", "not_a_db"])
-        assert "not_a_db" in caplog.text
+        assert "not_a_db" in str(exc.value)
 
 
 class TestDownload:
@@ -123,7 +123,7 @@ class TestDownload:
             run(databases=["fcs_script"])
         assert (tmp_path / "run_fcsadaptor.sh").stat().st_mode & stat.S_IXUSR
 
-    def test_failed_download_exits_after_trying_the_rest(self, monkeypatch, tmp_path):
+    def test_failed_download_raises_after_trying_the_rest(self, monkeypatch, tmp_path):
         monkeypatch.setenv("AAFTF_DB", str(tmp_path))
         calls = []
         ok = _fake_download(calls)
@@ -134,7 +134,7 @@ class TestDownload:
             return ok(url, dest, force)
 
         with patch("aaftf.download.download_file", side_effect=_flaky):
-            with pytest.raises(SystemExit):
+            with pytest.raises(RuntimeError):
                 run(databases=["univec", "proks"])
         assert [url for url, _ in calls] == [DATABASES["proks"]["url"]]
 

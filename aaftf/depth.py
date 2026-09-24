@@ -18,7 +18,6 @@ import math
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 from aaftf.utility import align_to_sorted_bam, check_file, cleanup_workdir, count_fastq, make_workdir, open_maybe_gz, print_cmd, require_tools, run_cmd
@@ -88,16 +87,13 @@ def run(
     # Validate inputs
     # ------------------------------------------------------------------
     if not left and not longreads:
-        logger.error("provide at least --left (Illumina) or --longreads")
-        sys.exit(1)
+        raise ValueError("provide at least --left (Illumina) or --longreads")
 
     if longreads and not longread_preset:
-        logger.error("--longread_preset is required when --longreads is provided (map-ont, map-pb, or map-hifi)")
-        sys.exit(1)
+        raise ValueError("--longread_preset is required when --longreads is provided (map-ont, map-pb, or map-hifi)")
 
     if not check_file(input):
-        logger.error(f"assembly file not found or empty: {input}")
-        sys.exit(1)
+        raise FileNotFoundError(f"assembly file not found or empty: {input}")
 
     genome = str(Path(input).resolve())
     reads_left = str(Path(left).resolve()) if left else None
@@ -106,8 +102,7 @@ def run(
 
     for label, fpath in [("--left", reads_left), ("--right", reads_right), ("--longreads", longreads)]:
         if fpath and not check_file(fpath):
-            logger.error(f"read file not found or empty ({label}): {fpath}")
-            sys.exit(1)
+            raise FileNotFoundError(f"read file not found or empty ({label}): {fpath}")
 
     # ------------------------------------------------------------------
     # Check required tools
@@ -163,8 +158,7 @@ def run(
     )
 
     if not bam_combined or not Path(bam_combined).exists():
-        logger.error("mapping produced no BAM file")
-        sys.exit(1)
+        raise RuntimeError("mapping produced no BAM file")
 
     # ------------------------------------------------------------------
     # samtools flagstat
@@ -190,8 +184,7 @@ def run(
     )
 
     if not Path(summary_file).exists():
-        logger.error(f"mosdepth summary not produced: {summary_file}")
-        sys.exit(1)
+        raise RuntimeError(f"mosdepth summary not produced: {summary_file}")
 
     total_row, contig_rows = parse_mosdepth_summary(summary_file)
 
@@ -359,8 +352,7 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
             bwa_index_cmd = ["bwa", "index", genome_local]
             ret = run_cmd(bwa_index_cmd, debug)
             if ret.returncode != 0:
-                logger.error("bwa index failed")
-                sys.exit(1)
+                raise RuntimeError("bwa index failed")
             read_group = r"@RG\tID:illumina\tSM:illumina\tPL:illumina"
             map_cmd = ["bwa", "mem", "-t", str(cpus), "-R", read_group, genome_local, reads_left]
             if reads_right:

@@ -10,7 +10,6 @@ Three polishing engines are supported via --method:
 import logging
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 from aaftf.utility import align_to_sorted_bam, cleanup_workdir, make_workdir, next_step_name, print_cmd, require_tools, run_cmd
@@ -48,14 +47,11 @@ def run(
         longreads = str(Path(longreads).resolve())
 
     if method == "racon" and not longreads:
-        logger.info("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads")
-        sys.exit(1)
+        raise ValueError("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads")
     if method == "nextpolish2" and not longreads:
-        logger.info("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads (nextpolish2 requires HiFi long reads)")
-        sys.exit(1)
+        raise ValueError("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads (nextpolish2 requires HiFi long reads)")
     if method in ("pypolca", "masurca", "polypolish", "nextpolish2") and not forward_reads:
-        logger.info("Unable to locate FASTQ raw reads, pass via -l,--left and/or -r,--right")
-        sys.exit(1)
+        raise ValueError("Unable to locate FASTQ raw reads, pass via -l,--left and/or -r,--right")
 
     workdir, custom_workdir = make_workdir(workdir, "polish")
 
@@ -85,14 +81,12 @@ def run(
     elif method == "racon":
         ret, out_path = run_racon(infile, longreads, cpus, workdir, polish_log, debug)
     else:
-        logger.info(f"Unknown polishing method: {method}")
-        sys.exit(1)
+        raise ValueError(f"Unknown polishing method: {method}")
 
     # Validate the polisher's output and copy it to the requested destination
     # — done once here rather than duplicated in every run_<method>() function.
     if ret != 0 or not Path(out_path).exists() or Path(out_path).stat().st_size == 0:
-        logger.error(f"{method} failed (exit {ret}); check log: {Path(workdir, polish_log)}")
-        sys.exit(1)
+        raise RuntimeError(f"{method} failed (exit {ret}); check log: {Path(workdir, polish_log)}")
     shutil.copyfile(out_path, polished_fasta)
     logger.info("AAFTF polish completed.")
     logger.info(f"{method} polished assembly: {polished_fasta}")
@@ -116,8 +110,7 @@ def run_polypolish(infile, forward_reads, reverse_reads, cpus, workdir, polish_l
     destination, and status reporting are all handled centrally by run().
     """
     if not reverse_reads:
-        logger.error("--method polypolish requires paired reads (-l/--left and -r/--right)")
-        sys.exit(1)
+        raise ValueError("--method polypolish requires paired reads (-l/--left and -r/--right)")
 
     assembly = str(Path(workdir, Path(infile).name))
     shutil.copyfile(infile, assembly)

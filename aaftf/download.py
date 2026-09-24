@@ -9,7 +9,6 @@ or ``all``) downloads them into the database folder (see
 
 import logging
 import os
-import sys
 import urllib.request
 from pathlib import Path
 
@@ -54,9 +53,8 @@ def run(databases=None, force=False, **kwargs):
             os.chmod(dest, 0o555)
 
     if errors:
-        logger.error("Some downloads failed:\n" + "\n".join(errors))
-        logger.info("Re-run the same command later; files already downloaded are skipped unless you pass --force.")
-        sys.exit(1)
+        hint = "Re-run the same command later; files already downloaded are skipped unless you pass --force."
+        raise RuntimeError("Some downloads failed:\n" + "\n".join(errors) + f"\n{hint}")
     logger.info("Download complete. Run 'AAFTF download' to see where each database is stored.")
 
 
@@ -152,7 +150,6 @@ def _resolve(names):
         selected.extend(abbr for abbr in matches if abbr not in selected)
 
     if unknown:
-        logger.error(f"unknown database(s): {', '.join(unknown)}")
-        logger.info(f"Choose from: {', '.join(DATABASES)} (or their file names), or 'all'. Run 'AAFTF download' to list them.")
-        sys.exit(1)
+        choices = f"Choose from: {', '.join(DATABASES)} (or their file names), or 'all'. Run 'AAFTF download' to list them."
+        raise ValueError(f"unknown database(s): {', '.join(unknown)}\n{choices}")
     return selected
