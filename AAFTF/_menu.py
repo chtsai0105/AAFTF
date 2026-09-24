@@ -8,7 +8,7 @@ separate from each subcommand module's own ``run(**kwargs)`` execution logic.
 ``AAFTF_main.py`` invokes the selected subtool via ``args.func(**vars(args))``.
 
 ``menu_common_args()`` adds the three arguments common to every subcommand
-(``-v/--debug``, ``--pipe``, ``-q/--quiet``). Call it last, passing the
+(``--pipe``, ``-q/--quiet``, ``-v/--verbose``). Call it last, passing the
 subcommand's own "optional arguments" group (not the parser itself), so these
 common flags render as the final entries in that group instead of appearing
 in a separate leading section.
@@ -42,12 +42,12 @@ def menu_common_args(target):
     ``target`` is normally a subcommand's "optional arguments" group (from
     ``parser.add_argument_group("optional arguments")``). Call this only
     after all of that subcommand's own optional arguments have been added,
-    so ``-v/--debug``, ``--pipe``, and ``-q/--quiet`` render as the final
+    so ``--pipe``, ``-q/--quiet`` and ``-v/--verbose`` render as the final
     entries of that group.
     """
     target.add_argument("--pipe", action="store_true", help="AAFTF is running in pipeline mode")
-    target.add_argument("-q", "--quiet", action="store_true", dest="quiet", help="Do not output warnings to stderr")
-    target.add_argument("-v", "--debug", action="store_true", help="Provide debugging messages")
+    target.add_argument("-q", "--quiet", action="store_true", dest="quiet", help="Only show warnings and errors")
+    target.add_argument("-v", "--verbose", action="store_true", dest="debug", help="Show debug messages and tool stderr, and keep temporary working directories")
     return target
 
 

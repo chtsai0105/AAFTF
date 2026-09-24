@@ -437,7 +437,7 @@ def setup_logging(debug=False, quiet=False):
     """Send AAFTF log messages to stderr.
 
     Args:
-        debug: Also show debug messages (``-v/--debug``).
+        debug: Also show debug messages (``-v/--verbose``).
         quiet: Show only warnings and errors (``-q/--quiet``); ``debug`` wins if both are set.
     """
     handler = logging.StreamHandler()

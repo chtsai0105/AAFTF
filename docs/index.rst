@@ -12,7 +12,7 @@ Every subcommand is invoked the same way::
 
     AAFTF <subcommand> [options]
 
-and every subcommand accepts at minimum ``-v/--debug`` (verbose logging, keep temp files) and
+and every subcommand accepts at minimum ``-v/--verbose`` (verbose logging, keep temp files) and
 ``--pipe`` (suppress "next command" hints; used internally when ``AAFTF pipeline`` chains steps
 together).
 

@@ -310,3 +310,23 @@ class TestMemoryCappedToAvailable:
         with patch("AAFTF.AAFTF_main.getRAM", return_value=0.3):
             args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
         assert args.memory == 1
+
+
+class TestVersionAndVerboseFlags:
+    @pytest.mark.parametrize("flag", ["-V", "--version"])
+    def test_version_flag_prints_version(self, flag, capsys):
+        with patch.object(sys, "argv", ["AAFTF", flag]):
+            with pytest.raises(SystemExit) as exc:
+                main()
+        assert exc.value.code == 0
+        assert capsys.readouterr().out.startswith("AAFTF ")
+
+    def test_verbose_long_flag_sets_debug(self):
+        args = _parse_with_main(["AAFTF", "sort", "-i", "in.fa", "-o", "out.fa", "--verbose"])
+        assert args.debug is True
+
+    def test_old_debug_flag_rejected(self):
+        with patch.object(sys, "argv", ["AAFTF", "sort", "-i", "in.fa", "-o", "out.fa", "--debug"]):
+            with pytest.raises(SystemExit) as exc:
+                main()
+        assert exc.value.code != 0

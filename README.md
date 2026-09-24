@@ -121,7 +121,7 @@ adaptor sequences
 
 optional arguments:
   -h, --help            show this help message and exit
-  -q, --quiet           Do not output warnings to stderr
+  -q, --quiet           Only show warnings and errors
   -o BASENAME, --out BASENAME
                         Output basename, default to base name of --left reads
   -c cpus, --cpus cpus  Number of CPUs/threads to use.
@@ -131,7 +131,8 @@ optional arguments:
                         FASTQ.
   -r RIGHT, --right RIGHT
                         right/reverse reads of paired-end FASTQ.
-  -v, --debug           Provide debugging messages
+  -v, --verbose         Show debug messages and tool stderr, and keep temporary
+                        working directories
   --pipe                AAFTF is running in pipeline mode
   --method {bbduk,trimmomatic}
                         Program to use for adapter trimming
@@ -191,7 +192,7 @@ Run assembler on cleaned reads
 
 optional arguments:
   -h, --help            show this help message and exit
-  -q, --quiet           Do not output warnings to stderr
+  -q, --quiet           Only show warnings and errors
   --method METHOD       Assembly method: spades, dipspades, megahit
   -o OUT, --out OUT     Output assembly FASTA
   -w WORKDIR, --workdir WORKDIR
@@ -202,7 +203,8 @@ optional arguments:
   -l LEFT, --left LEFT  Left (Forward) reads
   -r RIGHT, --right RIGHT
                         Right (Reverse) reads
-  -v, --debug           Print Spades stdout to terminal
+  -v, --verbose         Show debug messages and tool stderr, and keep temporary
+                        working directories
   --tmpdir TMPDIR       Assembler temporary dir
   --assembler_args ASSEMBLER_ARGS
                         Additional SPAdes/Megahit arguments

@@ -100,7 +100,7 @@ def calculate_n50(contig_lengths):
 ### Error Handling
 - Use try/except blocks for external tool execution
 - Provide informative error messages with context
-- Report progress with a module-level `logger = logging.getLogger(__name__)` (`logger.info`, `logger.warning`, `logger.error`); `AAFTF_main.main()` configures it via `setup_logging()` from `-q/--quiet` and `-v/--debug`. Don't add "ERROR:"/"WARNING:" prefixes or leading/trailing whitespace to messages — the formatter adds the level name
+- Report progress with a module-level `logger = logging.getLogger(__name__)` (`logger.info`, `logger.warning`, `logger.error`); `AAFTF_main.main()` configures it via `setup_logging()` from `-q/--quiet` and `-v/--verbose` (argparse dest `debug`). Don't add "ERROR:"/"WARNING:" prefixes or leading/trailing whitespace to messages — the formatter adds the level name
 - Handle file existence checks with `checkfile()` utility
 
 ### Code Structure
@@ -179,7 +179,7 @@ def run(input, debug=False, pipe=False, **kwargs):
 
     logger.info("Starting processing...")
 
-    # Execute external tools (prints the command; stderr shown only with --debug)
+    # Execute external tools (prints the command; stderr shown only with -v/--verbose)
     run_cmd(["tool", "--input", input], debug)
 
     logger.info("Processing complete")

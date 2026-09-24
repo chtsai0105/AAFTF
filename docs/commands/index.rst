@@ -78,6 +78,6 @@ Command Reference
      - all of the above (except fcs_screen/fcs_gx_purge/depth)
      - Run the full trim -> ... -> assess pipeline in one command
 
-Every subcommand accepts ``-v/--debug`` (verbose logging; also usually retains temp working
+Every subcommand accepts ``-v/--verbose`` (verbose logging; also usually retains temp working
 directories) and ``--pipe`` (suppress the "your next command might be" hint printed at the end --
 set automatically when a step is invoked from inside ``AAFTF pipeline``).

@@ -38,7 +38,7 @@ def main():
     # create the top-level parser
     #########################################
     parser = ap.ArgumentParser(prog="AAFTF", formatter_class=CustomHelpFormatter)
-    parser.add_argument("-v", "--version", help="Installed AAFTF version", action="version", version="%(prog)s " + str(myversion))
+    parser.add_argument("-V", "--version", help="Installed AAFTF version", action="version", version="%(prog)s " + str(myversion))
 
     subparsers = parser.add_subparsers(title="[sub-commands]", dest="command")
 
