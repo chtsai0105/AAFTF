@@ -6,15 +6,12 @@ Covers:
   - pypolca failure/success (files copied to expected destinations)
   - polypolish failure/success
   - nextpolish2 failure/success
-  - Integration test: real polypolish run on Rhizopus test data (requires bwa + polypolish)
 
 No external bioinformatics tools are invoked in the unit tests.
 """
 
-import shutil
 import sys
 from argparse import Namespace
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -629,92 +626,3 @@ class TestPolishNextpolish2:
         assert len(yak_cmds) == 1
         assert any("R1.fq" in a for a in yak_cmds[0])
         assert any("R2.fq" in a for a in yak_cmds[0])
-
-
-# ---------------------------------------------------------------------------
-# Integration test — real polypolish run on Rhizopus test data
-# ---------------------------------------------------------------------------
-
-# Paths relative to the repository root
-_TESTS_DIR = Path(__file__).parent
-_INPUT_FASTA = _TESTS_DIR / "Rhizopus_microsporus_NRRL_5546.fcs_screen.fasta"
-_R1 = _TESTS_DIR / "Rhizopus_microsporus_NRRL_5546_R1.fq.gz"
-_R2 = _TESTS_DIR / "Rhizopus_microsporus_NRRL_5546_R2.fq.gz"
-
-_have_polypolish = shutil.which("polypolish") is not None
-_have_bwa = shutil.which("bwa") is not None
-_test_data_present = _INPUT_FASTA.exists() and _R1.exists() and _R2.exists()
-
-_skip_reason = []
-if not _have_polypolish:
-    _skip_reason.append("polypolish not in PATH")
-if not _have_bwa:
-    _skip_reason.append("bwa not in PATH")
-if not _test_data_present:
-    _skip_reason.append("test FASTA or reads missing")
-
-_integration_skip = pytest.mark.skipif(
-    bool(_skip_reason),
-    reason=", ".join(_skip_reason) if _skip_reason else "",
-)
-
-
-@pytest.mark.integration
-class TestPolishPolypolishIntegration:
-    """Real polypolish run using Rhizopus test data.
-
-    Skipped automatically when polypolish, bwa, or the test data files are absent.
-    Run with:  pytest tests/test_polish.py -m integration -v
-    """
-
-    @_integration_skip
-    def test_polypolish_produces_output_fasta(self, tmp_path):
-        """AAFTF polish --method polypolish creates a non-empty polished FASTA."""
-        outfile = str(tmp_path / "Rhizopus_microsporus_NRRL_5546.polish.fasta")
-        args = Namespace(
-            method="polypolish",
-            infile=str(_INPUT_FASTA),
-            outfile=outfile,
-            left=str(_R1),
-            right=str(_R2),
-            longreads=None,
-            workdir=str(tmp_path / "workdir"),
-            cpus=4,
-            memory=16,
-            debug=False,
-            pipe=True,
-        )
-
-        from aaftf.polish import run
-
-        run(**vars(args))
-
-        out = Path(outfile)
-        assert out.exists(), "polished FASTA was not created"
-        assert out.stat().st_size > 0, "polished FASTA is empty"
-
-    @_integration_skip
-    def test_polypolish_output_is_valid_fasta(self, tmp_path):
-        """Polished output contains at least one FASTA record."""
-        outfile = str(tmp_path / "Rhizopus_microsporus_NRRL_5546.polish.fasta")
-        args = Namespace(
-            method="polypolish",
-            infile=str(_INPUT_FASTA),
-            outfile=outfile,
-            left=str(_R1),
-            right=str(_R2),
-            longreads=None,
-            workdir=str(tmp_path / "workdir"),
-            cpus=4,
-            memory=16,
-            debug=False,
-            pipe=True,
-        )
-
-        from aaftf.polish import run
-
-        run(**vars(args))
-
-        with open(outfile) as fh:
-            first_line = fh.readline()
-        assert first_line.startswith(">"), "output is not a FASTA file"

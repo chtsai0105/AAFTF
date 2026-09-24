@@ -4,6 +4,7 @@ dynamic = ["version"]
 authors = [
     { name = "Jason Stajich", email = "jasonstajich.phd@gmail.com" },
     { name = "Jonathan Palmer", email = "nextgen.usfs@gmail.com" },
+    { name = "Cheng-Hung Tsai", email = "chenghung.tsai@email.ucr.edu" },
 ]
 maintainers = [
     { name = "Jason Stajich", email = "jasonstajich.phd@gmail.com" },
@@ -60,7 +61,7 @@ source = "vcs"
 raw-options = { version_scheme = "guess-next-dev", local_scheme = "node-and-date", fallback_version = "0.0.0+unknown" }
 
 [tool.hatch.build.targets.wheel]
-packages = ["aaftf", "scripts"]
+packages = ["aaftf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

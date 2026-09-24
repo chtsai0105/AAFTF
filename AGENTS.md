@@ -40,14 +40,11 @@ pre-commit run --all-files
 
 ### Testing
 ```bash
-# No formal pytest setup exists. Tests are shell scripts in tests/ directory
-# Run individual test workflows:
-bash tests/00_spades_1trim.sh
-bash tests/01_mito.sh
-bash tests/03_BUSCO.sh
+# Unit tests (no external tools needed)
+python -m pytest tests/ -m unit -v
 
-# Basic import test
-python3 -c "import aaftf; print('Import successful')"
+# All tests (integration tests need the external tools, e.g. from the pixi environment)
+python -m pytest tests/ -v
 ```
 
 ## Code Style Guidelines
