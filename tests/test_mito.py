@@ -66,3 +66,32 @@ class TestOrientToStart:
     def test_no_hit_leaves_sequence_unrotated(self, tmp_path):
         seq = "AAAACCCCGGGGTTTT"
         assert self._orient(tmp_path, [], seq) == seq
+
+
+class TestNovoplastyInputs:
+    """run() writes the NOVOPlasty config from the bundled template and the bundled seed (package data)."""
+
+    def _run(self, tmp_path, **kwargs):
+        from aaftf.mito import run
+
+        workdir = tmp_path / "wd"
+        with patch("aaftf.mito.require_tools"), patch("aaftf.mito.estimate_read_length", return_value=150):
+            with patch("aaftf.mito.subprocess.Popen") as popen:
+                popen.return_value.communicate.return_value = (b"", b"")
+                run(left=str(tmp_path / "R1.fq"), right=str(tmp_path / "R2.fq"), out=str(tmp_path / "mt.fa"), workdir=str(workdir), **kwargs)
+        return workdir
+
+    def test_default_seed_copied_from_package_and_config_filled(self, tmp_path):
+        workdir = self._run(tmp_path, memory=6)
+        seed = workdir / "mito-seed.fasta"
+        assert seed.read_text().startswith(">")
+        config = (workdir / "novo-config.txt").read_text()
+        assert "<" not in config.replace("<=", "")  # every <PLACEHOLDER> replaced
+        assert str(seed.resolve()) in config and "150" in config and "6" in config
+
+    def test_explicit_seed_not_copied(self, tmp_path):
+        own_seed = tmp_path / "myseed.fa"
+        own_seed.write_text(">s\nACGT\n")
+        workdir = self._run(tmp_path, seed=str(own_seed))
+        assert not (workdir / "mito-seed.fasta").exists()
+        assert str(own_seed.resolve()) in (workdir / "novo-config.txt").read_text()

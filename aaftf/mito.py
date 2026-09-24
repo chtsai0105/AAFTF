@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from importlib.resources import files
 from pathlib import Path
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
@@ -17,6 +18,8 @@ __all__ = ["run"]
 
 
 logger = logging.getLogger(__name__)
+
+_PACKAGE_DATA = files("aaftf") / "data"
 
 
 def run(
@@ -43,17 +46,17 @@ def run(
     # now estimate read lengths of FASTQ
     read_len = estimate_read_length(left)
 
-    # check for seed sequence, otherwise write one
-    if not seed:
-        if not reference:
-            seed_fasta = str(Path(Path(__file__).parent, "data", "mito-seed.fasta").resolve())
-        else:
-            seed_fasta = str(Path(reference).resolve())
-    else:
+    # seed sequence: --seed, else --reference, else the bundled default (copied out of the
+    # package so NOVOPlasty gets a real file path even from a zipped install)
+    if seed:
         seed_fasta = str(Path(seed).resolve())
+    elif reference:
+        seed_fasta = str(Path(reference).resolve())
+    else:
+        seed_fasta = str(Path(workdir, "mito-seed.fasta").resolve())
+        Path(seed_fasta).write_bytes((_PACKAGE_DATA / "mito-seed.fasta").read_bytes())
 
-    # now write the novoplasty config file
-    default_config = str(Path(Path(__file__).parent, "data", "novoplasty-config.txt"))
+    # now write the novoplasty config file from the bundled template
     novo_config = str(Path(workdir, "novo-config.txt"))
     if reference:
         refgenome = str(Path(reference).resolve())
@@ -71,12 +74,10 @@ def run(
         str(Path(right).resolve()),  # rev read
         refgenome,
     )  # ref genome file
-    with open(novo_config, "w") as outfile:
-        with open(default_config) as infile:
-            for line in infile:
-                for check, rep in zip(check_words, rep_words):
-                    line = line.replace(check, rep)
-                outfile.write(line)
+    config_text = (_PACKAGE_DATA / "novoplasty-config.txt").read_text()
+    for check, rep in zip(check_words, rep_words):
+        config_text = config_text.replace(check, rep)
+    Path(novo_config).write_text(config_text)
 
     # now we can finally run NOVOplasty.pl
     logger.info("De novo assembling mitochondrial genome using NOVOplasty")
