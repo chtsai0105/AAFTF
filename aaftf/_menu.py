@@ -771,9 +771,9 @@ def fix_tbl_menu(subparsers):
     required = parser_fix.add_argument_group("required arguments")
     optional = parser_fix.add_argument_group("optional arguments")
 
-    required.add_argument("-t", "--table", "--infile", type=ap.FileType("rt"), required=True, help="Table format of annotation (NCBL tbl)")
+    required.add_argument("-t", "--table", "--infile", type=ap.FileType("rt"), required=True, help="Annotation table in NCBI .tbl format")
 
-    required.add_argument("-r", "--report", type=ap.FileType("rt"), required=True, help="FCS report (5 column CSV)")
+    required.add_argument("-r", "--report", type=ap.FileType("rt"), required=True, help="NCBI FCS action report (tab-separated: accession, length, action, range(s), ...)")
 
     required.add_argument("-o", "--output", type=ap.FileType("wt"), required=True, help="Write fixed TBL file")
 

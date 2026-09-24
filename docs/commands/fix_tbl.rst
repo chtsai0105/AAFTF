@@ -10,17 +10,22 @@ sequence.
 Algorithm
 =========
 
-1. Parses the input ``.tbl`` file into per-sequence feature lists (``>Feature seqid`` blocks,
-   each containing start/end/feature-type rows and qualifier lines).
-2. Parses the NCBI FCS trim-adjustment report (5-column TSV: accession, original length, action,
-   trimmed range(s), ...), keeping only ``ACTION_TRIM`` rows.
-3. For each affected sequence, determines whether the trim was at the **left** end (trim range
-   starts at position 1) or the **right** end (trim range ends at the original sequence length).
-   Trims spanning the interior of a contig are not auto-correctable and are reported as a warning
-   instead of silently mis-adjusting coordinates.
-4. Shifts every feature's start/end coordinates by the trimmed amount (clamping to a minimum of 1
-   for a left trim; clamping the end to the new right boundary for a right trim), preserving
-   NCBI's partial-feature markers (``<``/``>`` prefixes) on the coordinates.
+1. Parses the input ``.tbl`` file into per-sequence features (``>Feature seqid`` blocks; each
+   feature is a ``start<TAB>end<TAB>key`` line, optional extra ``start<TAB>end`` interval lines,
+   and its qualifier lines). Minus-strand features (``start > end``) and ``<``/``>`` partial
+   markers are kept as written.
+2. Parses the NCBI FCS action report (tab-separated: accession, length, action, range(s), ...),
+   reading every row after the ``#accession`` header line.
+3. For each sequence, works out which original bases remain: trims starting at position 1 remove
+   bases from the **left**, trims ending at the original length remove bases from the **right**
+   (the furthest trim wins when there are several). A sequence marked ``ACTION_EXCLUDE``, or
+   trimmed completely, is dropped from the table with a warning. Trims inside a contig cannot be
+   fixed by shifting coordinates and are reported as a warning.
+4. Clips every feature to the remaining bases and shifts it so the first remaining base becomes 1.
+   A feature cut at its 5' end gets ``<`` on its first coordinate, and one cut at its 3' end gets
+   ``>`` on its last coordinate (on either strand, including when a whole interval of a
+   multi-interval feature was trimmed away). Features that lie entirely inside a trimmed region
+   are dropped with a warning.
 5. Writes the corrected ``.tbl`` file.
 
 Invocation
