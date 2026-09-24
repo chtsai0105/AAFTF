@@ -6,7 +6,8 @@
 #       --output-dir dist-conda
 #
 # `version` below is the single source of truth for both the conda package
-# version AND the version baked into AAFTF/_version.py at install time:
+# version AND the version recorded in the installed package's metadata
+# (read at runtime as AAFTF.__version__):
 # SETUPTOOLS_SCM_PRETEND_VERSION forces hatch-vcs to record exactly this
 # string, so `AAFTF --version` inside the conda package reports the same
 # version as the package itself. pyproject.toml derives its version

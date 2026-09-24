@@ -142,9 +142,9 @@ def calculate_n50(contig_lengths):
 - Consider external tool memory requirements in parameter defaults
 
 ### Version Handling
-- `AAFTF/_version.py` resolves `__version__` via `importlib.metadata.version("AAFTF")`, falling back to `"0.0.0+unknown"` if the package isn't installed
+- `AAFTF/__init__.py` resolves `AAFTF.__version__` via `importlib.metadata.version("AAFTF")`, falling back to `"0.0.0+unknown"` if the package isn't installed
 - The version string itself is set at build time by `hatch-vcs` from git tags (see `[tool.hatch.version]` in `pyproject.toml`)
-- Main application (`AAFTF_main.py`) imports `__version__` directly from `AAFTF._version`
+- Main application (`AAFTF_main.py`) imports it with `from AAFTF import __version__`
 - Version is displayed both via `--version` flag and at application startup
 - Maintains PEP 440 compatibility for Python packaging standards
 

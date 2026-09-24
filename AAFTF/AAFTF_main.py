@@ -9,8 +9,8 @@ import logging
 import sys
 
 # AAFTF imports
+from AAFTF import __version__
 from AAFTF._menu import SUBCOMMAND_REGISTRARS
-from AAFTF._version import __version__
 from AAFTF.utility import CustomHelpFormatter, available_cpus, getRAM, setup_logging
 
 logger = logging.getLogger("AAFTF.main")

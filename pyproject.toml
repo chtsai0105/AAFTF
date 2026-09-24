@@ -53,7 +53,7 @@ build-backend = "hatchling.build"
 AAFTF = "AAFTF.AAFTF_main:main"
 
 # Version is derived from git tags (vX.Y.Z) plus the short commit hash.
-# At runtime, AAFTF/_version.py resolves the version via importlib.metadata
+# At runtime, AAFTF/__init__.py resolves __version__ via importlib.metadata
 # from the installed package's metadata.
 [tool.hatch.version]
 source = "vcs"

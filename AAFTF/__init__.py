@@ -1,6 +1,13 @@
-"""Init placeholder."""
+"""AAFTF: Automatic Assembly For The Fungi."""
 
 import logging
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("AAFTF")
+except PackageNotFoundError:
+    # imported from a source checkout that was never installed
+    __version__ = "0.0.0+unknown"
 
 # Library code only logs; AAFTF_main.main() configures handlers via setup_logging().
 logging.getLogger(__name__).addHandler(logging.NullHandler())
