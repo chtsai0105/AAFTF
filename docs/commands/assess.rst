@@ -21,7 +21,7 @@ it computes:
   (soft-masked) bases.
 * **Telomere detection** -- for each contig, scans the first and last ``--telomere_window`` bp
   (default 200) for >= ``-n/--telomere_n_repeat`` (default 2) tandem copies of the
-  ``-t/--telomere_monomer`` repeat motif (default ``TAA[C]+``, the canonical fungal telomere
+  ``-t/--telomere_monomer`` repeat motif (default ``TAAC{3,5}``, the canonical fungal telomere
   repeat) at the 5' end, and its reverse complement at the 3' end. Reports counts of
   **TELOMERE FWD**, **TELOMERE REV**, and **T2T SCAFFOLDS** (contigs with a telomere repeat found
   at *both* ends -- fully telomere-to-telomere assembled chromosomes/scaffolds).
@@ -39,9 +39,9 @@ Cutoffs / defaults
      - Default
      - Meaning
    * - ``-t/--telomere_monomer``
-     - ``TAA[C]+``
+     - ``TAAC{3,5}``
      - Telomere repeat motif to search for (regex; default matches the fungal ``TTAGGG``-family
-       repeat allowing extra ``C``\ s)
+       repeat with 3-5 ``C``\ s per monomer)
    * - ``-n/--telomere_n_repeat``
      - 2
      - Minimum tandem repeat count required to call a telomere

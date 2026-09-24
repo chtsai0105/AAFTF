@@ -185,7 +185,7 @@ class TestAssessParser:
 
     def test_default_telomere_monomer(self):
         args = _parse_with_main(["AAFTF", "assess", "-i", "g.fa"])
-        assert args.telomere_monomer == "TAA[C]+"
+        assert args.telomere_monomer == "TAAC{3,5}"
 
     def test_default_telomere_n_repeat(self):
         args = _parse_with_main(["AAFTF", "assess", "-i", "g.fa"])

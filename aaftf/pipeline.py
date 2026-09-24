@@ -221,5 +221,5 @@ def run(
 
     # assess the assembly
     assess_opts = ["debug"]
-    assess_args = create_namespace(assess_opts, required_args={"input": final_file, "report": False, "telomere_monomer": "TAA[C]+", "telomere_n_repeat": 2, "pipe": True})
+    assess_args = create_namespace(assess_opts, required_args={"input": final_file, "report": False, "telomere_monomer": "TAAC{3,5}", "telomere_n_repeat": 2, "pipe": True})
     assess.run(**vars(assess_args))

@@ -65,7 +65,7 @@ def _run_pipeline_up_to_sort(args):
         required_args={
             "input": "test.final.fasta",
             "report": False,
-            "telomere_monomer": "TAA[C]+",
+            "telomere_monomer": "TAAC{3,5}",
             "telomere_n_repeat": 2,
             "pipe": True,
         },
@@ -114,7 +114,7 @@ class TestAssessArgsNamespace:
     def test_assess_args_has_telomere_fields(self):
         args = _make_pipeline_args()
         _, assess_args = _run_pipeline_up_to_sort(args)
-        assert assess_args.telomere_monomer == "TAA[C]+"
+        assert assess_args.telomere_monomer == "TAAC{3,5}"
         assert assess_args.telomere_n_repeat == 2
 
     def test_assess_args_debug_inherits_from_parent(self):
