@@ -56,43 +56,20 @@ def download_menu(subparsers):
     parser_download = subparsers.add_parser(
         "download",
         formatter_class=CustomHelpFormatter,
-        description="Download reference databases to a persistent directory.",
-        help="Download AAFTF reference databases",
+        description=("List AAFTF reference databases (with no arguments), or download the named ones into the database folder ($AAFTF_DB, else ~/.cache/aaftf). Name databases by abbreviation or file name, or use 'all'."),
+        help="List or download AAFTF reference databases",
+    )
+    parser_download.add_argument(
+        "databases",
+        nargs="*",
+        metavar="DATABASE",
+        help="Databases to download, by abbreviation (e.g. univec) or file name (e.g. UniVec), or 'all'. Omit to list the databases and where they are stored.",
     )
     optional = parser_download.add_argument_group("optional arguments")
     optional.add_argument(
         "--force",
         action="store_true",
         help="Re-download files even if they already exist",
-    )
-    optional.add_argument(
-        "--skip-core",
-        action="store_true",
-        help="Skip downloading core contamination databases (UniVec, PhiX, contaminants, mitochondria)",
-    )
-    optional.add_argument(
-        "--skip-sourmash",
-        action="store_true",
-        help="Skip downloading sourmash taxonomy databases",
-    )
-    optional.add_argument(
-        "--sourdb-type",
-        type=str,
-        default="gbk",
-        choices=["gbk", "gtdb", "gtdbrep", "all"],
-        dest="sourdb_type",
-        help="Which sourmash database(s) to download",
-    )
-    optional.add_argument(
-        "--skip-fcs",
-        action="store_true",
-        help="Skip downloading NCBI FCS-adaptor resources",
-    )
-    optional.add_argument(
-        "--list",
-        action="store_true",
-        dest="list_db",
-        help="List database files already present in AAFTF_DB (with sizes) instead of downloading",
     )
     menu_common_args(optional)
     parser_download.set_defaults(func=download.run)
@@ -432,7 +409,7 @@ def fcs_screen_menu(subparsers):
         help="Temporary directory to store datafiles and processes in",
     )
 
-    optional.add_argument("--image", type=str, help="Container file (or will download and look in AAFTF_DB)")
+    optional.add_argument("--image", type=str, help="Container file (or will download and look in the database folder)")
 
     optional.add_argument(
         "--container_engine",

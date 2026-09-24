@@ -45,7 +45,7 @@ Invocation
     AAFTF fcs_screen -i INFILE -o OUTFILE
                      [--container_engine {singularity,docker}] [--image IMAGE]
                      [--euk | --prok] [--fcs_script PATH]
-                     [--AAFTF_DB DIR] [-w WORKDIR] [-v] [--pipe]
+                     [-w WORKDIR] [-v] [--pipe]
 
 ``-i/--input`` and ``-o/--outfile`` are required.
 
@@ -55,8 +55,7 @@ Example
 .. code-block:: bash
 
     # inside a SLURM/HPC node with singularity available
-    AAFTF fcs_screen -i genomes/STRAINX.spades.fasta -o genomes/STRAINX.fcs_adaptor.fasta \
-        --AAFTF_DB "$AAFTF_DB"
+    AAFTF fcs_screen -i genomes/STRAINX.spades.fasta -o genomes/STRAINX.fcs_adaptor.fasta
 
     # docker instead
     AAFTF fcs_screen --container_engine docker \

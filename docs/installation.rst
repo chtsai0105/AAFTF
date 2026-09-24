@@ -108,18 +108,22 @@ shells (``bash -l``, as used by SLURM/Nextflow task scripts).
 Setting up the reference database (``AAFTF_DB``)
 =====================================================
 
-Several subcommands (``filter``, ``vecscreen``, ``sourpurge``, ``fcs_screen``) download and cache
-UniVec, PhiX, eukaryotic/prokaryotic/mitochondrial contamination screens, sourmash taxonomy
-databases, and/or the NCBI FCS-adaptor resources into a persistent directory. Set this once:
+Several subcommands (``filter``, ``vecscreen``, ``sourpurge``, ``fcs_screen``) need UniVec, PhiX,
+eukaryotic/prokaryotic/mitochondrial contamination screens, sourmash taxonomy databases, and/or
+the NCBI FCS-adaptor resources. Download them once with ``AAFTF download``; those subcommands then
+read them from the database folder (and tell you what to download if something is missing). Without
+``$AAFTF_DB`` this is ``~/.cache/aaftf``; because some databases are several GB, it is best to
+point ``$AAFTF_DB`` at a folder with plenty of space (it can also list several folders separated
+by ``:``, like ``$PATH``):
 
 .. code-block:: bash
 
-    mkdir -p ~/lib/AAFTF_DB
-    export AAFTF_DB=~/lib/AAFTF_DB
-    AAFTF download --AAFTF_DB "$AAFTF_DB"
+    export AAFTF_DB=/path/with/space/aaftf_db
+    AAFTF download                                        # list databases
+    AAFTF download phix univec euks proks mitodb sm_gbk   # download some
 
-See :doc:`commands/download` for options to fetch only a subset of databases (e.g.
-``--sourdb-type gbk`` instead of all sourmash indices, which are large).
+See :doc:`commands/download` for the list of databases and which subcommands use each (the
+sourmash indices are large, so fetch only the one you need).
 
 Runs launched inside the pixi-managed Docker/Singularity images default ``AAFTF_DB`` to
 ``/opt/aaftf_db``; bind-mount or ``-e AAFTF_DB=...`` to point at your own copy instead of

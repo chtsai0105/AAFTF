@@ -61,7 +61,7 @@ Invocation
 
     AAFTF sourpurge -i INPUT -o OUTFILE -p PHYLUM [PHYLUM ...]
                     [-l LEFT] [-r RIGHT] [-k KMER] [--sourdb PATH] [--sourdb_type {gbk,gtdb,gtdbrep}]
-                    [-mc MINCOVPCT] [-c CPUS] [--AAFTF_DB DIR] [-w WORKDIR]
+                    [-mc MINCOVPCT] [-c CPUS] [-w WORKDIR]
                     [--just-show-taxonomy] [-v] [--pipe]
 
 ``-i/--input``, ``-o/--outfile``, and ``-p/--phylum`` are required. Providing ``-l/--left`` (and
@@ -76,10 +76,10 @@ Example
 
     AAFTF sourpurge -c 24 -i genomes/STRAINX.vecscreen.fasta -o genomes/STRAINX.sourpurge.fasta \
         --left reads_filtered_1.fastq.gz --right reads_filtered_2.fastq.gz \
-        --phylum Ascomycota --AAFTF_DB "$AAFTF_DB"
+        --phylum Ascomycota
 
     # Preview classifications before deciding which phylum to keep
     AAFTF sourpurge -i genomes/STRAINX.vecscreen.fasta -o /dev/null \
-        --phylum Ascomycota --just-show-taxonomy --AAFTF_DB "$AAFTF_DB"
+        --phylum Ascomycota --just-show-taxonomy
 
 Next step: :doc:`rmdup`.

@@ -69,11 +69,13 @@ $ pip install AAFTF
 $ python -m pip install git+https://github.com/stajichlab/AAFTF.git
 ```
 
-To install the sourmash database you need to set a place to store your AAFTF databases
+AAFTF caches its reference databases in `~/.cache/aaftf` unless `AAFTF_DB` is set. Some are several GB,
+so point `AAFTF_DB` at a folder with plenty of space (it can list several folders separated by `:`, like
+`$PATH`; databases are read from the first folder that has them and downloaded into the first writable one):
 ```
-$ mkdir -p ~/lib/AAFTF_DB # or make a place that is systemwide
-$ export AAFTF_DB=~/lib/AAFTF_DB
-# fill in download procedure / add to AAFTF
+$ export AAFTF_DB=/path/with/space/aaftf_db   # or a shared, system-wide location
+$ AAFTF download                                        # list databases and where they are stored
+$ AAFTF download phix univec euks proks mitodb sm_gbk   # download by short name (or file name, or 'all')
 ```
 
 To run ncbi-fcs or ncbi-fcs-gx in AAFTF through singularity will need to have that installed in system or environment.

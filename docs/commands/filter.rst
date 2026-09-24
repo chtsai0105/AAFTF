@@ -10,8 +10,8 @@ Algorithm
 
 1. Builds (or reuses a cached) combined contamination FASTA (``contamdb.fa``) from:
 
-   * the PhiX genome and UniVec (always included, downloaded from NCBI into ``$AAFTF_DB`` or the
-     working directory on first use -- or pre-populated via :doc:`download`);
+   * the PhiX genome and UniVec (always included; download them first with
+     ``AAFTF download phix univec`` -- see :doc:`download`);
    * any ``-a/--screen_accessions`` GenBank accessions (fetched via NCBI eutils);
    * any ``-u/--screen_urls`` remote FASTA URLs;
    * any ``-s/--screen_local`` local FASTA files (e.g. a ``mito.fasta`` from :doc:`mito`, so
@@ -63,7 +63,7 @@ Invocation
     AAFTF filter -l LEFT [-r RIGHT] [-o BASENAME] [-c CPUS]
                  [--aligner {bbduk,bowtie2,bwa,minimap2}] [-m MEMORY]
                  [-a ACCESSIONS ...] [-u URLS ...] [-s LOCAL_FASTA ...]
-                 [--AAFTF_DB DIR] [-w WORKDIR] [-v] [--pipe]
+                 [-w WORKDIR] [-v] [--pipe]
 
 **Output:** paired mode writes ``{basename}_filtered_1.fastq.gz`` /
 ``{basename}_filtered_2.fastq.gz``; single-end mode writes ``{basename}_filtered_U.fastq.gz``

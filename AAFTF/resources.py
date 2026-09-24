@@ -21,10 +21,13 @@ DB_Links = {
     ],
 }
 
+EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+
+# URL templates for fetching one sequence by accession (``% accession``)
 SeqDBs = {
-    "nucleotide": [f"{NCBI}/entrez/eutils/efetch.fcgi?" + "db=nucleotide&id=%s&rettype=fasta"],
+    "nucleotide": f"{EUTILS}/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta",
     "nucleotide_ebi": "https://www.ebi.ac.uk/ena/data/view/%s?display=fasta",
-    "nucleotide_ncbi": [f"{NCBI}/entrez/eutils/efetch.fcgi?" + "db=nucleotide&id=%s&rettype=fasta"],
+    "nucleotide_ncbi": f"{EUTILS}/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta",
 }
 
 Mitoseqs = {
@@ -47,4 +50,28 @@ FCSADAPTOR = {
     "SIFURL": "https://ftp.ncbi.nlm.nih.gov/genomes/TOOLS/FCS/releases/",
     "EXEURL": "https://raw.githubusercontent.com/ncbi/fcs/v%s/dist/run_fcsadaptor.sh",  # noqa: E501
     "DOCKERIMAGE": "ncbi/fcs-adaptor:%s",
+}
+
+
+def _file_name(url):
+    return url.rstrip("/").rsplit("/", 1)[-1]
+
+
+# Databases `AAFTF download` can fetch, keyed by abbreviation. `used_by` lists the subcommands that
+# read each one; `executable` marks files that must be runnable after download.
+DATABASES = {
+    "phix": {"filename": _file_name(Contaminant_Accessions["phiX"][0]), "url": Contaminant_Accessions["phiX"][0], "used_by": "filter"},
+    "univec": {"filename": _file_name(DB_Links["UniVec"][0]), "url": DB_Links["UniVec"][0], "used_by": "filter, vecscreen"},
+    "euks": {"filename": _file_name(DB_Links["CONTAM_EUKS"][0]), "url": DB_Links["CONTAM_EUKS"][0], "used_by": "vecscreen"},
+    "proks": {"filename": _file_name(DB_Links["CONTAM_PROKS"][0]), "url": DB_Links["CONTAM_PROKS"][0], "used_by": "vecscreen"},
+    "mitodb": {"filename": _file_name(DB_Links["MITO"][0]), "url": DB_Links["MITO"][0], "used_by": "vecscreen"},
+    "sm_gbk": {**{k: DB_Links["sourmash_gbk"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gbk)"},
+    "sm_gtdbrep": {**{k: DB_Links["sourmash_gtdbrep"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdbrep)"},
+    "sm_gtdb": {**{k: DB_Links["sourmash_gtdb"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdb)"},
+    "fcs_script": {"filename": "run_fcsadaptor.sh", "url": FCSADAPTOR["EXEURL"] % FCSADAPTOR["VERSION"], "used_by": "fcs_screen", "executable": True},
+    "fcs_image": {
+        "filename": FCSADAPTOR["SIFLOCAL"] % FCSADAPTOR["VERSION"],
+        "url": "/".join([FCSADAPTOR["SIFURL"].rstrip("/"), FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]]),
+        "used_by": "fcs_screen (singularity)",
+    },
 }

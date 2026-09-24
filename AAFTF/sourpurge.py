@@ -7,8 +7,7 @@ from pathlib import Path
 
 from Bio import SeqIO
 
-from AAFTF.resources import DB_Links
-from AAFTF.utility import aaftf_db_dir, align_to_sorted_bam, calc_nx, checkfile, cleanup_workdir, download_file, execute, fastastats, filter_fasta, make_workdir, next_step_name, run_cmd
+from AAFTF.utility import align_to_sorted_bam, calc_nx, checkfile, cleanup_workdir, execute, fastastats, filter_fasta, make_workdir, next_step_name, require_databases, run_cmd
 
 logger = logging.getLogger(__name__)
 
@@ -51,21 +50,8 @@ def run(
     if not sourdb:
         # --sourdb_type is restricted to these values by the "sourpurge" menu
         # in _menu.py (choices=["gbk", "gtdbrep", "gtdb"]).
-        dbindex = {"gbk": "sourmash_gbk", "gtdbrep": "sourmash_gtdbrep", "gtdb": "sourmash_gtdb"}[sourdb_type]
-
-        dburl = DB_Links[dbindex][0]["url"]
-        dbfile = DB_Links[dbindex][0]["filename"]
-
-        DB = aaftf_db_dir()
-        if not DB:
-            logger.info(f"$AAFTF_DB/{dbfile} not found, pass --sourdb")
-            sys.exit(1)
-        SOUR = str(Path(DB, dbfile))
-        try:
-            download_file(dburl, SOUR)
-        except Exception:
-            logger.info(f"{SOUR} sourmash database download of {dburl} failed. Manually download and rename to {DB}/{dbfile}")
-            sys.exit(1)
+        database = {"gbk": "sm_gbk", "gtdbrep": "sm_gtdbrep", "gtdb": "sm_gtdb"}[sourdb_type]
+        SOUR = require_databases([database], hint="or pass --sourdb PATH")[0]
     else:
         SOUR = str(Path(sourdb).resolve())
 

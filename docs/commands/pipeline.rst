@@ -67,7 +67,7 @@ Invocation
                    [-c CPUS] [-m MEMORY] [-ml MINLEN] [-it ITERATIONS]
                    [-mc MINCONTIGLEN] [--method {spades,dipspades,megahit}]
                    [-a ACCESSIONS ...] [-u URLS ...] [--sourdb PATH]
-                   [--mincovpct PCT] [--AAFTF_DB DIR] [-w WORKDIR]
+                   [--mincovpct PCT] [-w WORKDIR]
                    [--assembler_args ARG ...] [--tmpdir DIR] [-v] [--pipe]
 
 ``-l/--left``, ``-o/--out`` (basename), and ``-p/--phylum`` are required.
@@ -82,8 +82,7 @@ Example
     AAFTF pipeline \
         -l reads/STRAINX_R1.fq.gz -r reads/STRAINX_R2.fq.gz \
         -o STRAINX -c 24 -m 96 -it 5 \
-        --phylum Ascomycota \
-        --AAFTF_DB "$AAFTF_DB"
+        --phylum Ascomycota
 
 This produces, in sequence: ``STRAINX_1P.fastq.gz``/``STRAINX_2P.fastq.gz`` (trim),
 ``STRAINX.mito.fasta`` (mito, if paired), ``STRAINX_filtered_1.fastq.gz``/``_2.fastq.gz``

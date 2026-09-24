@@ -2,27 +2,80 @@
 download
 ========
 
-Fetches and caches every reference database AAFTF's other subcommands rely on into a persistent
-``$AAFTF_DB`` directory, so ``filter``/``vecscreen``/``sourpurge``/``fcs_screen`` don't each
-re-download (large) files the first time they run.
+Lists and fetches the reference databases AAFTF's other subcommands rely on, into the database
+folder (``$AAFTF_DB``, or ``~/.cache/aaftf`` when it is unset). This is the only command that
+downloads them: ``filter``/``vecscreen``/``sourpurge``/``fcs_screen`` read the stored copies and,
+if one is missing, stop with the ``AAFTF download ...`` command that fetches it. (The one
+exception is ``filter``'s ``-a/--screen_accessions`` and ``-u/--screen_urls``, which fetch those
+extra sequences themselves.)
 
-What it downloads
-==================
+Where databases are stored
+==========================
 
-Unless skipped with the flags below, ``download`` fetches:
+* ``$AAFTF_DB`` unset: databases go to ``~/.cache/aaftf`` (or ``$XDG_CACHE_HOME/aaftf``). Some are
+  large -- each sourmash index and the FCS container image are several GB -- so ``download``
+  warns before filling your home directory, which on clusters often has a small quota.
+* ``$AAFTF_DB`` may list several folders separated by ``:``, like ``$PATH``. Each database is read
+  from the first folder that has it, and missing ones are downloaded into the first folder you can
+  write to. This lets a lab share one read-only copy while each user keeps a personal folder for
+  anything missing::
 
-* **Core contamination databases** (``--skip-core`` to disable): PhiX genome, UniVec, NCBI
-  ``contam_in_euks``/``contam_in_prok``, RefSeq mitochondrion sequences -- used by ``filter`` and
-  ``vecscreen``.
-* **sourmash LCA taxonomy databases** (``--skip-sourmash`` to disable): one of GenBank k=31
-  (``gbk``), GTDB (``gtdb``), the smaller GTDB representative-genomes set (``gtdbrep``), or
-  ``all`` -- used by ``sourpurge``. These are large (GenBank is several GB); pick the one that
-  matches how you'll call ``sourpurge --sourdb_type``.
-* **NCBI FCS-adaptor resources** (``--skip-fcs`` to disable): the ``run_fcsadaptor.sh`` wrapper
-  script plus a cached Singularity ``.sif`` image -- used by ``fcs_screen``.
+      export AAFTF_DB=/shared/lab/aaftf_db:/scratch/$USER/aaftf_db
 
-Downloads are resumable/idempotent: each file is written to a ``.tmp`` path and atomically
-renamed on success, and files that already exist are skipped on re-run unless ``--force`` is
+* If none of the listed folders is writable, downloads fall back to ``~/.cache/aaftf`` (with the
+  same warning).
+
+
+Databases
+=========
+
+Run ``AAFTF download`` with no arguments to list every database: its short name, file, size,
+which subcommands use it, and the folder it is stored in (or ``not downloaded``, with the
+remote size):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 14 40 46
+
+   * - Name
+     - File
+     - Used by
+   * - ``phix``
+     - ``GCF_000819615.1_ViralProj14015_genomic.fna.gz`` (PhiX genome)
+     - ``filter``
+   * - ``univec``
+     - ``UniVec``
+     - ``filter``, ``vecscreen``
+   * - ``euks``
+     - ``contam_in_euks.fa.gz``
+     - ``vecscreen``
+   * - ``proks``
+     - ``contam_in_prok.fa``
+     - ``vecscreen``
+   * - ``mitodb``
+     - ``mitochondrion.1.1.genomic.fna.gz`` (RefSeq mitochondria)
+     - ``vecscreen``
+   * - ``sm_gbk``
+     - ``genbank-k31.lca.json.gz`` (sourmash GenBank)
+     - ``sourpurge --sourdb_type gbk``
+   * - ``sm_gtdbrep``
+     - ``gtdb-rs220-reps.k31.lca.json.gz`` (sourmash GTDB representatives)
+     - ``sourpurge --sourdb_type gtdbrep``
+   * - ``sm_gtdb``
+     - ``gtdb-rs220-k31.lca.json.gz`` (sourmash GTDB)
+     - ``sourpurge --sourdb_type gtdb``
+   * - ``fcs_script``
+     - ``run_fcsadaptor.sh``
+     - ``fcs_screen``
+   * - ``fcs_image``
+     - ``fcs-adaptor.0.5.5.sif``
+     - ``fcs_screen`` (singularity)
+
+The sourmash databases and the FCS image are several GB each; download only the sourmash index
+matching how you'll call ``sourpurge --sourdb_type``.
+
+Downloads are safe to interrupt: each file is written to a ``.tmp`` path and renamed on success,
+and files already present in any database folder are skipped on re-run unless ``--force`` is
 given.
 
 Invocation
@@ -30,8 +83,7 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF download [--AAFTF_DB DIR] [--force] [--skip-core] [--skip-sourmash]
-                   [--sourdb-type {gbk,gtdb,gtdbrep,all}] [--skip-fcs] [-v] [--pipe]
+    AAFTF download [DATABASE ...] [--force] [-v] [--pipe]
 
 .. list-table::
    :header-rows: 1
@@ -39,39 +91,37 @@ Invocation
 
    * - Option
      - Description
-   * - ``--AAFTF_DB DIR``
-     - Target directory. Defaults to the ``$AAFTF_DB`` environment variable.
+   * - ``DATABASE``
+     - Databases to download, by short name (e.g. ``univec``) or file name (e.g. ``UniVec``), case
+       insensitive, or ``all``. With none, list the databases instead.
    * - ``--force``
-     - Re-download files even if already present.
-   * - ``--skip-core``
-     - Skip UniVec/PhiX/Euk/Prok/Mito contamination databases.
-   * - ``--skip-sourmash``
-     - Skip sourmash taxonomy databases.
-   * - ``--sourdb-type``
-     - ``gbk`` (default here is ``all``; ``sourpurge`` itself defaults to ``gbk``), ``gtdb``,
-       ``gtdbrep``, or ``all``.
-   * - ``--skip-fcs``
-     - Skip NCBI FCS-adaptor script + container image.
+     - Re-download even if already present (into the first writable folder).
 
 Example
 =======
 
 .. code-block:: bash
 
-    export AAFTF_DB=~/lib/AAFTF_DB
-    mkdir -p "$AAFTF_DB"
+    # Pick a folder with plenty of space (optional; defaults to ~/.cache/aaftf)
+    export AAFTF_DB=/path/with/space/aaftf_db
 
-    # Everything (core + all sourmash indices + FCS-adaptor); can take a while / a lot of disk
-    AAFTF download --AAFTF_DB "$AAFTF_DB"
+    # See what is available, what is already downloaded, and where
+    AAFTF download
 
-    # Just the databases needed for filter/vecscreen/sourpurge with the GenBank sourmash index
-    AAFTF download --AAFTF_DB "$AAFTF_DB" --sourdb-type gbk --skip-fcs
+    # The databases filter/vecscreen/sourpurge need, with the GenBank sourmash index
+    AAFTF download phix univec euks proks mitodb sm_gbk
+
+    # Names and file names can be mixed
+    AAFTF download UniVec contam_in_prok.fa
+
+    # Everything (all sourmash indices + FCS-adaptor); a lot of disk
+    AAFTF download all
 
 Container usage
 ================
 
-The Singularity build (``AAFTF.def``) calls this exact command during ``%post`` (unless built with
+The Singularity build (``AAFTF.def``) runs ``AAFTF download phix univec euks proks mitodb sm_gbk fcs_script fcs_image`` during ``%post`` (unless built with
 ``--build-arg skip_db_download=1``) to bake the GenBank sourmash database into the image at
 ``/opt/aaftf_db``. If you build with ``skip_db_download=1`` (the CI default, to keep the image
-small), run ``AAFTF download`` yourself against a bind-mounted directory before using
+small), run ``AAFTF download NAME ...`` yourself against a bind-mounted directory before using
 ``sourpurge``/``vecscreen``/``filter`` from that image.

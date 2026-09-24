@@ -106,8 +106,7 @@ output file already exists (so an interrupted run can simply be re-launched):
     AAFTF pipeline \
         -l reads_R1.fq.gz -r reads_R2.fq.gz \
         -o STRAINX -c 24 -m 96 \
-        --phylum Ascomycota \
-        --AAFTF_DB "$AAFTF_DB"
+        --phylum Ascomycota
 
 ``fcs_screen``/``fcs_gx_purge`` and ``depth`` are *not* part of ``pipeline`` -- run them
 separately (see :doc:`commands/fcs_screen`, :doc:`commands/fcs_gx_purge`,

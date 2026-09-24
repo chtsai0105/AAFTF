@@ -18,6 +18,8 @@ import psutil
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.SeqIO.QualityIO import FastqGeneralIterator
 
+from AAFTF.resources import DATABASES
+
 logger = logging.getLogger(__name__)
 
 
@@ -341,19 +343,97 @@ def basename_from_reads(reads):
     return name
 
 
-def aaftf_db_dir(required=False):
-    """Return the ``$AAFTF_DB`` database directory, or None if it is unset.
+def home_db_cache():
+    """Return the default database folder: ``$XDG_CACHE_HOME/aaftf``, else ``~/.cache/aaftf``."""
+    return (Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "aaftf").expanduser().resolve()
+
+
+def db_dirs():
+    """Return the database folders to search, in order.
+
+    ``$AAFTF_DB`` may list several folders separated like ``$PATH`` (``:`` on
+    Linux/macOS), e.g. a shared read-only folder followed by a personal one.
+    When it is unset, the home cache (``home_db_cache()``) is used.
+    """
+    folders = [Path(p).expanduser().resolve() for p in os.environ.get("AAFTF_DB", "").split(os.pathsep) if p]
+    return folders or [home_db_cache()]
+
+
+def db_write_dir():
+    """Return the folder new databases are downloaded to (created if needed).
+
+    This is the first ``db_dirs()`` folder that can be written to, falling back
+    to the home cache if none can.
+    """
+    for folder in db_dirs():
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            continue
+        if os.access(folder, os.W_OK):
+            return folder
+    fallback = home_db_cache()
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+def find_db_file(name):
+    """Return the first existing copy of database file ``name`` in ``db_dirs()``, or None."""
+    for folder in db_dirs():
+        if (folder / name).is_file():
+            return str(folder / name)
+    return None
+
+
+def require_databases(names, hint=None):
+    """Return the stored paths of catalog databases ``names`` (keys of ``resources.DATABASES``).
+
+    Subcommands never download these themselves: if any is missing from every
+    ``db_dirs()`` folder, log the ``AAFTF download`` command that fetches them
+    and exit.
 
     Args:
-        required: Exit with an error instead of returning None when unset.
+        names: Database abbreviations, e.g. ``["phix", "univec"]``.
+        hint: Extra alternative to suggest, e.g. "or pass --sourdb PATH".
     """
-    db_dir = os.environ.get("AAFTF_DB")
-    if db_dir:
-        return str(Path(db_dir).resolve())
-    if required:
-        logger.error("No database directory specified.\nSet the AAFTF_DB environment variable.\nExample:\nexport AAFTF_DB=/path/to/aaftf_db\nAAFTF download")
+    paths, missing = [], []
+    for name in names:
+        path = find_db_file(DATABASES[name]["filename"])
+        if path:
+            paths.append(path)
+        else:
+            missing.append(name)
+    if missing:
+        searched = ", ".join(str(folder) for folder in db_dirs())
+        suggestion = f"Download them first: AAFTF download {' '.join(missing)}" + (f" ({hint})" if hint else "")
+        logger.error(f"missing database(s): {', '.join(missing)} (searched {searched})\n{suggestion}")
         sys.exit(1)
-    return None
+    return paths
+
+
+def db_file(name, force=False):
+    """Return the path to use for database file ``name``.
+
+    An existing copy in any ``db_dirs()`` folder is reused; otherwise (or when
+    ``force`` asks for a fresh download) it is placed in ``db_write_dir()``.
+    """
+    existing = None if force else find_db_file(name)
+    return existing or str(db_write_dir() / name)
+
+
+_home_cache_warned = False
+
+
+def warn_if_home_cache():
+    """Warn once if databases are going to the home cache because ``$AAFTF_DB`` is unset or unwritable."""
+    global _home_cache_warned
+    home = home_db_cache()
+    user_chose_home = bool(os.environ.get("AAFTF_DB")) and home in db_dirs()
+    if _home_cache_warned or user_chose_home or db_write_dir() != home:
+        return
+    _home_cache_warned = True
+    reason = "no folder in AAFTF_DB is writable" if os.environ.get("AAFTF_DB") else "AAFTF_DB is not set"
+    logger.warning(f"{reason}, so databases are saved to {home}. Some are large (the sourmash databases and the FCS container image are several GB each) and may exceed a home-directory quota. To store them elsewhere: export AAFTF_DB=/path/with/space")
 
 
 class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
@@ -394,6 +474,8 @@ def download_file(url, dest, force=False):
         logger.info(f"Already present: {dest}")
         return dest
 
+    if Path(dest).expanduser().resolve().parent == home_db_cache():
+        warn_if_home_cache()
     logger.info(f"Downloading {Path(dest).name} ...")
     Path(dest).parent.mkdir(parents=True, exist_ok=True)
 

@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from AAFTF.resources import FCSADAPTOR
-from AAFTF.utility import aaftf_db_dir, cleanup_workdir, download_file, make_workdir, run_cmd
+from AAFTF.utility import cleanup_workdir, make_workdir, require_databases, run_cmd
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +33,6 @@ def run(
     **kwargs,
 ):
     """Perform vector trimming via the fcs screening tool."""
-    DB = aaftf_db_dir(required=True)
-
     containerengine = container_engine
     infilename = Path(infile).resolve().name
     tax = "--euk"
@@ -42,25 +40,14 @@ def run(
         tax = "--prok"
     workdir, custom_workdir = make_workdir(workdir, "fcsscreen")
 
-    fcsexe = fcs_script
-    if fcsexe is None:
-        fcsexe = shutil.which("run_fcsadaptor.sh")
-    if fcsexe is None:
-        fcsexe = str(Path(DB, "run_fcsadaptor.sh"))
-        #  This will help download the fcs-adaptor shell script rather than re-implementing it here
-        if not Path(fcsexe).exists():
-            url = FCSADAPTOR["EXEURL"] % (FCSADAPTOR["VERSION"])
-            download_file(url, fcsexe)
-            Path(fcsexe).chmod(0o555)
+    # the wrapper script and singularity image come from `AAFTF download` unless given/found on PATH
+    fcsexe = fcs_script or shutil.which("run_fcsadaptor.sh")
+    needed = ([] if fcsexe else ["fcs_script"]) + (["fcs_image"] if containerengine == "singularity" and image is None else [])
+    found = dict(zip(needed, require_databases(needed, hint="or pass --fcs_script PATH / --image PATH")))
+    fcsexe = fcsexe or found["fcs_script"]
 
     if containerengine == "singularity":
-        # local SIF file: download once and cache under AAFTF_DB
-        if image is None:
-            image = str(Path(DB, FCSADAPTOR["SIFLOCAL"] % (FCSADAPTOR["VERSION"])))
-            if not Path(image).exists():
-                # SIFURL is a URL prefix, not a filesystem path — do not use pathlib here.
-                url = "/".join([FCSADAPTOR["SIFURL"].rstrip("/"), FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]])
-                download_file(url, image)
+        image = image or found["fcs_image"]
         if shutil.which("singularity") is None and shutil.which("apptainer") is None:
             logger.error("--container_engine singularity requires 'singularity' or 'apptainer' on PATH.")
             sys.exit(1)

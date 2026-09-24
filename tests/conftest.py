@@ -16,6 +16,14 @@ def _ample_resources(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolated_db_cache(monkeypatch, tmp_path_factory):
+    """Point the default database folder at a temp dir so tests never write to ~/.cache/aaftf."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path_factory.mktemp("xdg_cache")))
+    monkeypatch.delenv("AAFTF_DB", raising=False)
+    monkeypatch.setattr("AAFTF.utility._home_cache_warned", False)
+
+
+@pytest.fixture(autouse=True)
 def _reset_aaftf_logger():
     """Undo setup_logging() (called by every CLI test via main()) so caplog keeps working in later tests."""
     yield

@@ -8,8 +8,8 @@ import logging
 import sys
 from pathlib import Path
 
-from AAFTF.resources import Contaminant_Accessions, DB_Links, SeqDBs
-from AAFTF.utility import aaftf_db_dir, align_to_sorted_bam, bam_read_count, basename_from_reads, cleanup_workdir, concat_files, countfastq, download_file, make_workdir, run_cmd
+from AAFTF.resources import SeqDBs
+from AAFTF.utility import align_to_sorted_bam, bam_read_count, basename_from_reads, cleanup_workdir, concat_files, countfastq, db_file, download_file, make_workdir, require_databases, run_cmd
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +32,13 @@ def run(
 ):
     """Generic run command for this submodule for filtering reads."""
     workdir, custom_workdir = make_workdir(workdir, "filter")
-    DB = aaftf_db_dir()
     bamthreads = min(cpus, 4)
 
-    # contaminant sequences: cached in $AAFTF_DB when set, else the workdir
-    contam_filenames = []
-    for url in [u for urls in Contaminant_Accessions.values() for u in urls] + DB_Links["UniVec"]:
-        contam_filenames.append(download_file(url, str(Path(DB or workdir, Path(url).name))))
+    # PhiX and UniVec come from `AAFTF download`; extra accessions/URLs are fetched here
+    contam_filenames = require_databases(["phix", "univec"])
 
     for acc in screen_accessions or []:
-        acc_file = str(Path(DB, acc + ".fna")) if DB else ""
-        if not Path(acc_file).is_file():
-            acc_file = str(Path(workdir, acc + ".fna"))
-        contam_filenames.append(download_file(SeqDBs["nucleotide"] % acc, acc_file))
+        contam_filenames.append(download_file(SeqDBs["nucleotide"] % acc, db_file(acc + ".fna")))
 
     for url in screen_urls or []:
         contam_filenames.append(download_file(url, str(Path(workdir, Path(url).name))))

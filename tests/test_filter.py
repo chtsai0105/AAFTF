@@ -20,6 +20,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from AAFTF.AAFTF_main import main
+from AAFTF.resources import DATABASES, SeqDBs
+from AAFTF.utility import db_write_dir
 
 pytestmark = pytest.mark.unit
 
@@ -93,6 +95,14 @@ def _mock_download(url, dest, force=False):
     else:
         _write_stub_plain(p)
     return dest
+
+
+@pytest.fixture(autouse=True)
+def _stub_databases():
+    """Put stub PhiX/UniVec in the (test-isolated) database folder, as `AAFTF download` would."""
+    for name in ("phix", "univec"):
+        path = Path(db_write_dir(), DATABASES[name]["filename"])
+        _write_stub_gz(path) if path.name.endswith(".gz") else _write_stub_plain(path)
 
 
 # ---------------------------------------------------------------------------
@@ -391,3 +401,30 @@ class TestFilterRunBwa:
         mem_cmds = [c for c in popen_cmds if c and c[0] == "bwa" and "mem" in c]
         assert len(mem_cmds) > 0
         assert left in mem_cmds[0]
+
+
+class TestFilterDatabases:
+    def _run(self, tmp_path, **extra):
+        args = _make_filter_args(tmp_path, left=str(tmp_path / "sample_R1.fastq.gz"), **extra)
+        from AAFTF.filter import run
+
+        calls = []
+        with patch("AAFTF.filter.download_file", side_effect=lambda url, dest, force=False: (calls.append(url), _mock_download(url, dest))[1]):
+            with patch("AAFTF.filter.countfastq", return_value=100):
+                with patch("AAFTF.utility.subprocess.run"):
+                    run(**vars(args))
+        return calls
+
+    def test_missing_phix_exits_with_download_command(self, tmp_path, caplog):
+        Path(db_write_dir(), DATABASES["phix"]["filename"]).unlink()
+        with pytest.raises(SystemExit):
+            self._run(tmp_path)
+        assert "AAFTF download phix" in caplog.text
+
+    def test_databases_are_not_downloaded_by_filter(self, tmp_path):
+        assert self._run(tmp_path) == []
+
+    def test_screen_accession_fetched_from_eutils(self, tmp_path):
+        calls = self._run(tmp_path, screen_accessions=["NC_001422"])
+        assert calls == [SeqDBs["nucleotide"] % "NC_001422"]
+        assert calls[0].startswith("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?")

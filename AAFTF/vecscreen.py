@@ -19,8 +19,7 @@ from subprocess import DEVNULL, call
 # biopython needed
 from Bio import SeqIO
 
-from AAFTF.resources import DB_Links
-from AAFTF.utility import aaftf_db_dir, cleanup_workdir, concat_files, download_file, make_workdir, next_step_name, printCMD, write_fasta
+from AAFTF.utility import cleanup_workdir, concat_files, make_workdir, next_step_name, printCMD, require_databases, write_fasta
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +65,6 @@ def run(
     assembly and a separate mitochondrial-contigs FASTA.
     """
     workdir, custom_workdir = make_workdir(workdir, "vecscreen")
-    DB = aaftf_db_dir()
     percentid_cutoff = percent_id or BlastPercent_ID_ContamMatch
 
     # final_outfile/outdir/prefix are derived from the user's --outfile once,
@@ -80,7 +78,7 @@ def run(
         prefix = str(os.getpid())
     if not final_outfile:
         final_outfile = f"{prefix}.vecscreen.fasta"
-    _build_contam_databases(workdir, DB)
+    _build_contam_databases(workdir)
 
     contigs_to_remove = {}
     regions_to_trim = _screen_euk_prok_contamination(infile, workdir, prefix, cpus, percentid_cutoff)
@@ -105,20 +103,18 @@ def run(
     cleanup_workdir(workdir, debug, custom_workdir)
 
 
-def _build_contam_databases(workdir, DB):
-    """Download (if needed) and build a BLAST nucleotide DB for each contamination screen in DB_Links (sourmash entries excluded)."""
+# BLAST database name used by the screens -> `AAFTF download` database it is built from
+_CONTAM_BLAST_DBS = {"UniVec": "univec", "CONTAM_EUKS": "euks", "CONTAM_PROKS": "proks", "MITO": "mitodb"}
+
+
+def _build_contam_databases(workdir):
+    """Build a BLAST nucleotide DB in ``workdir`` for each contamination screen, from the downloaded databases."""
     logger.info("Building BLAST databases for contamination screen.")
-    for d in DB_Links:
-        if d.startswith("sourmash"):
-            continue
-        sources = []
-        for url in DB_Links[d]:
-            dbname = Path(str(url)).name
-            cached = Path(DB, dbname) if DB else None
-            sources.append(str(cached) if cached and cached.exists() else download_file(url, str(Path(workdir, dbname))))
-        combined_fasta = str(Path(workdir, f"{d}.fasta"))
-        concat_files(sources, combined_fasta)
-        _make_blastdb("nucl", combined_fasta, str(Path(workdir, d)))
+    sources = require_databases(list(_CONTAM_BLAST_DBS.values()))
+    for blast_name, source in zip(_CONTAM_BLAST_DBS, sources):
+        combined_fasta = str(Path(workdir, f"{blast_name}.fasta"))
+        concat_files([source], combined_fasta)
+        _make_blastdb("nucl", combined_fasta, str(Path(workdir, blast_name)))
 
 
 def _make_blastdb(type, file, name):

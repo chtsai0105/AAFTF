@@ -126,7 +126,8 @@ def calculate_n50(contig_lengths):
 - Support both compressed (.gz) and uncompressed files
 - Use `checkfile()` to validate input files
 - Use `safe_remove()` for file cleanup. Create a subcommand's working directory with `workdir, custom_workdir = make_workdir(workdir, "<name>")` and remove it with `cleanup_workdir(workdir, debug, custom_workdir)` (it never deletes a user-supplied `--workdir`)
-- Other shared helpers in `AAFTF/utility.py` — use these instead of re-implementing: `download_file()` (never leaves a partial file behind), `aaftf_db_dir()`, `require_tools()`, `run_cmd()` / `execute()`, `align_to_sorted_bam()`, `concat_files()`, `open_maybe_gz()`, `next_step_name()`, `basename_from_reads()`, `filter_fasta()` / `write_fasta()`, `calc_nx()`
+- Reference databases are listed in `AAFTF.resources.DATABASES` and downloaded **only** by `AAFTF download`. Other subcommands get them with `require_databases([...])`, which returns the stored paths or exits with the `AAFTF download ...` command to run — never download them from a subcommand. (Only `filter`'s `-a/--screen_accessions` / `-u/--screen_urls` fetch sequences themselves.)
+- Other shared helpers in `AAFTF/utility.py` — use these instead of re-implementing: `download_file()` (never leaves a partial file behind; for `download` and filter's -a/-u), `db_file()` (database file location across `$AAFTF_DB` folders / `~/.cache/aaftf`), `require_tools()`, `run_cmd()` / `execute()`, `align_to_sorted_bam()`, `concat_files()`, `open_maybe_gz()`, `next_step_name()`, `basename_from_reads()`, `filter_fasta()` / `write_fasta()`, `calc_nx()`
 - Handle file paths with `os.path` operations for cross-platform compatibility
 
 ### Logging and Output

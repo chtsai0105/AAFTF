@@ -89,7 +89,7 @@ Invocation
 .. code-block:: text
 
     AAFTF vecscreen -i INFILE -o OUTFILE [-c CPUS] [-pid PERCENT_ID]
-                    [-s {high,low}] [--AAFTF_DB DIR] [-w WORKDIR] [-v] [--pipe]
+                    [-s {high,low}] [-w WORKDIR] [-v] [--pipe]
 
 ``-i/--input`` (assembly FASTA) and ``-o/--outfile`` are required.
 

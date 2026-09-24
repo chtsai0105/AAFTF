@@ -1,10 +1,10 @@
 """Download and cache AAFTF reference databases.
 
-This module provides a one-time download command that downloads all (or a
-user-selected subset) of the reference databases listed in
-``AAFTF.resources`` into a persistent ``$AAFTF_DB`` folder.  Subsequent
-AAFTF commands will reuse these cached files instead of re-downloading
-them on first use.
+``AAFTF download`` with no arguments lists every database in
+``AAFTF.resources.DATABASES``: its abbreviation, file, size, which subcommands
+use it, and where it is stored. Naming databases (by abbreviation or file name,
+or ``all``) downloads them into the database folder (see
+``utility.db_dirs``), so later AAFTF commands reuse the cached files.
 """
 
 import logging
@@ -13,8 +13,8 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from AAFTF.resources import FCSADAPTOR, Contaminant_Accessions, DB_Links
-from AAFTF.utility import URL_OPENER, aaftf_db_dir, download_file
+from AAFTF.resources import DATABASES
+from AAFTF.utility import URL_OPENER, db_dirs, db_file, db_write_dir, download_file, find_db_file, warn_if_home_cache
 
 logger = logging.getLogger(__name__)
 
@@ -29,23 +29,6 @@ def _human_size(num_bytes):
     return f"{size:.1f} TB"  # pragma: no cover - unreachable, but keeps a return for every path
 
 
-def _expected_db_entries():
-    """Return [(filename, url), ...] for every database ``download`` would fetch."""
-    entries = []
-    for urls in Contaminant_Accessions.values():
-        for url in urls:
-            entries.append((Path(url).name, url))
-    for key, urls in DB_Links.items():
-        for url_or_meta in urls:
-            if isinstance(url_or_meta, dict):
-                entries.append((url_or_meta["filename"], url_or_meta["url"]))
-            else:
-                entries.append((Path(url_or_meta).name, url_or_meta))
-    entries.append(("run_fcsadaptor.sh", FCSADAPTOR["EXEURL"] % FCSADAPTOR["VERSION"]))
-    entries.append((FCSADAPTOR["SIFLOCAL"] % FCSADAPTOR["VERSION"], str(Path(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]))))
-    return entries
-
-
 def _remote_size(url):
     """Return the remote file size in bytes via an HTTP HEAD request, or ``None`` if unavailable."""
     try:
@@ -57,195 +40,116 @@ def _remote_size(url):
         return None
 
 
-def _list_db(db_dir):
-    """List every database ``download`` would fetch: local size if already downloaded, else the remote size."""
-    db_path = Path(db_dir)
+def _list_db():
+    """List every database with its abbreviation, file, size, users and storage folder.
 
-    logger.info(f"Database files in {db_dir}:")
+    Missing databases show their remote (estimated) size and "not downloaded".
+    """
+    folders = db_dirs()
+    logger.info("Database folders, searched in order:" if len(folders) > 1 else "Database folder:")
+    for folder in folders:
+        logger.info(f"{folder}{'' if folder.is_dir() else ' (does not exist yet)'}")
+
+    rows = []  # (name, file, size label, used by, location)
     downloaded_total = 0
     pending_total = 0
     pending_unknown = False
-    for filename, url in _expected_db_entries():
-        local_path = db_path / filename
-        if local_path.is_file():
-            size = local_path.stat().st_size
+    for abbr, entry in DATABASES.items():
+        local_path = find_db_file(entry["filename"])
+        if local_path:
+            size = Path(local_path).stat().st_size
             downloaded_total += size
-            print(f"  {filename:<40} {_human_size(size):>10}  (downloaded)")
+            size_label, location = _human_size(size), str(Path(local_path).parent)
         else:
-            size = _remote_size(url)
+            size = _remote_size(entry["url"])
             if size is None:
                 pending_unknown = True
-                print(f"  {filename:<40} {'unknown':>10}  (not downloaded)")
             else:
                 pending_total += size
-                print(f"  {filename:<40} {_human_size(size):>10}  (not downloaded)")
+            size_label, location = ("unknown" if size is None else _human_size(size)), "not downloaded"
+        rows.append((abbr, entry["filename"], size_label, entry["used_by"], location))
 
-    # Any other files present that aren't part of the expected set (e.g. leftover reports)
-    expected_names = {filename for filename, _ in _expected_db_entries()}
-    if db_path.is_dir():
-        extras = sorted(f for f in db_path.rglob("*") if f.is_file() and f.name not in expected_names)
-        for f in extras:
+    # Any other files present that aren't databases (e.g. leftover reports)
+    known_files = {entry["filename"] for entry in DATABASES.values()}
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+        for f in sorted(f for f in folder.rglob("*") if f.is_file() and f.name not in known_files):
             size = f.stat().st_size
             downloaded_total += size
-            print(f"  {str(f.relative_to(db_path)):<40} {_human_size(size):>10}  (other)")
+            rows.append(("-", str(f.relative_to(folder)), _human_size(size), "-", f"{folder} (other file)"))
 
-    print("-" * 68)
-    print(f"  {'Downloaded':<40} {_human_size(downloaded_total):>10}")
+    header = ("Name", "File", "Size", "Used by", "Location")
+    name_w, file_w, size_w, used_w = (max(len(row[i]) for row in [header, *rows]) for i in range(4))
+    for name, filename, size_label, used_by, location in [header, *rows]:
+        print(f"  {name:<{name_w}}  {filename:<{file_w}}  {size_label:>{size_w}}  {used_by:<{used_w}}  {location}")
+
     pending_label = _human_size(pending_total) + ("+" if pending_unknown else "")
-    print(f"  {'Not yet downloaded (estimated)':<40} {pending_label:>10}")
+    print("-" * (name_w + file_w + size_w + used_w + 20))
+    print(f"  {'Downloaded':<32} {_human_size(downloaded_total):>10}")
+    print(f"  {'Not yet downloaded (estimated)':<32} {pending_label:>10}")
+    print("\nDownload with: AAFTF download NAME [NAME ...]   (abbreviation or file name, or 'all')")
 
 
-def run(force=False, skip_core=False, skip_sourmash=False, skip_fcs=False, sourdb_type="all", list_db=False, **kwargs):
+def _resolve(names):
+    """Map database abbreviations / file names (or ``all``) to abbreviations, in order, without duplicates."""
+    lookup = {}
+    for abbr, entry in DATABASES.items():
+        lookup[abbr.lower()] = abbr
+        lookup[entry["filename"].lower()] = abbr
+
+    selected, unknown = [], []
+    for name in names:
+        key = name.lower()
+        if key == "all":
+            matches = list(DATABASES)
+        elif key in lookup:
+            matches = [lookup[key]]
+        else:
+            unknown.append(name)
+            continue
+        selected.extend(abbr for abbr in matches if abbr not in selected)
+
+    if unknown:
+        logger.error(f"unknown database(s): {', '.join(unknown)}")
+        logger.info(f"Choose from: {', '.join(DATABASES)} (or their file names), or 'all'. Run 'AAFTF download' to list them.")
+        sys.exit(1)
+    return selected
+
+
+def run(databases=None, force=False, **kwargs):
     """Execute the ``download`` subcommand.
 
-    Downloads reference databases to the ``AAFTF_DB`` directory so that
-    later AAFTF commands do not need to fetch them on-the-fly. If
-    ``list_db`` is set, lists the existing database files (and their sizes)
-    instead of downloading anything.
+    Args:
+        databases: Database abbreviations or file names (case-insensitive), or
+            ``all``. When empty, list the databases instead of downloading.
+        force: Re-download even if a copy already exists (into the first
+            writable database folder).
     """
-    db_dir = aaftf_db_dir(required=True)
-
-    if list_db:
-        _list_db(db_dir)
+    if not databases:
+        _list_db()
         return
 
-    Path(db_dir).mkdir(parents=True, exist_ok=True)
+    selected = _resolve(databases)
+    db_dir = db_write_dir()
+    warn_if_home_cache()
     logger.info(f"AAFTF database directory: {db_dir}")
 
     errors = []
-
-    # Core databases (always downloaded unless --skip-core)
-    if not skip_core:
+    for abbr in selected:
+        entry = DATABASES[abbr]
+        dest = db_file(entry["filename"], force=force)
+        already_present = Path(dest).exists() and not force
         try:
-            _download_contaminants(db_dir, force=force)
+            download_file(entry["url"], dest, force=force)
         except Exception as e:
-            errors.append(f"Contaminant accessions: {e}")
-        try:
-            _download_db_links(db_dir, force=force)
-        except Exception as e:
-            errors.append(f"DB_Links: {e}")
-
-    # Sourmash taxonomy databases (optional)
-    if not skip_sourmash:
-        try:
-            _download_sourmash(db_dir, sourdb_type=sourdb_type, force=force)
-        except Exception as e:
-            errors.append(f"Sourmash DB: {e}")
-
-    # NCBI FCS-adaptor resources (optional)
-    if not skip_fcs:
-        try:
-            _download_fcs(db_dir, force=force)
-        except Exception as e:
-            errors.append(f"FCS resources: {e}")
+            errors.append(f"{abbr} ({entry['filename']}): {e}")
+            continue
+        if entry.get("executable") and not already_present:
+            os.chmod(dest, 0o555)
 
     if errors:
-        logger.info("Some downloads failed:")
-        for err in errors:
-            logger.info(f"- {err}")
-        logger.info("You can re-run 'AAFTF download' later; already-downloaded files will be skipped unless you pass --force.")
+        logger.error("Some downloads failed:\n" + "\n".join(errors))
+        logger.info("Re-run the same command later; files already downloaded are skipped unless you pass --force.")
         sys.exit(1)
-
-    logger.info(f"Setup complete. Future AAFTF runs will use cached files from {db_dir}")
-
-
-def _download_db_links(db_dir, keys=None, force=False):
-    """Download files referenced in ``DB_Links``.
-
-    Args:
-        db_dir: Target directory.
-        keys: Iterable of ``DB_Links`` keys to download, or ``None``
-            for the subset used by *filter* / *vecscreen*.
-        force: If True, overwrite existing files.
-    """
-    if keys is None:
-        # Default set needed by filter / vecscreen
-        keys = ("UniVec", "CONTAM_EUKS", "CONTAM_PROKS", "MITO")
-
-    for key in keys:
-        if key not in DB_Links:
-            logger.warning(f"unknown DB_Links key '{key}', skipping")
-            continue
-        logger.info(f"Downloading {key} ...")
-        for url_or_meta in DB_Links[key]:
-            if isinstance(url_or_meta, dict):
-                url = url_or_meta["url"]
-                filename = url_or_meta["filename"]
-            else:
-                url = url_or_meta
-                filename = Path(url).name
-            dest = str(Path(db_dir, filename))
-            download_file(url, dest, force=force)
-
-
-def _download_contaminants(db_dir, force=False):
-    """Download contaminant accessions (e.g. PhiX).
-
-    Args:
-        db_dir: Target directory.
-        force: If True, overwrite existing files.
-    """
-    logger.info("Downloading contaminant accessions ...")
-    for name, urls in Contaminant_Accessions.items():
-        logger.info(f"{name} ...")
-        for url in urls:
-            filename = Path(url).name
-            dest = str(Path(db_dir, filename))
-            download_file(url, dest, force=force)
-
-
-def _download_sourmash(db_dir, sourdb_type="gbk", force=False):
-    """Download sourmash LCA taxonomy databases.
-
-    Args:
-        db_dir: Target directory.
-        sourdb_type: One of ``gbk``, ``gtdb``, ``gtdbrep``, or ``all``.
-        force: If True, overwrite existing files.
-    """
-    type_map = {
-        "gbk": "sourmash_gbk",
-        "gtdb": "sourmash_gtdb",
-        "gtdbrep": "sourmash_gtdbrep",
-    }
-
-    if sourdb_type == "all":
-        indices = list(type_map.values())
-    else:
-        if sourdb_type not in type_map:
-            logger.error(f"unknown sourdb_type '{sourdb_type}'. Choose from {list(type_map.keys()) + ['all']}")
-            return
-        indices = [type_map[sourdb_type]]
-
-    for idx in indices:
-        logger.info(f"Downloading sourmash database ({idx}) ...")
-        for entry in DB_Links[idx]:
-            dest = str(Path(db_dir, entry["filename"]))
-            download_file(entry["url"], dest, force=force)
-
-
-def _download_fcs(db_dir, force=False):
-    """Download NCBI FCS-adaptor script and SIF image.
-
-    Args:
-        db_dir: Target directory.
-        force: If True, overwrite existing files.
-    """
-    logger.info("Downloading NCBI FCS-adaptor resources ...")
-
-    # Wrapper script
-    script_url = FCSADAPTOR["EXEURL"] % FCSADAPTOR["VERSION"]
-    script_dest = str(Path(db_dir, "run_fcsadaptor.sh"))
-    if Path(script_dest).exists() and not force:
-        logger.info(f"Already present: {script_dest}")
-    else:
-        download_file(script_url, script_dest, force=force)
-        os.chmod(script_dest, 0o555)
-
-    # Singularity image
-    image_name = FCSADAPTOR["SIFLOCAL"] % FCSADAPTOR["VERSION"]
-    image_dest = str(Path(db_dir, image_name))
-    if Path(image_dest).exists() and not force:
-        logger.info(f"Already present: {image_dest}")
-    else:
-        image_url = str(Path(FCSADAPTOR["SIFURL"], FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]))
-        download_file(image_url, image_dest, force=force)
+    logger.info("Download complete. Run 'AAFTF download' to see where each database is stored.")

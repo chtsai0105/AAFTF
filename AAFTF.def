@@ -120,7 +120,7 @@ From: debian:bookworm-slim
     if [ "{{ skip_db_download }}" = "1" ]; then
         echo "Skipping database download (skip_db_download=1)"
     else
-        AAFTF download --sourdb-type gbk
+        AAFTF download phix univec euks proks mitodb sm_gbk fcs_script fcs_image
     fi
 
     # -------------------------------------------------------------------------

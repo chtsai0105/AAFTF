@@ -5,13 +5,14 @@ All tests are pure Python — no external bioinformatics tools required.
 
 import gzip
 import io
+import os
 import shutil
 import subprocess
+from unittest.mock import patch
 
 import pytest
 
 from AAFTF.utility import (
-    aaftf_db_dir,
     align_to_sorted_bam,
     available_cpus,
     bam_read_count,
@@ -21,19 +22,26 @@ from AAFTF.utility import (
     cleanup_workdir,
     concat_files,
     countfastq,
+    db_dirs,
+    db_file,
+    db_write_dir,
     download_file,
     execute,
     fastastats,
     filter_fasta,
+    find_db_file,
+    home_db_cache,
     make_workdir,
     next_step_name,
     open_maybe_gz,
+    require_databases,
     require_tools,
     run_cmd,
     safe_remove,
     samtools_sort_cmd,
     setup_logging,
     softwrap,
+    warn_if_home_cache,
     write_fasta,
 )
 from tests.conftest import make_fastq_text
@@ -451,19 +459,84 @@ class TestOpenAndConcat:
         assert out.read_text() == ">a\nAC\n>b\nGT\n"
 
 
-class TestAaftfDbDir:
-    def test_unset_returns_none(self, monkeypatch):
-        monkeypatch.delenv("AAFTF_DB", raising=False)
-        assert aaftf_db_dir() is None
+class TestDatabaseFolders:
+    def test_unset_uses_home_cache(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        assert home_db_cache() == (tmp_path / "aaftf").resolve()
+        assert db_dirs() == [home_db_cache()]
 
-    def test_unset_required_exits(self, monkeypatch):
-        monkeypatch.delenv("AAFTF_DB", raising=False)
-        with pytest.raises(SystemExit):
-            aaftf_db_dir(required=True)
+    def test_home_cache_without_xdg(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        assert home_db_cache() == (tmp_path / ".cache" / "aaftf").resolve()
 
-    def test_set_returns_absolute_path(self, monkeypatch, tmp_path):
+    def test_path_like_list(self, monkeypatch, tmp_path):
+        shared, mine = tmp_path / "shared", tmp_path / "mine"
+        monkeypatch.setenv("AAFTF_DB", f"{shared}{os.pathsep}{mine}")
+        assert db_dirs() == [shared.resolve(), mine.resolve()]
+
+    def test_finds_file_in_any_folder_first_wins(self, monkeypatch, tmp_path):
+        shared, mine = tmp_path / "shared", tmp_path / "mine"
+        shared.mkdir()
+        mine.mkdir()
+        (mine / "UniVec").write_text("mine")
+        monkeypatch.setenv("AAFTF_DB", f"{shared}{os.pathsep}{mine}")
+        assert find_db_file("UniVec") == str(mine.resolve() / "UniVec")
+        (shared / "UniVec").write_text("shared")
+        assert find_db_file("UniVec") == str(shared.resolve() / "UniVec")
+        assert find_db_file("missing") is None
+
+    def test_missing_file_goes_to_first_writable_folder(self, monkeypatch, tmp_path):
+        readonly, mine = tmp_path / "readonly", tmp_path / "mine"
+        readonly.mkdir()
+        readonly.chmod(0o555)
+        try:
+            monkeypatch.setenv("AAFTF_DB", f"{readonly}{os.pathsep}{mine}")
+            assert db_file("UniVec") == str(mine.resolve() / "UniVec")
+            assert mine.is_dir()
+        finally:
+            readonly.chmod(0o755)
+
+    def test_force_ignores_existing_copy(self, monkeypatch, tmp_path):
+        shared, mine = tmp_path / "shared", tmp_path / "mine"
+        shared.mkdir()
+        (shared / "UniVec").write_text("shared")
+        shared.chmod(0o555)
+        try:
+            monkeypatch.setenv("AAFTF_DB", f"{shared}{os.pathsep}{mine}")
+            assert db_file("UniVec") == str(shared.resolve() / "UniVec")
+            assert db_file("UniVec", force=True) == str(mine.resolve() / "UniVec")
+        finally:
+            shared.chmod(0o755)
+
+    def test_no_writable_folder_falls_back_to_home_cache(self, monkeypatch, tmp_path):
+        readonly = tmp_path / "readonly"
+        readonly.mkdir()
+        readonly.chmod(0o555)
+        try:
+            monkeypatch.setenv("AAFTF_DB", str(readonly))
+            assert db_write_dir() == home_db_cache()
+        finally:
+            readonly.chmod(0o755)
+
+
+class TestHomeCacheWarning:
+    def test_warns_once_when_unset(self, caplog):
+        warn_if_home_cache()
+        warn_if_home_cache()
+        assert caplog.text.count("AAFTF_DB is not set") == 1
+        assert "export AAFTF_DB=" in caplog.text
+
+    def test_no_warning_when_aaftf_db_writable(self, monkeypatch, tmp_path, caplog):
         monkeypatch.setenv("AAFTF_DB", str(tmp_path))
-        assert aaftf_db_dir() == str(tmp_path.resolve())
+        warn_if_home_cache()
+        assert "AAFTF_DB" not in caplog.text
+
+    def test_download_into_home_cache_warns(self, tmp_path, caplog):
+        src = tmp_path / "src.txt"
+        src.write_text("data")
+        download_file(src.as_uri(), db_file("src.txt"))
+        assert "AAFTF_DB is not set" in caplog.text
 
 
 class TestDownloadFile:
@@ -533,3 +606,25 @@ class TestAvailableCpus:
         monkeypatch.delattr("AAFTF.utility.os.sched_getaffinity", raising=False)
         monkeypatch.setattr("AAFTF.utility.os.cpu_count", lambda: 5)
         assert available_cpus() == 5
+
+
+class TestRequireDatabases:
+    def test_returns_paths_of_stored_databases(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("AAFTF_DB", str(tmp_path))
+        (tmp_path / "UniVec").write_text(">v\nACGT\n")
+        assert require_databases(["univec"]) == [str(tmp_path.resolve() / "UniVec")]
+
+    def test_missing_exits_with_download_command(self, monkeypatch, tmp_path, caplog):
+        monkeypatch.setenv("AAFTF_DB", str(tmp_path))
+        (tmp_path / "UniVec").write_text(">v\nACGT\n")
+        with pytest.raises(SystemExit):
+            require_databases(["univec", "euks", "proks"], hint="or pass --x")
+        assert "missing database(s): euks, proks" in caplog.text
+        assert "AAFTF download euks proks (or pass --x)" in caplog.text
+
+    def test_never_downloads(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("AAFTF_DB", str(tmp_path))
+        with patch("AAFTF.utility.download_file") as download:
+            with pytest.raises(SystemExit):
+                require_databases(["univec"])
+        download.assert_not_called()
