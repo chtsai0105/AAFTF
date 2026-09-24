@@ -5,7 +5,7 @@ import logging
 import shutil
 import sys
 
-logger = logging.getLogger(__name__)
+__all__ = ["REQUIRED_TOOLS", "OPTIONAL_TOOLS", "REQUIRED_PYTHON_PACKAGES", "run"]
 
 
 # external binaries used via subprocess across the AAFTF modules
@@ -50,6 +50,8 @@ REQUIRED_PYTHON_PACKAGES = {
     "Bio": "biopython",
 }
 
+logger = logging.getLogger(__name__)
+
 
 def run(**kwargs):
     """Check whether AAFTF's external tool and Python package dependencies are installed."""
@@ -79,6 +81,18 @@ def run(**kwargs):
             logger.info(f"NOTE: {len(missing_optional)} optional tool(s) missing (only needed for specific subcommands).")
 
 
+def _print_tool_table(title, results):
+    logger.info(title)
+    missing = []
+    for tool, path, used_by in results:
+        if path:
+            print(f"  [OK]      {tool:<20} {path}")
+        else:
+            print(f"  [MISSING] {tool:<20} required by: {used_by}")
+            missing.append(tool)
+    return missing
+
+
 def _check_tools(tools):
     results = []
     for tool, used_by in sorted(tools.items()):
@@ -96,15 +110,3 @@ def _check_python_packages(packages):
         except ImportError:
             results.append((dist_name, False))
     return results
-
-
-def _print_tool_table(title, results):
-    logger.info(title)
-    missing = []
-    for tool, path, used_by in results:
-        if path:
-            print(f"  [OK]      {tool:<20} {path}")
-        else:
-            print(f"  [MISSING] {tool:<20} required by: {used_by}")
-            missing.append(tool)
-    return missing

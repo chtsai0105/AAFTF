@@ -12,28 +12,30 @@ from unittest.mock import patch
 
 import pytest
 
-from AAFTF.utility import (
+from aaftf.utility import (
+    PafHit,
     align_to_sorted_bam,
     available_cpus,
     bam_read_count,
     basename_from_reads,
     calc_nx,
-    checkfile,
+    check_file,
     cleanup_workdir,
     concat_files,
-    countfastq,
+    count_fastq,
     db_dirs,
     db_file,
     db_write_dir,
     download_file,
     execute,
-    fastastats,
+    fasta_stats,
     filter_fasta,
     find_db_file,
     home_db_cache,
     make_workdir,
     next_step_name,
     open_maybe_gz,
+    paf_hits,
     require_databases,
     require_tools,
     run_cmd,
@@ -125,50 +127,50 @@ class TestWriteFasta:
 
 
 # ---------------------------------------------------------------------------
-# checkfile
+# check_file
 # ---------------------------------------------------------------------------
 
 
 class TestCheckfile:
     def test_existing_nonempty_file_is_true(self, fasta_file):
-        assert checkfile(str(fasta_file)) is True
+        assert check_file(str(fasta_file)) is True
 
     def test_empty_file_is_false(self, empty_file):
-        assert checkfile(str(empty_file)) is False
+        assert check_file(str(empty_file)) is False
 
     def test_missing_file_is_false(self, tmp_path):
-        assert checkfile(str(tmp_path / "nonexistent.fa")) is False
+        assert check_file(str(tmp_path / "nonexistent.fa")) is False
 
     def test_symlink_to_nonempty_file_is_true(self, tmp_path, fasta_file):
         link = tmp_path / "link.fa"
         link.symlink_to(fasta_file)
-        assert checkfile(str(link)) is True
+        assert check_file(str(link)) is True
 
     def test_broken_symlink_is_false(self, tmp_path):
         link = tmp_path / "broken_link.fa"
         link.symlink_to(tmp_path / "nonexistent_target.fa")
-        assert checkfile(str(link)) is False
+        assert check_file(str(link)) is False
 
 
 # ---------------------------------------------------------------------------
-# fastastats / filter_fasta
+# fasta_stats / filter_fasta
 # ---------------------------------------------------------------------------
 
 
 class TestFastastats:
     def test_count(self, fasta_file):
-        count, total_len = fastastats(str(fasta_file))
+        count, total_len = fasta_stats(str(fasta_file))
         assert count == 3
 
     def test_total_length(self, fasta_file):
         # SEQ1=20, SEQ2=80, SEQ3=150 → 250
-        count, total_len = fastastats(str(fasta_file))
+        count, total_len = fasta_stats(str(fasta_file))
         assert total_len == 250
 
     def test_wrapped_sequence_length(self, tmp_path):
         p = tmp_path / "wrapped.fa"
         p.write_text(">a desc\nACGT\nAC\n>b\nGG\n")
-        assert fastastats(str(p)) == (2, 8)
+        assert fasta_stats(str(p)) == (2, 8)
 
 
 class TestFilterFasta:
@@ -199,42 +201,42 @@ class TestFilterFasta:
 
 
 # ---------------------------------------------------------------------------
-# countfastq
+# count_fastq
 # ---------------------------------------------------------------------------
 
 
 class TestCountFastq:
     def test_plain_fastq(self, fastq_file):
-        assert countfastq(str(fastq_file)) == 10
+        assert count_fastq(str(fastq_file)) == 10
 
     def test_gzip_fastq(self, gz_fastq_file):
-        assert countfastq(str(gz_fastq_file)) == 10
+        assert count_fastq(str(gz_fastq_file)) == 10
 
     def test_single_read(self, tmp_path):
         p = tmp_path / "one.fastq"
         p.write_text(make_fastq_text(1))
-        assert countfastq(str(p)) == 1
+        assert count_fastq(str(p)) == 1
 
     def test_gz_50_reads(self, tmp_path):
         p = tmp_path / "fifty.fastq.gz"
         with gzip.open(p, "wt") as fh:
             fh.write(make_fastq_text(50))
-        assert countfastq(str(p)) == 50
+        assert count_fastq(str(p)) == 50
 
     def test_missing_trailing_newline(self, tmp_path):
         p = tmp_path / "nonl.fastq"
         p.write_text(make_fastq_text(3).rstrip("\n"))
-        assert countfastq(str(p)) == 3
+        assert count_fastq(str(p)) == 3
 
     def test_gz_without_pigz_or_gzip(self, gz_fastq_file, monkeypatch):
-        monkeypatch.setattr("AAFTF.utility.shutil.which", lambda name: None)
-        assert countfastq(str(gz_fastq_file)) == 10
+        monkeypatch.setattr("aaftf.utility.shutil.which", lambda name: None)
+        assert count_fastq(str(gz_fastq_file)) == 10
 
     def test_bad_gzip_raises(self, tmp_path):
         p = tmp_path / "bad.fastq.gz"
         p.write_bytes(b"not a valid gzip file")
         with pytest.raises((OSError, subprocess.CalledProcessError)):
-            countfastq(str(p))
+            count_fastq(str(p))
 
 
 # ---------------------------------------------------------------------------
@@ -565,7 +567,7 @@ class TestSetupLogging:
         import logging
 
         setup_logging(**kwargs)
-        log = logging.getLogger("AAFTF.test")
+        log = logging.getLogger("aaftf.test")
         log.debug("dbg")
         log.info("inf")
         log.warning("wrn")
@@ -598,13 +600,13 @@ class TestAvailableCpus:
 
     def test_uses_affinity_without_slurm(self, monkeypatch):
         monkeypatch.delenv("SLURM_CPUS_PER_TASK", raising=False)
-        monkeypatch.setattr("AAFTF.utility.os.sched_getaffinity", lambda pid: {0, 1}, raising=False)
+        monkeypatch.setattr("aaftf.utility.os.sched_getaffinity", lambda pid: {0, 1}, raising=False)
         assert available_cpus() == 2
 
     def test_falls_back_to_cpu_count_without_affinity(self, monkeypatch):
         monkeypatch.delenv("SLURM_CPUS_PER_TASK", raising=False)
-        monkeypatch.delattr("AAFTF.utility.os.sched_getaffinity", raising=False)
-        monkeypatch.setattr("AAFTF.utility.os.cpu_count", lambda: 5)
+        monkeypatch.delattr("aaftf.utility.os.sched_getaffinity", raising=False)
+        monkeypatch.setattr("aaftf.utility.os.cpu_count", lambda: 5)
         assert available_cpus() == 5
 
 
@@ -624,7 +626,15 @@ class TestRequireDatabases:
 
     def test_never_downloads(self, monkeypatch, tmp_path):
         monkeypatch.setenv("AAFTF_DB", str(tmp_path))
-        with patch("AAFTF.utility.download_file") as download:
+        with patch("aaftf.utility.download_file") as download:
             with pytest.raises(SystemExit):
                 require_databases(["univec"])
         download.assert_not_called()
+
+
+class TestPafHits:
+    def test_parses_named_fields_and_skips_short_lines(self):
+        paf = "q1\t1000\t10\t990\t-\tt1\t5000\t100\t1080\t950\t980\t60\ttp:A:P\nnot paf\n"
+        hits = list(paf_hits(["printf", paf], quiet=True))
+        assert hits == [PafHit("q1", 1000, 10, 990, "-", "t1", 5000, 100, 1080, 950, 980, 60)]
+        assert hits[0].strand == "-" and hits[0].target_end == 1080

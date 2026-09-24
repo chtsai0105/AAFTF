@@ -10,7 +10,7 @@ Algorithm
 =========
 
 Runs three successive BLASTN screens, in this order, against BLAST databases built from
-``resources.DB_Links`` (downloaded/cached under ``$AAFTF_DB`` or the working directory):
+``resources.DB_LINKS`` (downloaded/cached under ``$AAFTF_DB`` or the working directory):
 
 1. **CONTAM_EUKS / CONTAM_PROKS screen.** BLASTN of the assembly against NCBI's
    ``contam_in_euks``/``contam_in_prok`` reference sets (``-dust yes -soft_masking true``). A hit

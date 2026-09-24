@@ -1,11 +1,13 @@
 """URLS and hardcoded resource links."""
 
+__all__ = ["NCBI", "CONTAMINANT_ACCESSIONS", "DB_LINKS", "EUTILS", "SEQ_DBS", "MITO_SEQS", "FCSADAPTOR", "DATABASES"]
+
+
 NCBI = "https://ftp.ncbi.nlm.nih.gov"
 
-Contaminant_Accessions = {"phiX": [f"{NCBI}/genomes/all/GCF/000/819/615/" + "GCF_000819615.1_ViralProj14015/" + "GCF_000819615.1_ViralProj14015_genomic.fna.gz"]}
+CONTAMINANT_ACCESSIONS = {"phiX": [f"{NCBI}/genomes/all/GCF/000/819/615/" + "GCF_000819615.1_ViralProj14015/" + "GCF_000819615.1_ViralProj14015_genomic.fna.gz"]}
 
-
-DB_Links = {
+DB_LINKS = {
     "UniVec": [f"{NCBI}/pub/UniVec/UniVec"],
     "CONTAM_EUKS": [f"{NCBI}/pub/kitts/contam_in_euks.fa.gz"],
     "CONTAM_PROKS": [f"{NCBI}/pub/kitts/contam_in_prok.fa"],
@@ -24,13 +26,13 @@ DB_Links = {
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 
 # URL templates for fetching one sequence by accession (``% accession``)
-SeqDBs = {
+SEQ_DBS = {
     "nucleotide": f"{EUTILS}/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta",
     "nucleotide_ebi": "https://www.ebi.ac.uk/ena/data/view/%s?display=fasta",
     "nucleotide_ncbi": f"{EUTILS}/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta",
 }
 
-Mitoseqs = {
+MITO_SEQS = {
     "COB1": (
         "atgagaattttaaaaagtcatcctttattaaaattagttaatagttatattattg"
         + "attcaccacaaccttctaatattagttatttatgaaattttggatctttattagc"
@@ -43,6 +45,7 @@ Mitoseqs = {
 }
 
 """NCBI Foreign Contaminant Screen tool links"""
+
 FCSADAPTOR = {
     "VERSION": "0.5.5",
     "SIF": "fcs-adaptor.sif",
@@ -52,22 +55,17 @@ FCSADAPTOR = {
     "DOCKERIMAGE": "ncbi/fcs-adaptor:%s",
 }
 
-
-def _file_name(url):
-    return url.rstrip("/").rsplit("/", 1)[-1]
-
-
 # Databases `AAFTF download` can fetch, keyed by abbreviation. `used_by` lists the subcommands that
 # read each one; `executable` marks files that must be runnable after download.
 DATABASES = {
-    "phix": {"filename": _file_name(Contaminant_Accessions["phiX"][0]), "url": Contaminant_Accessions["phiX"][0], "used_by": "filter"},
-    "univec": {"filename": _file_name(DB_Links["UniVec"][0]), "url": DB_Links["UniVec"][0], "used_by": "filter, vecscreen"},
-    "euks": {"filename": _file_name(DB_Links["CONTAM_EUKS"][0]), "url": DB_Links["CONTAM_EUKS"][0], "used_by": "vecscreen"},
-    "proks": {"filename": _file_name(DB_Links["CONTAM_PROKS"][0]), "url": DB_Links["CONTAM_PROKS"][0], "used_by": "vecscreen"},
-    "mitodb": {"filename": _file_name(DB_Links["MITO"][0]), "url": DB_Links["MITO"][0], "used_by": "vecscreen"},
-    "sm_gbk": {**{k: DB_Links["sourmash_gbk"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gbk)"},
-    "sm_gtdbrep": {**{k: DB_Links["sourmash_gtdbrep"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdbrep)"},
-    "sm_gtdb": {**{k: DB_Links["sourmash_gtdb"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdb)"},
+    "phix": {"filename": CONTAMINANT_ACCESSIONS["phiX"][0].rsplit("/", 1)[-1], "url": CONTAMINANT_ACCESSIONS["phiX"][0], "used_by": "filter"},
+    "univec": {"filename": DB_LINKS["UniVec"][0].rsplit("/", 1)[-1], "url": DB_LINKS["UniVec"][0], "used_by": "filter, vecscreen"},
+    "euks": {"filename": DB_LINKS["CONTAM_EUKS"][0].rsplit("/", 1)[-1], "url": DB_LINKS["CONTAM_EUKS"][0], "used_by": "vecscreen"},
+    "proks": {"filename": DB_LINKS["CONTAM_PROKS"][0].rsplit("/", 1)[-1], "url": DB_LINKS["CONTAM_PROKS"][0], "used_by": "vecscreen"},
+    "mitodb": {"filename": DB_LINKS["MITO"][0].rsplit("/", 1)[-1], "url": DB_LINKS["MITO"][0], "used_by": "vecscreen"},
+    "sm_gbk": {**{k: DB_LINKS["sourmash_gbk"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gbk)"},
+    "sm_gtdbrep": {**{k: DB_LINKS["sourmash_gtdbrep"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdbrep)"},
+    "sm_gtdb": {**{k: DB_LINKS["sourmash_gtdb"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdb)"},
     "fcs_script": {"filename": "run_fcsadaptor.sh", "url": FCSADAPTOR["EXEURL"] % FCSADAPTOR["VERSION"], "used_by": "fcs_screen", "executable": True},
     "fcs_image": {
         "filename": FCSADAPTOR["SIFLOCAL"] % FCSADAPTOR["VERSION"],

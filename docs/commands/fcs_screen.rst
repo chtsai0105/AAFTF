@@ -35,7 +35,7 @@ execution) -- NCBI ships FCS-adaptor only as a container image:
 * ``--container_engine docker``: requires ``docker`` on ``$PATH``. AAFTF passes a registry
   reference (``ncbi/fcs-adaptor:{VERSION}``) for Docker to pull/cache itself.
 
-Pinned tool version: FCS-adaptor **0.5.5** (hard-coded in ``AAFTF/resources.py``).
+Pinned tool version: FCS-adaptor **0.5.5** (hard-coded in ``aaftf/resources.py``).
 
 Invocation
 ==========

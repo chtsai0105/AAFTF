@@ -5,7 +5,7 @@ AAFTF subcommand's argparse parser via ``subparsers.add_parser(...)``, and
 binds that subtool's ``run()`` function to it via ``parser_x.set_defaults(
 func=<module>.run)``. This keeps all CLI surface/wiring in one place,
 separate from each subcommand module's own ``run(**kwargs)`` execution logic.
-``AAFTF_main.py`` invokes the selected subtool via ``args.func(**vars(args))``.
+``aaftf.main`` invokes the selected subtool via ``args.func(**vars(args))``.
 
 ``menu_common_args()`` adds the three arguments common to every subcommand
 (``--pipe``, ``-q/--quiet``, ``-v/--verbose``). Call it last, passing the
@@ -16,39 +16,67 @@ in a separate leading section.
 
 import argparse as ap
 
-import AAFTF.assemble as assemble
-import AAFTF.assess as assess
-import AAFTF.check_dependencies as check_dependencies
-import AAFTF.depth as depth
-import AAFTF.download as download
-import AAFTF.fcs_gx_purge as fcs_gx_purge
-import AAFTF.fcs_screen as fcs_screen
-import AAFTF.filter as aaftf_filter
-import AAFTF.fix_tbl as fix_tbl
-import AAFTF.mito as mito
-import AAFTF.pipeline as pipeline
-import AAFTF.polish as polish
-import AAFTF.rmdup as rmdup
-import AAFTF.sort as aaftf_sort
-import AAFTF.sourpurge as sourpurge
-import AAFTF.trim as trim
-import AAFTF.vecscreen as vecscreen
-from AAFTF.utility import CustomHelpFormatter
+import aaftf.assemble as assemble
+import aaftf.assess as assess
+import aaftf.check_dependencies as check_dependencies
+import aaftf.depth as depth
+import aaftf.download as download
+import aaftf.fcs_gx_purge as fcs_gx_purge
+import aaftf.fcs_screen as fcs_screen
+import aaftf.filter as aaftf_filter
+import aaftf.fix_tbl as fix_tbl
+import aaftf.mito as mito
+import aaftf.pipeline as pipeline
+import aaftf.polish as polish
+import aaftf.rmdup as rmdup
+import aaftf.sort as aaftf_sort
+import aaftf.sourpurge as sourpurge
+import aaftf.trim as trim
+import aaftf.vecscreen as vecscreen
+from aaftf.utility import CustomHelpFormatter
+
+__all__ = [
+    "register_subcommands",
+    "download_menu",
+    "menu_common_args",
+    "trim_menu",
+    "mito_menu",
+    "filter_menu",
+    "assemble_menu",
+    "vecscreen_menu",
+    "fcs_screen_menu",
+    "fcs_gx_purge_menu",
+    "sourpurge_menu",
+    "rmdup_menu",
+    "polish_menu",
+    "sort_menu",
+    "assess_menu",
+    "fix_tbl_menu",
+    "depth_menu",
+    "pipeline_menu",
+    "check_dependencies_menu",
+]
 
 
-def menu_common_args(target):
-    """Add the arguments common to every AAFTF subcommand parser.
-
-    ``target`` is normally a subcommand's "optional arguments" group (from
-    ``parser.add_argument_group("optional arguments")``). Call this only
-    after all of that subcommand's own optional arguments have been added,
-    so ``--pipe``, ``-q/--quiet`` and ``-v/--verbose`` render as the final
-    entries of that group.
-    """
-    target.add_argument("--pipe", action="store_true", help="AAFTF is running in pipeline mode")
-    target.add_argument("-q", "--quiet", action="store_true", dest="quiet", help="Only show warnings and errors")
-    target.add_argument("-v", "--verbose", action="store_true", dest="debug", help="Show debug messages and tool stderr, and keep temporary working directories")
-    return target
+def register_subcommands(subparsers):
+    """Register every AAFTF subcommand parser on ``subparsers``, in ``AAFTF --help`` order."""
+    download_menu(subparsers)
+    trim_menu(subparsers)
+    mito_menu(subparsers)
+    filter_menu(subparsers)
+    assemble_menu(subparsers)
+    vecscreen_menu(subparsers)
+    fcs_screen_menu(subparsers)
+    fcs_gx_purge_menu(subparsers)
+    sourpurge_menu(subparsers)
+    rmdup_menu(subparsers)
+    polish_menu(subparsers)
+    sort_menu(subparsers)
+    assess_menu(subparsers)
+    fix_tbl_menu(subparsers)
+    depth_menu(subparsers)
+    pipeline_menu(subparsers)
+    check_dependencies_menu(subparsers)
 
 
 def download_menu(subparsers):
@@ -74,6 +102,21 @@ def download_menu(subparsers):
     menu_common_args(optional)
     parser_download.set_defaults(func=download.run)
     return parser_download
+
+
+def menu_common_args(target):
+    """Add the arguments common to every AAFTF subcommand parser.
+
+    ``target`` is normally a subcommand's "optional arguments" group (from
+    ``parser.add_argument_group("optional arguments")``). Call this only
+    after all of that subcommand's own optional arguments have been added,
+    so ``--pipe``, ``-q/--quiet`` and ``-v/--verbose`` render as the final
+    entries of that group.
+    """
+    target.add_argument("--pipe", action="store_true", help="AAFTF is running in pipeline mode")
+    target.add_argument("-q", "--quiet", action="store_true", dest="quiet", help="Only show warnings and errors")
+    target.add_argument("-v", "--verbose", action="store_true", dest="debug", help="Show debug messages and tool stderr, and keep temporary working directories")
+    return target
 
 
 def trim_menu(subparsers):
@@ -902,24 +945,3 @@ def check_dependencies_menu(subparsers):
     )
     parser_check_deps.set_defaults(func=check_dependencies.run)
     return parser_check_deps
-
-
-SUBCOMMAND_REGISTRARS = [
-    download_menu,
-    trim_menu,
-    mito_menu,
-    filter_menu,
-    assemble_menu,
-    vecscreen_menu,
-    fcs_screen_menu,
-    fcs_gx_purge_menu,
-    sourpurge_menu,
-    rmdup_menu,
-    polish_menu,
-    sort_menu,
-    assess_menu,
-    fix_tbl_menu,
-    depth_menu,
-    pipeline_menu,
-    check_dependencies_menu,
-]

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from AAFTF.depth import (
+from aaftf.depth import (
     _coverage_breadth_from_dist,
     _get_plot_prefix,
     _paginate_by_length_ratio,

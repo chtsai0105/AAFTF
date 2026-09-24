@@ -1,6 +1,7 @@
 """Utility scripts for parsing FASTA/FASTQ files and other shared helpers."""
 
 import argparse as ap
+import functools
 import gzip
 import logging
 import os
@@ -13,14 +14,62 @@ import urllib.request
 import uuid
 from itertools import islice
 from pathlib import Path
+from typing import NamedTuple
 
 import psutil
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.SeqIO.QualityIO import FastqGeneralIterator
 
-from AAFTF.resources import DATABASES
+from aaftf.resources import DATABASES
+
+__all__ = [
+    "COMPLEMENT",
+    "CustomHelpFormatter",
+    "PafHit",
+    "concat_files",
+    "open_maybe_gz",
+    "estimate_read_length",
+    "check_file",
+    "available_cpus",
+    "get_ram",
+    "fasta_stats",
+    "filter_fasta",
+    "write_fasta",
+    "softwrap",
+    "count_fastq",
+    "align_to_sorted_bam",
+    "samtools_sort_cmd",
+    "print_cmd",
+    "bam_read_count",
+    "paf_hits",
+    "execute",
+    "calc_nx",
+    "run_cmd",
+    "require_tools",
+    "next_step_name",
+    "basename_from_reads",
+    "require_databases",
+    "find_db_file",
+    "db_dirs",
+    "home_db_cache",
+    "db_file",
+    "db_write_dir",
+    "download_file",
+    "warn_if_home_cache",
+    "open_url",
+    "safe_remove",
+    "setup_logging",
+    "make_workdir",
+    "cleanup_workdir",
+]
+
+
+# IUPAC complement (U pairs with A); case is preserved so soft-masked bases stay lowercase.
+COMPLEMENT = str.maketrans("ACGTURYKMSWBDHVNXacgturykmswbdhvnx", "TGCAAYRMKSWVBDHNXtgcaayrmkswvbdhnx")
 
 logger = logging.getLogger(__name__)
+
+_home_cache_warned = False
 
 
 class CustomHelpFormatter(ap.HelpFormatter):
@@ -52,9 +101,21 @@ class CustomHelpFormatter(ap.HelpFormatter):
         return help
 
 
-def open_maybe_gz(path, mode="rt"):
-    """Open ``path`` with gzip if its name ends in ``.gz``, else as a plain file."""
-    return (gzip.open if str(path).endswith(".gz") else open)(path, mode)
+class PafHit(NamedTuple):
+    """One alignment from minimap2's PAF output (its 12 standard columns; coordinates are 0-based)."""
+
+    query: str
+    query_len: int
+    query_start: int
+    query_end: int
+    strand: str
+    target: str
+    target_len: int
+    target_start: int
+    target_end: int
+    matches: int
+    aln_len: int
+    mapq: int
 
 
 def concat_files(paths, dest):
@@ -65,6 +126,11 @@ def concat_files(paths, dest):
                 shutil.copyfileobj(fh, out)
 
 
+def open_maybe_gz(path, mode="rt"):
+    """Open ``path`` with gzip if its name ends in ``.gz``, else as a plain file."""
+    return (gzip.open if str(path).endswith(".gz") else open)(path, mode)
+
+
 def estimate_read_length(input):
     """Guess the read length in a FASTQ file, rounded to the nearest 10bp."""
     with open_maybe_gz(input) as infile:
@@ -73,15 +139,15 @@ def estimate_read_length(input):
     return round(max_len, -1)
 
 
-def checkfile(input):
+def check_file(input):
     """Check that file to read is valid."""
 
-    def _getSize(filename):
+    def _get_size(filename):
         st = os.stat(filename)
         return st.st_size
 
     if Path(input).is_file():
-        return _getSize(input) >= 1
+        return _get_size(input) >= 1
     return False
 
 
@@ -101,7 +167,7 @@ def available_cpus():
     return os.cpu_count() or 1
 
 
-def getRAM(max_lim=0):
+def get_ram(max_lim=0):
     """Get the available RAM on system, in GB, kept safely under the true value.
 
     Rounded down to the nearest 10 once available RAM exceeds 10 GB;
@@ -119,7 +185,7 @@ def getRAM(max_lim=0):
     return min(safe_gb, max_lim) if max_lim else safe_gb
 
 
-def fastastats(input):
+def fasta_stats(input):
     """Return (number of records, total sequence length) of a FASTA file."""
     count = length = 0
     with open(input) as f:
@@ -151,17 +217,19 @@ def filter_fasta(fasta_in, fasta_out, keep, wrap=60):
     return count, length
 
 
-def _count_lines(fh):
-    """Count lines in a binary stream, including a final line with no newline."""
-    lines = 0
-    last = b"\n"
-    for chunk in iter(lambda: fh.read(1 << 20), b""):
-        lines += chunk.count(b"\n")
-        last = chunk[-1:]
-    return lines + (last != b"\n")
+def write_fasta(fh, header, seq, wrap=60):
+    """Write one FASTA record to an open file handle, wrapped at ``wrap`` columns."""
+    fh.write(f">{header}\n")
+    if seq:
+        fh.write(f"{softwrap(seq, wrap)}\n")
 
 
-def countfastq(input):
+def softwrap(string, every=60):
+    """Softwrap lines in a textstring (60 columns by default, as Biopython's SeqIO.write)."""
+    return "\n".join(string[i : i + every] for i in range(0, len(string), every))
+
+
+def count_fastq(input):
     """Count the number of records in a FASTQ file (gzip or regular).
 
     Gzipped input is decompressed with pigz (or gzip) when available, which is
@@ -183,25 +251,39 @@ def countfastq(input):
     return lines // 4
 
 
-def softwrap(string, every=60):
-    """Softwrap lines in a textstring (60 columns by default, as Biopython's SeqIO.write)."""
-    return "\n".join(string[i : i + every] for i in range(0, len(string), every))
+def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, debug=False):
+    """Pipe an aligner's SAM output straight into ``samtools sort``.
 
+    Args:
+        align_cmd: Aligner command list that writes SAM to stdout.
+        bam_out: Destination sorted BAM, relative to the current directory
+            (not ``cwd``).
+        threads: samtools sort threads.
+        cwd: Working directory for both commands.
+        debug: Show both commands' stderr (hidden otherwise).
 
-def write_fasta(fh, header, seq, wrap=60):
-    """Write one FASTA record to an open file handle, wrapped at ``wrap`` columns."""
-    fh.write(f">{header}\n")
-    if seq:
-        fh.write(f"{softwrap(seq, wrap)}\n")
-
-
-# ---------------------------------------------------------------------------
-# samtools helpers (samtools >= 1.13 required; pixi pins >= 1.24)
-# ---------------------------------------------------------------------------
+    The BAM is indexed (``<bam_out>.bai``) as it is written. Exits the program
+    if either command fails, removing any partial BAM/index so a rerun does not
+    mistake it for a finished alignment.
+    """
+    bam_path = Path(bam_out).resolve()
+    sort_cmd = samtools_sort_cmd("-", str(bam_path), threads, write_index=True)
+    stderr = None if debug else subprocess.DEVNULL
+    print_cmd(align_cmd)
+    print_cmd(sort_cmd)
+    p1 = subprocess.Popen(align_cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=stderr)
+    p2 = subprocess.Popen(sort_cmd, cwd=cwd, stdin=p1.stdout, stderr=stderr)
+    p1.stdout.close()
+    p2.communicate()
+    if p1.wait() != 0 or p2.returncode != 0:
+        bam_path.unlink(missing_ok=True)
+        Path(f"{bam_path}.bai").unlink(missing_ok=True)
+        logger.error(f"{align_cmd[0]} | samtools sort failed for {bam_out}")
+        sys.exit(1)
 
 
 def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None, tmp_prefix=None, write_index=False):
-    """Return a ``samtools sort`` command list.
+    """Return a ``samtools sort`` command list (samtools >= 1.13; pixi pins >= 1.24).
 
     Args:
         input_file: Path to input SAM/BAM, or ``'-'`` to read from stdin.
@@ -224,35 +306,12 @@ def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None,
     return cmd
 
 
-def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, debug=False):
-    """Pipe an aligner's SAM output straight into ``samtools sort``.
-
-    Args:
-        align_cmd: Aligner command list that writes SAM to stdout.
-        bam_out: Destination sorted BAM, relative to the current directory
-            (not ``cwd``).
-        threads: samtools sort threads.
-        cwd: Working directory for both commands.
-        debug: Show both commands' stderr (hidden otherwise).
-
-    The BAM is indexed (``<bam_out>.bai``) as it is written. Exits the program
-    if either command fails, removing any partial BAM/index so a rerun does not
-    mistake it for a finished alignment.
-    """
-    bam_path = Path(bam_out).resolve()
-    sort_cmd = samtools_sort_cmd("-", str(bam_path), threads, write_index=True)
-    stderr = None if debug else subprocess.DEVNULL
-    printCMD(align_cmd)
-    printCMD(sort_cmd)
-    p1 = subprocess.Popen(align_cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=stderr)
-    p2 = subprocess.Popen(sort_cmd, cwd=cwd, stdin=p1.stdout, stderr=stderr)
-    p1.stdout.close()
-    p2.communicate()
-    if p1.wait() != 0 or p2.returncode != 0:
-        bam_path.unlink(missing_ok=True)
-        Path(f"{bam_path}.bai").unlink(missing_ok=True)
-        logger.error(f"{align_cmd[0]} | samtools sort failed for {bam_out}")
-        sys.exit(1)
+def print_cmd(cmd):
+    """Print out a command for debugging."""
+    stringcmd = "{:}".format(" ".join(cmd))
+    prefix = "\033[96mCMD:\033[00m "
+    wrapper = textwrap.TextWrapper(initial_indent=prefix, width=80, subsequent_indent=" " * 8, break_long_words=False)
+    print(wrapper.fill(stringcmd))
 
 
 def bam_read_count(bamfile):
@@ -269,8 +328,50 @@ def bam_read_count(bamfile):
     return mapped, primary - mapped
 
 
-# IUPAC complement (U pairs with A); case is preserved so soft-masked bases stay lowercase.
-COMPLEMENT = str.maketrans("ACGTURYKMSWBDHVNXacgturykmswbdhvnx", "TGCAAYRMKSWVBDHNXtgcaayrmkswvbdhnx")
+# from https://stackoverflow.com/questions/4417546/
+# constantly-print-subprocess-output-while-process-is-running
+def paf_hits(cmd, **execute_args):
+    """Run a PAF-producing command (e.g. ``minimap2 -x ...``) and yield each alignment as a ``PafHit``.
+
+    Args:
+        cmd: Command list whose stdout is PAF.
+        **execute_args: Passed to ``execute`` (``cwd``, ``debug``, ``quiet``).
+    """
+    for line in execute(cmd, **execute_args):
+        cols = line.rstrip("\n").split("\t")
+        if len(cols) < 12:
+            continue
+        yield PafHit(cols[0], int(cols[1]), int(cols[2]), int(cols[3]), cols[4], cols[5], *map(int, cols[6:12]))
+
+
+def execute(cmd, cwd=None, debug=False, quiet=False):
+    """Run a command and yield its stdout line by line.
+
+    Args:
+        cmd: Command list.
+        cwd: Working directory.
+        debug: Show the command's stderr (hidden otherwise).
+        quiet: Don't print the command (e.g. when it runs once per contig).
+
+    Raises:
+        subprocess.CalledProcessError: If the command fails and all its output
+            was read. If the caller stops reading early, the command is
+            stopped and its exit status is ignored.
+    """
+    if not quiet:
+        print_cmd(cmd)
+    proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, text=True, stderr=None if debug else subprocess.DEVNULL)
+    finished = False
+    try:
+        yield from proc.stdout
+        finished = True
+    finally:
+        proc.stdout.close()
+        if not finished:
+            proc.kill()
+        return_code = proc.wait()
+    if return_code:
+        raise subprocess.CalledProcessError(return_code, cmd)
 
 
 def calc_nx(lengths, fraction=0.5):
@@ -289,14 +390,6 @@ def calc_nx(lengths, fraction=0.5):
     return 0, 0
 
 
-def printCMD(cmd):
-    """Print out a command for debugging."""
-    stringcmd = "{:}".format(" ".join(cmd))
-    prefix = "\033[96mCMD:\033[00m "
-    wrapper = textwrap.TextWrapper(initial_indent=prefix, width=80, subsequent_indent=" " * 8, break_long_words=False)
-    print(wrapper.fill(stringcmd))
-
-
 def run_cmd(cmd, debug=False, cwd=None, stdout=None, env=None, quiet_stdout=False):
     """Print a command, then run it with stderr hidden unless ``debug``.
 
@@ -311,7 +404,7 @@ def run_cmd(cmd, debug=False, cwd=None, stdout=None, env=None, quiet_stdout=Fals
     Returns:
         subprocess.CompletedProcess.
     """
-    printCMD(cmd)
+    print_cmd(cmd)
     if quiet_stdout and not debug:
         stdout = subprocess.DEVNULL
     return subprocess.run(cmd, cwd=cwd, stdout=stdout, stderr=None if debug else subprocess.DEVNULL, env=env)
@@ -343,48 +436,6 @@ def basename_from_reads(reads):
     return name
 
 
-def home_db_cache():
-    """Return the default database folder: ``$XDG_CACHE_HOME/aaftf``, else ``~/.cache/aaftf``."""
-    return (Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "aaftf").expanduser().resolve()
-
-
-def db_dirs():
-    """Return the database folders to search, in order.
-
-    ``$AAFTF_DB`` may list several folders separated like ``$PATH`` (``:`` on
-    Linux/macOS), e.g. a shared read-only folder followed by a personal one.
-    When it is unset, the home cache (``home_db_cache()``) is used.
-    """
-    folders = [Path(p).expanduser().resolve() for p in os.environ.get("AAFTF_DB", "").split(os.pathsep) if p]
-    return folders or [home_db_cache()]
-
-
-def db_write_dir():
-    """Return the folder new databases are downloaded to (created if needed).
-
-    This is the first ``db_dirs()`` folder that can be written to, falling back
-    to the home cache if none can.
-    """
-    for folder in db_dirs():
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            continue
-        if os.access(folder, os.W_OK):
-            return folder
-    fallback = home_db_cache()
-    fallback.mkdir(parents=True, exist_ok=True)
-    return fallback
-
-
-def find_db_file(name):
-    """Return the first existing copy of database file ``name`` in ``db_dirs()``, or None."""
-    for folder in db_dirs():
-        if (folder / name).is_file():
-            return str(folder / name)
-    return None
-
-
 def require_databases(names, hint=None):
     """Return the stored paths of catalog databases ``names`` (keys of ``resources.DATABASES``).
 
@@ -411,6 +462,30 @@ def require_databases(names, hint=None):
     return paths
 
 
+def find_db_file(name):
+    """Return the first existing copy of database file ``name`` in ``db_dirs()``, or None."""
+    for folder in db_dirs():
+        if (folder / name).is_file():
+            return str(folder / name)
+    return None
+
+
+def db_dirs():
+    """Return the database folders to search, in order.
+
+    ``$AAFTF_DB`` may list several folders separated like ``$PATH`` (``:`` on
+    Linux/macOS), e.g. a shared read-only folder followed by a personal one.
+    When it is unset, the home cache (``home_db_cache()``) is used.
+    """
+    folders = [Path(p).expanduser().resolve() for p in os.environ.get("AAFTF_DB", "").split(os.pathsep) if p]
+    return folders or [home_db_cache()]
+
+
+def home_db_cache():
+    """Return the default database folder: ``$XDG_CACHE_HOME/aaftf``, else ``~/.cache/aaftf``."""
+    return (Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "aaftf").expanduser().resolve()
+
+
 def db_file(name, force=False):
     """Return the path to use for database file ``name``.
 
@@ -421,39 +496,22 @@ def db_file(name, force=False):
     return existing or str(db_write_dir() / name)
 
 
-_home_cache_warned = False
+def db_write_dir():
+    """Return the folder new databases are downloaded to (created if needed).
 
-
-def warn_if_home_cache():
-    """Warn once if databases are going to the home cache because ``$AAFTF_DB`` is unset or unwritable."""
-    global _home_cache_warned
-    home = home_db_cache()
-    user_chose_home = bool(os.environ.get("AAFTF_DB")) and home in db_dirs()
-    if _home_cache_warned or user_chose_home or db_write_dir() != home:
-        return
-    _home_cache_warned = True
-    reason = "no folder in AAFTF_DB is writable" if os.environ.get("AAFTF_DB") else "AAFTF_DB is not set"
-    logger.warning(f"{reason}, so databases are saved to {home}. Some are large (the sourmash databases and the FCS container image are several GB each) and may exceed a home-directory quota. To store them elsewhere: export AAFTF_DB=/path/with/space")
-
-
-class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
-    """Extend urllib's redirect handler to also follow HTTP 308.
-
-    Python < 3.11 does not handle 308 (Permanent Redirect): the base
-    ``redirect_request()`` only allows {301,302,303,307} and raises HTTPError
-    for anything else, so both it and an http_error_308 dispatcher are needed.
+    This is the first ``db_dirs()`` folder that can be written to, falling back
+    to the home cache if none can.
     """
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        if code == 308:
-            code = 307  # method-preserving permanent redirect
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-    def http_error_308(self, req, fp, code, msg, headers):
-        return self.http_error_302(req, fp, code, msg, headers)
-
-
-URL_OPENER = urllib.request.build_opener(_Redirect308Handler())
+    for folder in db_dirs():
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            continue
+        if os.access(folder, os.W_OK):
+            return folder
+    fallback = home_db_cache()
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
 
 
 def download_file(url, dest, force=False):
@@ -482,7 +540,7 @@ def download_file(url, dest, force=False):
     tmp = f"{dest}.tmp"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "AAFTF/1.0"})
-        with URL_OPENER.open(req, timeout=300) as response:
+        with open_url(req, timeout=300) as response:
             final_url = response.geturl()
             if final_url != url:
                 logger.info(f"Redirected to {final_url}")
@@ -498,70 +556,21 @@ def download_file(url, dest, force=False):
     return dest
 
 
-class _StatusFormatter(logging.Formatter):
-    """Format records as ``[Mon DD HH:MM AM] message``; warnings and errors get a level prefix."""
-
-    def __init__(self, color):
-        super().__init__(datefmt="%b %d %I:%M %p")
-        self.color = color
-
-    def format(self, record):
-        stamp = f"[{self.formatTime(record, self.datefmt)}]"
-        if self.color:
-            stamp = f"\033[92m{stamp}\033[00m"
-        message = record.getMessage()
-        if record.levelno >= logging.WARNING:
-            message = f"{record.levelname}: {message}"
-        return f"{stamp} {message}"
+def warn_if_home_cache():
+    """Warn once if databases are going to the home cache because ``$AAFTF_DB`` is unset or unwritable."""
+    global _home_cache_warned
+    home = home_db_cache()
+    user_chose_home = bool(os.environ.get("AAFTF_DB")) and home in db_dirs()
+    if _home_cache_warned or user_chose_home or db_write_dir() != home:
+        return
+    _home_cache_warned = True
+    reason = "no folder in AAFTF_DB is writable" if os.environ.get("AAFTF_DB") else "AAFTF_DB is not set"
+    logger.warning(f"{reason}, so databases are saved to {home}. Some are large (the sourmash databases and the FCS container image are several GB each) and may exceed a home-directory quota. To store them elsewhere: export AAFTF_DB=/path/with/space")
 
 
-def setup_logging(debug=False, quiet=False):
-    """Send AAFTF log messages to stderr.
-
-    Args:
-        debug: Also show debug messages (``-v/--verbose``).
-        quiet: Show only warnings and errors (``-q/--quiet``); ``debug`` wins if both are set.
-    """
-    handler = logging.StreamHandler()
-    handler.setFormatter(_StatusFormatter(color=handler.stream.isatty()))
-    package_logger = logging.getLogger("AAFTF")
-    package_logger.handlers[:] = [handler]
-    package_logger.setLevel(logging.DEBUG if debug else logging.WARNING if quiet else logging.INFO)
-    package_logger.propagate = False
-
-
-# from https://stackoverflow.com/questions/4417546/
-# constantly-print-subprocess-output-while-process-is-running
-
-
-def execute(cmd, cwd=None, debug=False, quiet=False):
-    """Run a command and yield its stdout line by line.
-
-    Args:
-        cmd: Command list.
-        cwd: Working directory.
-        debug: Show the command's stderr (hidden otherwise).
-        quiet: Don't print the command (e.g. when it runs once per contig).
-
-    Raises:
-        subprocess.CalledProcessError: If the command fails and all its output
-            was read. If the caller stops reading early, the command is
-            stopped and its exit status is ignored.
-    """
-    if not quiet:
-        printCMD(cmd)
-    proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, text=True, stderr=None if debug else subprocess.DEVNULL)
-    finished = False
-    try:
-        yield from proc.stdout
-        finished = True
-    finally:
-        proc.stdout.close()
-        if not finished:
-            proc.kill()
-        return_code = proc.wait()
-    if return_code:
-        raise subprocess.CalledProcessError(return_code, cmd)
+def open_url(request, timeout):
+    """Open a URL or ``urllib.request.Request``, following HTTP 308 redirects (which Python < 3.11 does not)."""
+    return _url_opener().open(request, timeout=timeout)
 
 
 def safe_remove(path):
@@ -574,6 +583,21 @@ def safe_remove(path):
         shutil.rmtree(path)
     else:
         path.unlink(missing_ok=True)
+
+
+def setup_logging(debug=False, quiet=False):
+    """Send AAFTF log messages to stderr.
+
+    Args:
+        debug: Also show debug messages (``-v/--verbose``).
+        quiet: Show only warnings and errors (``-q/--quiet``); ``debug`` wins if both are set.
+    """
+    handler = logging.StreamHandler()
+    handler.setFormatter(_StatusFormatter(color=handler.stream.isatty()))
+    package_logger = logging.getLogger("aaftf")
+    package_logger.handlers[:] = [handler]
+    package_logger.setLevel(logging.DEBUG if debug else logging.WARNING if quiet else logging.INFO)
+    package_logger.propagate = False
 
 
 def make_workdir(workdir, prefix):
@@ -602,3 +626,53 @@ def cleanup_workdir(workdir, debug, custom_workdir):
     """
     if not debug and not custom_workdir:
         safe_remove(workdir)
+
+
+class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
+    """Extend urllib's redirect handler to also follow HTTP 308.
+
+    Python < 3.11 does not handle 308 (Permanent Redirect): the base
+    ``redirect_request()`` only allows {301,302,303,307} and raises HTTPError
+    for anything else, so both it and an http_error_308 dispatcher are needed.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if code == 308:
+            code = 307  # method-preserving permanent redirect
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    def http_error_308(self, req, fp, code, msg, headers):
+        return self.http_error_302(req, fp, code, msg, headers)
+
+
+class _StatusFormatter(logging.Formatter):
+    """Format records as ``[Mon DD HH:MM AM] message``; warnings and errors get a level prefix."""
+
+    def __init__(self, color):
+        super().__init__(datefmt="%b %d %I:%M %p")
+        self.color = color
+
+    def format(self, record):
+        stamp = f"[{self.formatTime(record, self.datefmt)}]"
+        if self.color:
+            stamp = f"\033[92m{stamp}\033[00m"
+        message = record.getMessage()
+        if record.levelno >= logging.WARNING:
+            message = f"{record.levelname}: {message}"
+        return f"{stamp} {message}"
+
+
+def _count_lines(fh):
+    """Count lines in a binary stream, including a final line with no newline."""
+    lines = 0
+    last = b"\n"
+    for chunk in iter(lambda: fh.read(1 << 20), b""):
+        lines += chunk.count(b"\n")
+        last = chunk[-1:]
+    return lines + (last != b"\n")
+
+
+@functools.cache
+def _url_opener():
+    """Build (once) the urllib opener used by ``open_url``."""
+    return urllib.request.build_opener(_Redirect308Handler())

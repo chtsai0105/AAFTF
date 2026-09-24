@@ -1,7 +1,7 @@
 """Download and cache AAFTF reference databases.
 
 ``AAFTF download`` with no arguments lists every database in
-``AAFTF.resources.DATABASES``: its abbreviation, file, size, which subcommands
+``aaftf.resources.DATABASES``: its abbreviation, file, size, which subcommands
 use it, and where it is stored. Naming databases (by abbreviation or file name,
 or ``all``) downloads them into the database folder (see
 ``utility.db_dirs``), so later AAFTF commands reuse the cached files.
@@ -13,31 +13,51 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from AAFTF.resources import DATABASES
-from AAFTF.utility import URL_OPENER, db_dirs, db_file, db_write_dir, download_file, find_db_file, warn_if_home_cache
+from aaftf.resources import DATABASES
+from aaftf.utility import db_dirs, db_file, db_write_dir, download_file, find_db_file, open_url, warn_if_home_cache
+
+__all__ = ["run"]
+
 
 logger = logging.getLogger(__name__)
 
 
-def _human_size(num_bytes):
-    """Format a byte count as a human-readable string (e.g. ``1.2 GB``)."""
-    size = float(num_bytes)
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size < 1024 or unit == "TB":
-            return f"{size:.1f} {unit}"
-        size /= 1024
-    return f"{size:.1f} TB"  # pragma: no cover - unreachable, but keeps a return for every path
+def run(databases=None, force=False, **kwargs):
+    """Execute the ``download`` subcommand.
 
+    Args:
+        databases: Database abbreviations or file names (case-insensitive), or
+            ``all``. When empty, list the databases instead of downloading.
+        force: Re-download even if a copy already exists (into the first
+            writable database folder).
+    """
+    if not databases:
+        _list_db()
+        return
 
-def _remote_size(url):
-    """Return the remote file size in bytes via an HTTP HEAD request, or ``None`` if unavailable."""
-    try:
-        req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "AAFTF/1.0"})
-        with URL_OPENER.open(req, timeout=10) as response:
-            length = response.headers.get("Content-Length")
-            return int(length) if length is not None else None
-    except Exception:
-        return None
+    selected = _resolve(databases)
+    db_dir = db_write_dir()
+    warn_if_home_cache()
+    logger.info(f"AAFTF database directory: {db_dir}")
+
+    errors = []
+    for abbr in selected:
+        entry = DATABASES[abbr]
+        dest = db_file(entry["filename"], force=force)
+        already_present = Path(dest).exists() and not force
+        try:
+            download_file(entry["url"], dest, force=force)
+        except Exception as e:
+            errors.append(f"{abbr} ({entry['filename']}): {e}")
+            continue
+        if entry.get("executable") and not already_present:
+            os.chmod(dest, 0o555)
+
+    if errors:
+        logger.error("Some downloads failed:\n" + "\n".join(errors))
+        logger.info("Re-run the same command later; files already downloaded are skipped unless you pass --force.")
+        sys.exit(1)
+    logger.info("Download complete. Run 'AAFTF download' to see where each database is stored.")
 
 
 def _list_db():
@@ -91,6 +111,27 @@ def _list_db():
     print("\nDownload with: AAFTF download NAME [NAME ...]   (abbreviation or file name, or 'all')")
 
 
+def _human_size(num_bytes):
+    """Format a byte count as a human-readable string (e.g. ``1.2 GB``)."""
+    size = float(num_bytes)
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size < 1024 or unit == "TB":
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"  # pragma: no cover - unreachable, but keeps a return for every path
+
+
+def _remote_size(url):
+    """Return the remote file size in bytes via an HTTP HEAD request, or ``None`` if unavailable."""
+    try:
+        req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "AAFTF/1.0"})
+        with open_url(req, timeout=10) as response:
+            length = response.headers.get("Content-Length")
+            return int(length) if length is not None else None
+    except Exception:
+        return None
+
+
 def _resolve(names):
     """Map database abbreviations / file names (or ``all``) to abbreviations, in order, without duplicates."""
     lookup = {}
@@ -115,41 +156,3 @@ def _resolve(names):
         logger.info(f"Choose from: {', '.join(DATABASES)} (or their file names), or 'all'. Run 'AAFTF download' to list them.")
         sys.exit(1)
     return selected
-
-
-def run(databases=None, force=False, **kwargs):
-    """Execute the ``download`` subcommand.
-
-    Args:
-        databases: Database abbreviations or file names (case-insensitive), or
-            ``all``. When empty, list the databases instead of downloading.
-        force: Re-download even if a copy already exists (into the first
-            writable database folder).
-    """
-    if not databases:
-        _list_db()
-        return
-
-    selected = _resolve(databases)
-    db_dir = db_write_dir()
-    warn_if_home_cache()
-    logger.info(f"AAFTF database directory: {db_dir}")
-
-    errors = []
-    for abbr in selected:
-        entry = DATABASES[abbr]
-        dest = db_file(entry["filename"], force=force)
-        already_present = Path(dest).exists() and not force
-        try:
-            download_file(entry["url"], dest, force=force)
-        except Exception as e:
-            errors.append(f"{abbr} ({entry['filename']}): {e}")
-            continue
-        if entry.get("executable") and not already_present:
-            os.chmod(dest, 0o555)
-
-    if errors:
-        logger.error("Some downloads failed:\n" + "\n".join(errors))
-        logger.info("Re-run the same command later; files already downloaded are skipped unless you pass --force.")
-        sys.exit(1)
-    logger.info("Download complete. Run 'AAFTF download' to see where each database is stored.")

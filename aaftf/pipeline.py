@@ -4,17 +4,20 @@ import logging
 import sys
 from argparse import Namespace
 
-import AAFTF.assemble as assemble
-import AAFTF.assess as assess
-import AAFTF.filter as aaftf_filter
-import AAFTF.mito as mito
-import AAFTF.polish as polish
-import AAFTF.rmdup as rmdup
-import AAFTF.sort as aaftf_sort
-import AAFTF.sourpurge as sourpurge
-import AAFTF.trim as trim
-import AAFTF.vecscreen as vecscreen
-from AAFTF.utility import checkfile, getRAM
+import aaftf.assemble as assemble
+import aaftf.assess as assess
+import aaftf.filter as aaftf_filter
+import aaftf.mito as mito
+import aaftf.polish as polish
+import aaftf.rmdup as rmdup
+import aaftf.sort as aaftf_sort
+import aaftf.sourpurge as sourpurge
+import aaftf.trim as trim
+import aaftf.vecscreen as vecscreen
+from aaftf.utility import check_file, get_ram
+
+__all__ = ["run"]
+
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +46,9 @@ def run(
     """Script runs entire AAFTF pipeline."""
     # script to run entire AAFTF pipeline
     args_dict = {k: v for k, v in locals().items() if k != "kwargs"}
-    RAM = round(0.75 * getRAM())
+    ram = round(0.75 * get_ram())
     if not memory:
-        args_dict["memory"] = str(RAM)
+        args_dict["memory"] = str(ram)
 
     # Helper function to create namespace with required defaults
     def create_namespace(options, required_args=None, **extra_args):
@@ -59,15 +62,15 @@ def run(
     # Helper function to check step output and handle failures
     def check_step_success(output_file, step_name):
         """Check if step completed successfully."""
-        if not checkfile(output_file):
+        if not check_file(output_file):
             logger.info(f"AAFTF {step_name} failed")
             sys.exit(1)
         return True
 
     # run trimming with bbduk
-    if not checkfile(basename + "_1P.fastq.gz"):
-        trimOpts = ["memory", "left", "right", "basename", "cpus", "debug", "minlen"]
-        trim_args = create_namespace(trimOpts, required_args={"method": "bbduk", "pipe": True, "avgqual": 10})
+    if not check_file(basename + "_1P.fastq.gz"):
+        trim_opts = ["memory", "left", "right", "basename", "cpus", "debug", "minlen"]
+        trim_args = create_namespace(trim_opts, required_args={"method": "bbduk", "pipe": True, "avgqual": 10})
         trim.run(**vars(trim_args))
     else:
         if right:
@@ -78,10 +81,10 @@ def run(
 
     # run mitochondrial assembly on bbduk trimmed reads
     if right:
-        if not checkfile(basename + ".mito.fasta"):
-            mitoOpts = ["left", "right", "out", "minlen", "maxlen", "seed", "starting", "workdir", "pipe", "reference", "memory", "debug"]
+        if not check_file(basename + ".mito.fasta"):
+            mito_opts = ["left", "right", "out", "minlen", "maxlen", "seed", "starting", "workdir", "pipe", "reference", "memory", "debug"]
             mito_args = create_namespace(
-                mitoOpts,
+                mito_opts,
                 required_args={
                     "left": basename + "_1P.fastq.gz",
                     "right": basename + "_2P.fastq.gz",
@@ -91,7 +94,7 @@ def run(
                     "pipe": True,
                     "memory": int(args_dict["memory"]),
                 },
-                **{x: False for x in mitoOpts if x not in args_dict},
+                **{x: False for x in mito_opts if x not in args_dict},
             )
             mito.run(**vars(mito_args))
         else:
@@ -100,15 +103,15 @@ def run(
         logger.info("AAFTF mito requires PE reads, " + "skipping mitochondrial de novo assembly")
 
     # run filtering with bbduk
-    if not checkfile(basename + "_filtered_1.fastq.gz"):
-        filterOpts = ["screen_accessions", "screen_urls", "basename", "cpus", "debug", "memory", "workdir"]
+    if not check_file(basename + "_filtered_1.fastq.gz"):
+        filter_opts = ["screen_accessions", "screen_urls", "basename", "cpus", "debug", "memory", "workdir"]
         filter_args = create_namespace(
-            filterOpts,
+            filter_opts,
             required_args={
                 "aligner": "bbduk",
                 "left": basename + "_1P.fastq.gz",
                 "right": basename + "_2P.fastq.gz" if right else None,
-                "screen_local": [basename + ".mito.fasta"] if checkfile(basename + ".mito.fasta") else None,
+                "screen_local": [basename + ".mito.fasta"] if check_file(basename + ".mito.fasta") else None,
                 "pipe": True,
             },
         )
@@ -123,8 +126,8 @@ def run(
     # run assembly with specified method
     assembly_method = method or "spades"
     assembly_file = basename + f".{assembly_method}.fasta"
-    if not checkfile(assembly_file):
-        assembleOpts = ["memory", "cpus", "debug", "workdir", "method", "assembler_args", "tmpdir"]
+    if not check_file(assembly_file):
+        assemble_opts = ["memory", "cpus", "debug", "workdir", "method", "assembler_args", "tmpdir"]
         asm_extra = {
             "left": basename + "_filtered_1.fastq.gz",
             "right": basename + "_filtered_2.fastq.gz" if right else None,
@@ -136,7 +139,7 @@ def run(
         if assembly_method == "spades":
             asm_extra["isolate"] = False
             asm_extra["careful"] = True
-        asm_args = create_namespace(assembleOpts, required_args=asm_extra)
+        asm_args = create_namespace(assemble_opts, required_args=asm_extra)
         assemble.run(**vars(asm_args))
     else:
         logger.info(f"AAFTF assemble output found: {assembly_file}")
@@ -144,9 +147,9 @@ def run(
 
     # run vecscreen
     vecscreen_file = basename + ".vecscreen.fasta"
-    if not checkfile(vecscreen_file):
-        vecOpts = ["cpus", "debug", "workdir"]
-        vec_args = create_namespace(vecOpts, required_args={"percent_id": False, "stringency": "high", "infile": assembly_file, "outfile": vecscreen_file, "pipe": True})
+    if not check_file(vecscreen_file):
+        vec_opts = ["cpus", "debug", "workdir"]
+        vec_args = create_namespace(vec_opts, required_args={"percent_id": False, "stringency": "high", "infile": assembly_file, "outfile": vecscreen_file, "pipe": True})
         vecscreen.run(**vars(vec_args))
     else:
         logger.info(f"AAFTF vecscreen output found: {vecscreen_file}")
@@ -154,10 +157,10 @@ def run(
 
     # run sourmash purge
     sourpurge_file = basename + ".sourpurge.fasta"
-    if not checkfile(sourpurge_file):
-        sourOpts = ["cpus", "debug", "workdir", "phylum", "sourdb", "mincovpct"]
+    if not check_file(sourpurge_file):
+        sour_opts = ["cpus", "debug", "workdir", "phylum", "sourdb", "mincovpct"]
         sour_args = create_namespace(
-            sourOpts,
+            sour_opts,
             required_args={
                 "left": basename + "_filtered_1.fastq.gz",
                 "right": basename + "_filtered_2.fastq.gz" if right else None,
@@ -176,9 +179,9 @@ def run(
 
     # run remove duplicates
     rmdup_file = basename + ".rmdup.fasta"
-    if not checkfile(rmdup_file):
-        rmdupOpts = ["cpus", "debug", "workdir"]
-        rmdup_args = create_namespace(rmdupOpts, required_args={"input": sourpurge_file, "out": rmdup_file, "minlen": mincontiglen, "percent_id": 95, "percent_cov": 95, "exhaustive": False, "pipe": True})
+    if not check_file(rmdup_file):
+        rmdup_opts = ["cpus", "debug", "workdir"]
+        rmdup_args = create_namespace(rmdup_opts, required_args={"input": sourpurge_file, "out": rmdup_file, "minlen": mincontiglen, "percent_id": 95, "percent_cov": 95, "exhaustive": False, "pipe": True})
         rmdup.run(**vars(rmdup_args))
     else:
         logger.info(f"AAFTF rmdup output found: {rmdup_file}")
@@ -186,10 +189,10 @@ def run(
 
     # run polish to error-correct
     polish_file = basename + ".polish.fasta"
-    if not checkfile(polish_file):
-        polishOpts = ["cpus", "debug", "workdir", "memory"]
+    if not check_file(polish_file):
+        polish_opts = ["cpus", "debug", "workdir", "memory"]
         polish_args = create_namespace(
-            polishOpts,
+            polish_opts,
             required_args={
                 "method": "pypolca",
                 "infile": rmdup_file,
@@ -210,15 +213,15 @@ def run(
 
     # sort and rename
     final_file = basename + ".final.fasta"
-    if not checkfile(final_file):
-        sortOpts = ["debug"]
-        sort_args = create_namespace(sortOpts, required_args={"input": polish_file, "out": final_file, "name": "scaffold", "minlen": mincontiglen, "pipe": True})
+    if not check_file(final_file):
+        sort_opts = ["debug"]
+        sort_args = create_namespace(sort_opts, required_args={"input": polish_file, "out": final_file, "name": "scaffold", "minlen": mincontiglen, "pipe": True})
         aaftf_sort.run(**vars(sort_args))
     else:
         logger.info(f"AAFTF sort output found: {final_file}")
     check_step_success(final_file, "sort")
 
     # assess the assembly
-    assessOpts = ["debug"]
-    assess_args = create_namespace(assessOpts, required_args={"input": final_file, "report": False, "telomere_monomer": "TAA[C]+", "telomere_n_repeat": 2, "pipe": True})
+    assess_opts = ["debug"]
+    assess_args = create_namespace(assess_opts, required_args={"input": final_file, "report": False, "telomere_monomer": "TAA[C]+", "telomere_n_repeat": 2, "pipe": True})
     assess.run(**vars(assess_args))

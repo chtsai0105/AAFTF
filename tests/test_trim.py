@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from AAFTF.AAFTF_main import main
+from aaftf.main import main
 
 pytestmark = pytest.mark.unit
 
@@ -31,7 +31,7 @@ def _parse_trim(argv):
         captured["args"] = Namespace(**kwargs)
 
     with patch.object(sys, "argv", argv):
-        with patch("AAFTF.trim.run", side_effect=_capture):
+        with patch("aaftf.trim.run", side_effect=_capture):
             main()
     return captured.get("args")
 
@@ -209,9 +209,9 @@ def _run_bbduk(tmp_path, left, right=None, **extra):
     """Invoke trim.run() with method=bbduk, return captured subprocess commands."""
     args = _make_trim_args(tmp_path, method="bbduk", left=left, right=right, **extra)
     cmds = []
-    with patch("AAFTF.trim.countfastq", return_value=100):
-        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)) as _:
-            from AAFTF.trim import run
+    with patch("aaftf.trim.count_fastq", return_value=100):
+        with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)) as _:
+            from aaftf.trim import run
 
             run(**vars(args))
     return cmds, args
@@ -286,9 +286,9 @@ class TestTrimRunBbduk:
 def _run_fastp(tmp_path, left, right=None, **extra):
     args = _make_trim_args(tmp_path, method="fastp", left=left, right=right, **extra)
     cmds = []
-    with patch("AAFTF.trim.countfastq", return_value=100):
-        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-            from AAFTF.trim import run
+    with patch("aaftf.trim.count_fastq", return_value=100):
+        with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+            from aaftf.trim import run
 
             run(**vars(args))
     return cmds, args
@@ -381,10 +381,10 @@ class TestTrimRunTrimmomatic:
         right = str(tmp_path / "s_R2.fastq.gz")
         args = _make_trim_args(tmp_path, method="trimmomatic", left=left, right=right)
 
-        from AAFTF.trim import run
+        from aaftf.trim import run
 
-        with patch("AAFTF.trim._find_trimmomatic", return_value=False):
-            with patch("AAFTF.trim.countfastq", return_value=100):
+        with patch("aaftf.trim._find_trimmomatic", return_value=False):
+            with patch("aaftf.trim.count_fastq", return_value=100):
                 with pytest.raises(SystemExit):
                     run(**vars(args))
 
@@ -402,11 +402,11 @@ class TestTrimRunTrimmomatic:
             trimmomatic_adaptors=fake_adaptor,
         )
         cmds = []
-        with patch("AAFTF.trim._find_trimmomatic", return_value=fake_jar):
-            with patch("AAFTF.trim.countfastq", return_value=100):
-                with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-                    with patch("AAFTF.trim.safe_remove"):
-                        from AAFTF.trim import run
+        with patch("aaftf.trim._find_trimmomatic", return_value=fake_jar):
+            with patch("aaftf.trim.count_fastq", return_value=100):
+                with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+                    with patch("aaftf.trim.safe_remove"):
+                        from aaftf.trim import run
 
                         run(**vars(args))
         assert len(cmds) > 0

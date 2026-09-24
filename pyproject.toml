@@ -50,17 +50,17 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-AAFTF = "AAFTF.AAFTF_main:main"
+AAFTF = "aaftf.main:main"
 
 # Version is derived from git tags (vX.Y.Z) plus the short commit hash.
-# At runtime, AAFTF/__init__.py resolves __version__ via importlib.metadata
+# At runtime, aaftf/__init__.py resolves __version__ via importlib.metadata
 # from the installed package's metadata.
 [tool.hatch.version]
 source = "vcs"
 raw-options = { version_scheme = "guess-next-dev", local_scheme = "node-and-date", fallback_version = "0.0.0+unknown" }
 
 [tool.hatch.build.targets.wheel]
-packages = ["AAFTF", "scripts"]
+packages = ["aaftf", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

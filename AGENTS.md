@@ -22,17 +22,17 @@ pip install AAFTF
 ### Code Quality and Linting
 ```bash
 # Run ruff for code style, linting, and import sorting (replaces flake8, isort, pyupgrade)
-ruff check AAFTF/
-ruff format AAFTF/
+ruff check aaftf/
+ruff format aaftf/
 
 # Run ruff with automatic fixes
-ruff check --fix AAFTF/
+ruff check --fix aaftf/
 
 # Run pydocstyle for documentation standards
-pydocstyle --convention=google AAFTF/
+pydocstyle --convention=google aaftf/
 
 # Run codespell for spelling checks
-codespell AAFTF/ --ignore-words-list=nd,reacher,thist,ths,ure,referenc,wile,nin,pid
+codespell aaftf/ --ignore-words-list=nd,reacher,thist,ths,ure,referenc,wile,nin,pid
 
 # All pre-commit hooks (recommended)
 pre-commit run --all-files
@@ -47,7 +47,7 @@ bash tests/01_mito.sh
 bash tests/03_BUSCO.sh
 
 # Basic import test
-python3 -c "import AAFTF; print('Import successful')"
+python3 -c "import aaftf; print('Import successful')"
 ```
 
 ## Code Style Guidelines
@@ -70,8 +70,8 @@ from Bio.SeqIO.FastaIO import SimpleFastaParser
 from packaging.version import Version
 
 # Local AAFTF imports
-from AAFTF.utility import status, checkfile, execute
-from AAFTF.resources import DB_Links
+from aaftf.utility import status, check_file, execute
+from aaftf.resources import DB_LINKS
 ```
 
 ### Function and Variable Naming
@@ -100,12 +100,12 @@ def calculate_n50(contig_lengths):
 ### Error Handling
 - Use try/except blocks for external tool execution
 - Provide informative error messages with context
-- Report progress with a module-level `logger = logging.getLogger(__name__)` (`logger.info`, `logger.warning`, `logger.error`); `AAFTF_main.main()` configures it via `setup_logging()` from `-q/--quiet` and `-v/--verbose` (argparse dest `debug`). Don't add "ERROR:"/"WARNING:" prefixes or leading/trailing whitespace to messages — the formatter adds the level name
-- Handle file existence checks with `checkfile()` utility
+- Report progress with a module-level `logger = logging.getLogger(__name__)` (`logger.info`, `logger.warning`, `logger.error`); `aaftf.main.main()` configures it via `setup_logging()` from `-q/--quiet` and `-v/--verbose` (argparse dest `debug`). Don't add "ERROR:"/"WARNING:" prefixes or leading/trailing whitespace to messages — the formatter adds the level name
+- Handle file existence checks with `check_file()` utility
 
 ### Code Structure
 - Each AAFTF subcommand has its own module (trim.py, assemble.py, filter.py, etc.)
-- Main entry point is through `AAFTF_main.py`
+- Main entry point is through `main.py`
 - Common utilities are in `utility.py`
 - Resource URLs and constants are in `resources.py`
 - Each module should have a `run(parser, args)` function for CLI integration
@@ -124,15 +124,16 @@ def calculate_n50(contig_lengths):
 
 ### File I/O Patterns
 - Support both compressed (.gz) and uncompressed files
-- Use `checkfile()` to validate input files
+- Use `check_file()` to validate input files
 - Use `safe_remove()` for file cleanup. Create a subcommand's working directory with `workdir, custom_workdir = make_workdir(workdir, "<name>")` and remove it with `cleanup_workdir(workdir, debug, custom_workdir)` (it never deletes a user-supplied `--workdir`)
-- Reference databases are listed in `AAFTF.resources.DATABASES` and downloaded **only** by `AAFTF download`. Other subcommands get them with `require_databases([...])`, which returns the stored paths or exits with the `AAFTF download ...` command to run — never download them from a subcommand. (Only `filter`'s `-a/--screen_accessions` / `-u/--screen_urls` fetch sequences themselves.)
-- Other shared helpers in `AAFTF/utility.py` — use these instead of re-implementing: `download_file()` (never leaves a partial file behind; for `download` and filter's -a/-u), `db_file()` (database file location across `$AAFTF_DB` folders / `~/.cache/aaftf`), `require_tools()`, `run_cmd()` / `execute()`, `align_to_sorted_bam()`, `concat_files()`, `open_maybe_gz()`, `next_step_name()`, `basename_from_reads()`, `filter_fasta()` / `write_fasta()`, `calc_nx()`
+- Reference databases are listed in `aaftf.resources.DATABASES` and downloaded **only** by `AAFTF download`. Other subcommands get them with `require_databases([...])`, which returns the stored paths or exits with the `AAFTF download ...` command to run — never download them from a subcommand. (Only `filter`'s `-a/--screen_accessions` / `-u/--screen_urls` fetch sequences themselves.)
+- Every module follows the same top-level layout: (1) module docstring; (2) imports (stdlib, third-party, local; conditional `try: import ...` blocks right after them); (3) `__all__` listing the public constants, classes and functions; (4) constants and module-level variables, public first, then private ones and shared state (`logger`, `_cache`, ...); (5) public ABCs/Protocols; (6) public classes; (7) public functions — `run` first in subcommand modules, the rest in the order they are called; (8) private classes; (9) private helpers, also in call order; (10) the `if __name__ == "__main__":` block. Module-level code must not call anything defined further down (e.g. build objects lazily in a function, as `open_url()` does).
+- Other shared helpers in `aaftf/utility.py` — use these instead of re-implementing: `download_file()` (never leaves a partial file behind; for `download` and filter's -a/-u), `db_file()` (database file location across `$AAFTF_DB` folders / `~/.cache/aaftf`), `require_tools()`, `run_cmd()` / `execute()`, `align_to_sorted_bam()`, `concat_files()`, `open_maybe_gz()`, `next_step_name()`, `basename_from_reads()`, `filter_fasta()` / `write_fasta()`, `calc_nx()`
 - Handle file paths with `os.path` operations for cross-platform compatibility
 
 ### Logging and Output
 - Use `logger.info/warning/error` for user-facing messages
-- Use `printCMD()` to show commands being executed
+- Use `print_cmd()` to show commands being executed
 - Provide progress feedback for long-running operations
 - Use debug flags for verbose output during development
 
@@ -143,9 +144,9 @@ def calculate_n50(contig_lengths):
 - Consider external tool memory requirements in parameter defaults
 
 ### Version Handling
-- `AAFTF/__init__.py` resolves `AAFTF.__version__` via `importlib.metadata.version("AAFTF")`, falling back to `"0.0.0+unknown"` if the package isn't installed
+- `aaftf/__init__.py` resolves `AAFTF.__version__` via `importlib.metadata.version("AAFTF")`, falling back to `"0.0.0+unknown"` if the package isn't installed
 - The version string itself is set at build time by `hatch-vcs` from git tags (see `[tool.hatch.version]` in `pyproject.toml`)
-- Main application (`AAFTF_main.py`) imports it with `from AAFTF import __version__`
+- Main application (`main.py`) imports it with `from aaftf import __version__`
 - Version is displayed both via `--version` flag and at application startup
 - Maintains PEP 440 compatibility for Python packaging standards
 
@@ -166,7 +167,7 @@ Since AAFTF primarily integrates external bioinformatics tools, testing focuses 
 import logging
 import sys
 
-from AAFTF.utility import checkfile, run_cmd
+from aaftf.utility import check_file, run_cmd
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ logger = logging.getLogger(__name__)
 def run(input, debug=False, pipe=False, **kwargs):
     """Main entry point for subcommand."""
     # Validate inputs
-    if not checkfile(input):
+    if not check_file(input):
         logger.error(f"Input file not found: {input}")
         sys.exit(1)
 

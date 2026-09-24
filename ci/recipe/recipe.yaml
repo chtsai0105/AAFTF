@@ -7,7 +7,7 @@
 #
 # `version` below is the single source of truth for both the conda package
 # version AND the version recorded in the installed package's metadata
-# (read at runtime as AAFTF.__version__):
+# (read at runtime as aaftf.__version__):
 # SETUPTOOLS_SCM_PRETEND_VERSION forces hatch-vcs to record exactly this
 # string, so `AAFTF --version` inside the conda package reports the same
 # version as the package itself. pyproject.toml derives its version
@@ -81,7 +81,7 @@ requirements:
 tests:
   - python:
       imports:
-        - AAFTF
+        - aaftf
       pip_check: true
   - script:
       - AAFTF --version

@@ -4,46 +4,46 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 
 ## Key Architecture Reminders
 
-- Entry point: `AAFTF/AAFTF_main.py` — builds the top-level parser, wires up subcommands via `SUBCOMMAND_REGISTRARS` (imported from `AAFTF/_menu.py`), and dispatches by calling `args.func(**vars(args))`. There is no central dispatcher function: each subcommand parser binds its own subtool's `run` directly via `parser_x.set_defaults(func=<module>.run)` inside its `<name>_menu()` function in `_menu.py`. Subcommand parsers no longer register any `aliases=[...]` — each subcommand has exactly one canonical name.
-- All argparse subcommand-parser definitions ("menus") live in one place: `AAFTF/_menu.py`. Each subcommand has a `<name>_menu(subparsers)` function there (e.g. `trim_menu`, `depth_menu`) that builds and registers that subtool's `subparsers.add_parser(...)` block and its arguments, then calls `parser_x.set_defaults(func=<module>.run)`; `AAFTF/_menu.py` also defines `menu_common_args()` and the `SUBCOMMAND_REGISTRARS` list, and imports every subcommand module (`trim`, `depth`, etc.) to reference their `run` functions. Each subcommand module itself (`trim.py`, `depth.py`, etc.) only contains the `run(**kwargs)` execution logic — no parser-building code
+- Entry point: `aaftf/main.py` — builds the top-level parser, wires up subcommands via `register_subcommands(subparsers)` (imported from `aaftf/_menu.py`), and dispatches by calling `args.func(**vars(args))`. There is no central dispatcher function: each subcommand parser binds its own subtool's `run` directly via `parser_x.set_defaults(func=<module>.run)` inside its `<name>_menu()` function in `_menu.py`. Subcommand parsers no longer register any `aliases=[...]` — each subcommand has exactly one canonical name.
+- All argparse subcommand-parser definitions ("menus") live in one place: `aaftf/_menu.py`. Each subcommand has a `<name>_menu(subparsers)` function there (e.g. `trim_menu`, `depth_menu`) that builds and registers that subtool's `subparsers.add_parser(...)` block and its arguments, then calls `parser_x.set_defaults(func=<module>.run)`; `aaftf/_menu.py` also defines `menu_common_args()` and `register_subcommands()` (which calls every `<name>_menu()` in `AAFTF --help` order), and imports every subcommand module (`trim`, `depth`, etc.) to reference their `run` functions. Each subcommand module itself (`trim.py`, `depth.py`, etc.) only contains the `run(**kwargs)` execution logic — no parser-building code
 - Every subcommand's `run()` function takes its CLI dest names directly as keyword arguments (not an `args`/`parser` pair) and ends its parameter list with `**kwargs` to absorb argparse's own bookkeeping attributes (`command`, `func`, and `quiet`, which only `main()` uses to set the log level) that ride along in `vars(args)`. The function body uses those parameters directly (e.g. `left`, `workdir`) — there is no internal `args = Namespace(...)` reconstruction; a parameter that needs to change during the run (e.g. `basename` auto-derived from `left`, `workdir` defaulted when not given) is simply reassigned as a local variable. Only `assemble.py`'s internal helpers (`run_spades`, `run_dipspades`, `run_megahit`, `run_unicycler`) and `pipeline.py`'s `create_namespace()` still build/pass `Namespace`/dict objects, because they need a keyed collection to forward a subset of fields — not because they mirror the old `args.xxx` style.
 - Because `run()` no longer mutates a caller-supplied `args` object, tests must not expect derived values (e.g. `trim.run()`'s auto-derived `basename`) to show up on the `Namespace`/kwargs the test constructed — assert on the actual side effects (subprocess commands, files written) instead. See `tests/test_trim.py::_run_bbduk` for the pattern.
-- `AAFTF/pipeline.py`'s own `run()` follows the same convention, and internally calls each step's module via `<module>.run(**vars(step_args))` instead of `<module>.run(parser, step_args)`
-- `CustomHelpFormatter` lives in `AAFTF/utility.py`. Every subcommand parser (built in `_menu.py`) uses `formatter_class=CustomHelpFormatter`
+- `aaftf/pipeline.py`'s own `run()` follows the same convention, and internally calls each step's module via `<module>.run(**vars(step_args))` instead of `<module>.run(parser, step_args)`
+- `CustomHelpFormatter` lives in `aaftf/utility.py`. Every subcommand parser (built in `_menu.py`) uses `formatter_class=CustomHelpFormatter`
 
 ## CLI Framework Conventions
 
 - Every subcommand parser must have `-v/--verbose` (argparse dest `debug`, so code and `run()` parameters still use `debug`) and `--pipe` flags — enforced by test suite (`TestAssessParser`, `TestSortParser`, `TestFixTblParser`)
 - When building a `Namespace` for pipeline steps, include **all** attributes the target `run()` function accesses — check the submodule source to avoid `AttributeError`
-- `menu_common_args(target)` (in `AAFTF/_menu.py`) adds exactly three arguments — `--pipe`, `-q/--quiet`, `-v/--verbose` (dest `debug`) — to whatever `target` is passed. Every `<name>_menu()` function calls it **last**, passing its own `optional = parser_x.add_argument_group("optional arguments")` group (not the parser itself), so these three common flags render as the final entries of that subcommand's "optional arguments" section rather than in a separate leading group. Do not pass the raw parser to `menu_common_args()` — always pass the `optional` group, and call it after all of that subcommand's own optional args have been added.
+- `menu_common_args(target)` (in `aaftf/_menu.py`) adds exactly three arguments — `--pipe`, `-q/--quiet`, `-v/--verbose` (dest `debug`) — to whatever `target` is passed. Every `<name>_menu()` function calls it **last**, passing its own `optional = parser_x.add_argument_group("optional arguments")` group (not the parser itself), so these three common flags render as the final entries of that subcommand's "optional arguments" section rather than in a separate leading group. Do not pass the raw parser to `menu_common_args()` — always pass the `optional` group, and call it after all of that subcommand's own optional args have been added.
 - All other args a subcommand needs (`-c/--cpus`, `-w/--workdir/--tmpdir`, `-l/--left`/`-r/--right`, etc.) are implemented locally within that subcommand's own `<name>_menu()` in `_menu.py` — there is no shared parent-parser mechanism for them (an earlier version used `argparse` `parents=[...]` for these, but that shared the underlying `Action` objects across every subcommand and any per-subcommand override via `conflict_handler="resolve"` silently corrupted other subcommands; it was removed for this reason). When adding a `-c/--cpus`/`-w/--workdir`/`-l/--left`,`-r/--right` block to a new menu function, copy it verbatim from a similar existing one (e.g. `vecscreen_menu`, `sourpurge_menu`) to keep help text/defaults consistent.
 - Each `<name>_menu()` function that has any required argument also creates two argument groups — `required = parser_x.add_argument_group("required arguments")` and `optional = parser_x.add_argument_group("optional arguments")` — and adds each local argument to the appropriate one (required = `required=True` with no `default=`; everything else = optional).
-- Adding a new subcommand: write its `<name>_menu(subparsers)` function in `AAFTF/_menu.py` (create the subparser, add required/optional groups and any subtool-specific args, call `menu_common_args(optional)` last, then `parser_x.set_defaults(func=<module>.run)`), add it to `SUBCOMMAND_REGISTRARS` in that same file, and write the subtool's `run(**kwargs)` in its own module (with named params for the dest names it uses, plus a trailing `**kwargs`)
-- Testing a subcommand's CLI parsing without executing the tool: patch `AAFTF.<module>.run` (not a central dispatcher — there isn't one) with a `side_effect` that captures `**kwargs` into a `Namespace`, then call `AAFTF.AAFTF_main.main()` with `sys.argv` patched. See `tests/test_cli.py::_parse_with_main` for the pattern. Note that since `run()` rebuilds its own internal `args`/local variables from the passed kwargs, a test's original `Namespace`/kwargs object is **not** mutated by any in-`run()` auto-derivation (e.g. `trim.run()` deriving `basename` from `left` when not given) — assert on side effects (subprocess commands, files written) instead of re-inspecting the caller's original args object for such derived values.
+- Adding a new subcommand: write its `<name>_menu(subparsers)` function in `aaftf/_menu.py` (create the subparser, add required/optional groups and any subtool-specific args, call `menu_common_args(optional)` last, then `parser_x.set_defaults(func=<module>.run)`), add a call to it in `register_subcommands()` in that same file, and write the subtool's `run(**kwargs)` in its own module (with named params for the dest names it uses, plus a trailing `**kwargs`)
+- Testing a subcommand's CLI parsing without executing the tool: patch `aaftf.<module>.run` (not a central dispatcher — there isn't one) with a `side_effect` that captures `**kwargs` into a `Namespace`, then call `aaftf.main.main()` with `sys.argv` patched. See `tests/test_cli.py::_parse_with_main` for the pattern. Note that since `run()` rebuilds its own internal `args`/local variables from the passed kwargs, a test's original `Namespace`/kwargs object is **not** mutated by any in-`run()` auto-derivation (e.g. `trim.run()` deriving `basename` from `left` when not given) — assert on side effects (subprocess commands, files written) instead of re-inspecting the caller's original args object for such derived values.
 
 ## Subcommand Reference
 
-"Module" below is where each subtool's `run(**kwargs)` execution logic lives; its argparse parser/menu is instead in `AAFTF/_menu.py` (as `<name>_menu()`).
+"Module" below is where each subtool's `run(**kwargs)` execution logic lives; its argparse parser/menu is instead in `aaftf/_menu.py` (as `<name>_menu()`).
 
 | Canonical name | Module | Key external tools |
 |---|---|---|
-| `trim` | `AAFTF/trim.py` | bbduk.sh, trimmomatic, fastp |
-| `filter` | `AAFTF/filter.py` | bbduk.sh, bowtie2, bwa, minimap2, samtools |
-| `assemble` | `AAFTF/assemble.py` | spades.py, megahit, unicycler |
-| `vecscreen` | `AAFTF/vecscreen.py` | blastn, makeblastdb |
-| `fcs_screen` | `AAFTF/fcs_screen.py` | run_fcsadaptor.sh (singularity/docker) |
-| `fcs_gx_purge` | `AAFTF/fcs_gx_purge.py` | run_gx.py (NCBI FCS-GX) |
-| `sourpurge` | `AAFTF/sourpurge.py` | sourmash, bwa, samtools |
-| `rmdup` | `AAFTF/rmdup.py` | minimap2 |
-| `polish` | `AAFTF/polish.py` | polypolish, pypolca, nextPolish2, racon, bwa, samtools, minimap2, yak, freebayes |
-| `sort` | `AAFTF/sort.py` | (none — BioPython only) |
-| `assess` | `AAFTF/assess.py` | (none — BioPython only) |
-| `depth` | `AAFTF/depth.py` | minimap2, bwa, samtools, mosdepth |
-| `mito` | `AAFTF/mito.py` | NOVOPlasty, minimap2 |
-| `fix_tbl` | `AAFTF/fix_tbl.py` | (none) |
-| `download` | `AAFTF/download.py` | (none — urllib only) |
-| `check_dependencies` | `AAFTF/check_dependencies.py` | (none — checks PATH for all of the above) |
-| `pipeline` | `AAFTF/pipeline.py` | all of the above |
+| `trim` | `aaftf/trim.py` | bbduk.sh, trimmomatic, fastp |
+| `filter` | `aaftf/filter.py` | bbduk.sh, bowtie2, bwa, minimap2, samtools |
+| `assemble` | `aaftf/assemble.py` | spades.py, megahit, unicycler |
+| `vecscreen` | `aaftf/vecscreen.py` | blastn, makeblastdb |
+| `fcs_screen` | `aaftf/fcs_screen.py` | run_fcsadaptor.sh (singularity/docker) |
+| `fcs_gx_purge` | `aaftf/fcs_gx_purge.py` | run_gx.py (NCBI FCS-GX) |
+| `sourpurge` | `aaftf/sourpurge.py` | sourmash, bwa, samtools |
+| `rmdup` | `aaftf/rmdup.py` | minimap2 |
+| `polish` | `aaftf/polish.py` | polypolish, pypolca, nextPolish2, racon, bwa, samtools, minimap2, yak, freebayes |
+| `sort` | `aaftf/sort.py` | (none — BioPython only) |
+| `assess` | `aaftf/assess.py` | (none — BioPython only) |
+| `depth` | `aaftf/depth.py` | minimap2, bwa, samtools, mosdepth |
+| `mito` | `aaftf/mito.py` | NOVOPlasty, minimap2 |
+| `fix_tbl` | `aaftf/fix_tbl.py` | (none) |
+| `download` | `aaftf/download.py` | (none — urllib only) |
+| `check_dependencies` | `aaftf/check_dependencies.py` | (none — checks PATH for all of the above) |
+| `pipeline` | `aaftf/pipeline.py` | all of the above |
 
 ## Module `args` Signatures
 
@@ -57,7 +57,7 @@ Key `args` attributes accessed by each `run()` function:
 - **fcs_gx_purge**: `workdir`, `db`, `input`, `taxid`, `outfile`, `debug`, `pipe`
 - **sourpurge**: `workdir`, `cpus`, `left`, `right`, `sourdb`, `sourdb_type`, `input`, `kmer`, `phylum`, `mincovpct`, `outfile`, `taxonomy`, `debug`, `pipe`
 - **rmdup**: `workdir`, `cpus`, `input`, `percent_id`, `percent_cov`, `minlen`, `exhaustive`, `debug`, `out`, `pipe`
-- **polish**: `method`, `memory`, `cpus`, `left`, `right`, `longreads`, `workdir`, `infile`, `outfile`, `debug`, `pipe`. Each `--method` (`pypolca`, `polypolish`, `nextpolish2`, `racon`) is isolated into its own `run_<method>()` function in `AAFTF/polish.py`.
+- **polish**: `method`, `memory`, `cpus`, `left`, `right`, `longreads`, `workdir`, `infile`, `outfile`, `debug`, `pipe`. Each `--method` (`pypolca`, `polypolish`, `nextpolish2`, `racon`) is isolated into its own `run_<method>()` function in `aaftf/polish.py`.
 - **sort**: `input`, `minlen`, `out`, `name`
 - **assess**: `input`, `report`, `telomere_monomer`, `telomere_n_repeat`, `telomere_window`
 - **depth**: `input`, `out`, `left`, `right`, `longreads`, `longread_preset`, `aligner`, `cpus`, `workdir`, `debug`, `pipe`, `min_contig_len`, `no_plot`, `plot_format`
@@ -111,7 +111,7 @@ Expected inputs/outputs per step:
 
 ### `depth` subtool — coverage analysis
 
-**New file:** `AAFTF/depth.py`; registered in `AAFTF_main.py`.
+**New file:** `aaftf/depth.py`; registered in `main.py`.
 
 **Workflow:**
 1. Counts reads in each input FASTQ
@@ -138,7 +138,7 @@ Expected inputs/outputs per step:
 | `sourpurge.py` | 113 | `"nomatch" in cols` tested list membership — fragile | Changed to `cols[1].strip() == "nomatch"` |
 | `fcs_screen.py` | 31 | Missing DB fell back to string literal `"AAFTF_DB"` | Changed to `status()` + `sys.exit(1)` |
 
-### CLI consistency fixes (AAFTF_main.py)
+### CLI consistency fixes (main.py)
 
 - Added `--pipe` and `-v/--debug` to `fix_tbl` parser
 - Added `--pipe` to `pipeline` parser
@@ -152,7 +152,7 @@ Expected inputs/outputs per step:
 
 ### Bioinformatics enhancements
 
-- `assess.py`: `findTelomere()` window is now configurable (`--telomere_window`, default 200 bp); added N-gap count and total N bases to stats output
+- `assess.py`: `find_telomere()` window is now configurable (`--telomere_window`, default 200 bp); added N-gap count and total N bases to stats output
 - `rmdup.py`: now computes and reports both N50 and N75; filtering threshold uses N75 (as before)
 - `depth.py`: added `--min_contig_len` (default 500 bp) to exclude short contigs from outlier depth analysis
 
@@ -166,8 +166,8 @@ conda run -n base python -m pytest tests/ -m unit -v
 conda run -n base python -m pytest tests/ -v
 
 # Compile-check all modules
-python -m py_compile AAFTF/filter.py AAFTF/polish.py AAFTF/trim.py \
-    AAFTF/vecscreen.py AAFTF/sourpurge.py AAFTF/fcs_screen.py \
-    AAFTF/depth.py AAFTF/AAFTF_main.py AAFTF/pipeline.py \
-    AAFTF/assess.py AAFTF/rmdup.py AAFTF/_menu.py
+python -m py_compile aaftf/filter.py aaftf/polish.py aaftf/trim.py \
+    aaftf/vecscreen.py aaftf/sourpurge.py aaftf/fcs_screen.py \
+    aaftf/depth.py aaftf/main.py aaftf/pipeline.py \
+    aaftf/assess.py aaftf/rmdup.py aaftf/_menu.py
 ```

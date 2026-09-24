@@ -14,7 +14,10 @@ import sys
 import uuid
 from pathlib import Path
 
-from AAFTF.utility import fastastats, run_cmd
+from aaftf.utility import fasta_stats, run_cmd
+
+__all__ = ["run", "run_spades", "run_dipspades", "run_megahit", "run_unicycler"]
+
 
 logger = logging.getLogger(__name__)
 
@@ -76,14 +79,14 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=True, careful=True, as
     if tmpdir:
         runcmd.extend(["--tmp-dir", tmpdir])
 
-    forReads, revReads = _resolve_reads(left, right)
+    forward_reads, reverse_reads = _resolve_reads(left, right)
 
-    if not revReads:
-        runcmd.extend(["--s1", forReads])
+    if not reverse_reads:
+        runcmd.extend(["--s1", forward_reads])
         if merged:
             runcmd.extend(["--s2", merged])
     else:
-        runcmd.extend(["--pe1-1", forReads, "--pe1-2", revReads])
+        runcmd.extend(["--pe1-1", forward_reads, "--pe1-2", reverse_reads])
         if merged:
             runcmd.extend(["--s1", merged])
 
@@ -94,8 +97,8 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=True, careful=True, as
     logger.info("Assembling FASTQ data using Spades")
     run_cmd(runcmd, debug, quiet_stdout=True)
 
-    finalOut = _derive_finalOut(out, forReads, ".spades.fasta")
-    _finish_assembly(Path(workdir, "scaffolds.fasta"), finalOut, "Spades", cpus, pipe)
+    final_out = _derive_final_out(out, forward_reads, ".spades.fasta")
+    _finish_assembly(Path(workdir, "scaffolds.fasta"), final_out, "Spades", cpus, pipe)
 
 
 def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haplocontigs=False, tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
@@ -114,12 +117,12 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
     if tmpdir:
         runcmd.extend(["--tmp-dir", tmpdir])
 
-    forReads, revReads = _resolve_reads(left, right)
+    forward_reads, reverse_reads = _resolve_reads(left, right)
 
-    if not revReads:
-        runcmd.extend(["-s", forReads])
+    if not reverse_reads:
+        runcmd.extend(["-s", forward_reads])
     else:
-        runcmd.extend(["--pe1-1", forReads, "--pe1-2", revReads])
+        runcmd.extend(["--pe1-1", forward_reads, "--pe1-2", reverse_reads])
         if merged:
             runcmd.extend(["-s", merged])
 
@@ -130,8 +133,8 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
     logger.info("Assembling FASTQ data using Spades")
     run_cmd(runcmd, debug, quiet_stdout=True)
 
-    finalOut = _derive_finalOut(out, forReads, ".dipspades.fasta")
-    prefix = Path(finalOut).name.removesuffix(".dipspades.fasta")
+    final_out = _derive_final_out(out, forward_reads, ".dipspades.fasta")
+    prefix = Path(final_out).name.removesuffix(".dipspades.fasta")
 
     if Path(workdir, "consensus_contigs.fasta").is_file():
         shutil.copyfile(str(Path(workdir, "dipspades", "paired_consensus_contigs.fasta")), prefix + ".dipspades_consensus_paired.fasta")
@@ -139,7 +142,7 @@ def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haploc
         logger.info("Dipspades assembly copied over: {:}".format(prefix + ".dipspades_consensus_unpaired.fasta"), prefix + ".dipspades_consensus_paired.fasta")
 
     missing_msg = "Spades assembly output missing -- check Dipspades logfile in {:}.".format(str(Path(workdir, "dipspades", "dipspades.log")))
-    _finish_assembly(Path(workdir, "consensus_contigs.fasta"), finalOut, "Dipspades", cpus, pipe, missing_msg=missing_msg)
+    _finish_assembly(Path(workdir, "consensus_contigs.fasta"), final_out, "Dipspades", cpus, pipe, missing_msg=missing_msg)
 
 
 def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=None, left=None, right=None, out=None, debug=False, pipe=False, **kwargs):
@@ -158,12 +161,12 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
     if tmpdir:
         runcmd.extend(["--tmp-dir", tmpdir])
 
-    forReads, revReads = _resolve_reads(left, right)
+    forward_reads, reverse_reads = _resolve_reads(left, right)
 
-    if not revReads:
-        runcmd.extend(["-r", forReads])
+    if not reverse_reads:
+        runcmd.extend(["-r", forward_reads])
     else:
-        runcmd.extend(["-1", forReads, "-2", revReads])
+        runcmd.extend(["-1", forward_reads, "-2", reverse_reads])
 
     if Path(workdir).is_dir():
         logger.info(f"Cannot re-run with existing folder {workdir}")
@@ -171,8 +174,8 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
     logger.info("Assembling FASTQ data using megahit")
     run_cmd(runcmd, debug, quiet_stdout=True)
 
-    finalOut = _derive_finalOut(out, forReads, ".megahit.fasta")
-    _finish_assembly(Path(workdir, "final.contigs.fa"), finalOut, "Megahit", cpus, pipe)
+    final_out = _derive_final_out(out, forward_reads, ".megahit.fasta")
+    _finish_assembly(Path(workdir, "final.contigs.fa"), final_out, "Megahit", cpus, pipe)
 
 
 def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
@@ -185,17 +188,17 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     # if memory:
     #    runcmd.extend(['--spades_options', f'-m {memory}'])
 
-    forReads, revReads = _resolve_reads(left, right)
+    forward_reads, reverse_reads = _resolve_reads(left, right)
 
     if longreads:
         runcmd.extend(["--long", longreads])
 
-    if not revReads:
-        runcmd.extend(["--unpaired", forReads])
+    if not reverse_reads:
+        runcmd.extend(["--unpaired", forward_reads])
     elif merged:
         runcmd.extend(["--unpaired", merged])
     else:
-        runcmd.extend(["--short1", forReads, "--short2", revReads])
+        runcmd.extend(["--short1", forward_reads, "--short2", reverse_reads])
         if merged:
             runcmd.extend(["--unpaired", merged])
 
@@ -210,40 +213,40 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     logger.info("Assembling FASTQ data using Unicycler")
     run_cmd(runcmd, debug, quiet_stdout=True)
 
-    finalOut = _derive_finalOut(out, forReads, ".unicycler.fasta")
-    _finish_assembly(Path(workdir, "assembly.fasta"), finalOut, "Unicycler", cpus, pipe)
+    final_out = _derive_final_out(out, forward_reads, ".unicycler.fasta")
+    _finish_assembly(Path(workdir, "assembly.fasta"), final_out, "Unicycler", cpus, pipe)
 
 
 def _resolve_reads(left, right):
     """Resolve absolute paths for forward/reverse reads; exit if forward reads are missing."""
-    forReads = str(Path(left).resolve()) if left else None
-    revReads = str(Path(right).resolve()) if right else None
-    if not forReads:
+    forward_reads = str(Path(left).resolve()) if left else None
+    reverse_reads = str(Path(right).resolve()) if right else None
+    if not forward_reads:
         logger.info("Unable to located FASTQ raw reads, provide --left")
         sys.exit(1)
-    return forReads, revReads
+    return forward_reads, reverse_reads
 
 
-def _derive_finalOut(out, forReads, suffix):
+def _derive_final_out(out, forward_reads, suffix):
     """Derive the assembly output FASTA filename from --out, or from the input read filename."""
     if out:
         return out
-    prefix = Path(forReads).name
+    prefix = Path(forward_reads).name
     m = re.search(r"(\S+)\.(fastq|fq)(\.\S+)?", prefix)
     if m:
         prefix = m.group(1)
     return prefix + suffix
 
 
-def _finish_assembly(src, finalOut, tool_name, cpus, pipe, missing_msg=None):
+def _finish_assembly(src, final_out, tool_name, cpus, pipe, missing_msg=None):
     """Copy the assembler's raw output to finalOut, report stats, and print the next-step hint."""
     if Path(src).is_file():
-        shutil.copyfile(str(src), finalOut)
-        logger.info(f"{tool_name} assembly finished: {finalOut}")
-        numSeqs, assemblySize = fastastats(finalOut)
-        logger.info(f"Assembly is {numSeqs:,} scaffolds and {assemblySize:,} bp")
+        shutil.copyfile(str(src), final_out)
+        logger.info(f"{tool_name} assembly finished: {final_out}")
+        num_seqs, assembly_size = fasta_stats(final_out)
+        logger.info(f"Assembly is {num_seqs:,} scaffolds and {assembly_size:,} bp")
     else:
         logger.info(missing_msg or f"{tool_name} assembly output missing -- check {tool_name} logfile.")
 
     if not pipe:
-        logger.info(f"Your next command might be:\nAAFTF vecscreen -i {finalOut} -c {cpus}")
+        logger.info(f"Your next command might be:\nAAFTF vecscreen -i {final_out} -c {cpus}")

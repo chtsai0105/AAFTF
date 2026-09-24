@@ -9,7 +9,7 @@ Algorithm
 =========
 
 Four polishing engines are supported via ``--method``, each isolated into its own function
-in ``AAFTF/polish.py``:
+in ``aaftf/polish.py``:
 
 * **polypolish** (default) -- Single-pass short-read polishing via
   `Polypolish <https://github.com/rrwick/Polypolish>`_. AAFTF indexes the assembly with

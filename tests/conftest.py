@@ -11,8 +11,8 @@ import pytest
 @pytest.fixture(autouse=True)
 def _ample_resources(monkeypatch):
     """Keep main()'s -c/-m capping from depending on the test machine; capping tests patch these themselves."""
-    monkeypatch.setattr("AAFTF.AAFTF_main.available_cpus", lambda: 1024)
-    monkeypatch.setattr("AAFTF.AAFTF_main.getRAM", lambda max_lim=0: 1024.0)
+    monkeypatch.setattr("aaftf.main.available_cpus", lambda: 1024)
+    monkeypatch.setattr("aaftf.main.get_ram", lambda max_lim=0: 1024.0)
 
 
 @pytest.fixture(autouse=True)
@@ -20,14 +20,14 @@ def _isolated_db_cache(monkeypatch, tmp_path_factory):
     """Point the default database folder at a temp dir so tests never write to ~/.cache/aaftf."""
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path_factory.mktemp("xdg_cache")))
     monkeypatch.delenv("AAFTF_DB", raising=False)
-    monkeypatch.setattr("AAFTF.utility._home_cache_warned", False)
+    monkeypatch.setattr("aaftf.utility._home_cache_warned", False)
 
 
 @pytest.fixture(autouse=True)
 def _reset_aaftf_logger():
     """Undo setup_logging() (called by every CLI test via main()) so caplog keeps working in later tests."""
     yield
-    aaftf_logger = logging.getLogger("AAFTF")
+    aaftf_logger = logging.getLogger("aaftf")
     aaftf_logger.handlers.clear()
     aaftf_logger.setLevel(logging.NOTSET)
     aaftf_logger.propagate = True

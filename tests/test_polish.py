@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from AAFTF.AAFTF_main import main
+from aaftf.main import main
 
 # ---------------------------------------------------------------------------
 # Helper: parse 'AAFTF polish ...' without executing the tool
@@ -33,7 +33,7 @@ def _parse_polish(argv):
         captured["args"] = Namespace(**kwargs)
 
     with patch.object(sys, "argv", argv):
-        with patch("AAFTF.polish.run", side_effect=_capture):
+        with patch("aaftf.polish.run", side_effect=_capture):
             main()
     return captured.get("args")
 
@@ -156,28 +156,28 @@ class TestPolishParser:
 class TestPolishRunGuards:
     def test_racon_without_longreads_exits(self, tmp_path):
         args = _make_args(tmp_path, method="racon", longreads=None, left=None, right=None)
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
         with pytest.raises(SystemExit):
             run(**vars(args))
 
     def test_nextpolish2_without_longreads_exits(self, tmp_path):
         args = _make_args(tmp_path, method="nextpolish2", longreads=None)
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
         with pytest.raises(SystemExit):
             run(**vars(args))
 
     def test_pypolca_without_reads_exits(self, tmp_path):
         args = _make_args(tmp_path, method="pypolca", left=None, right=None)
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
         with pytest.raises(SystemExit):
             run(**vars(args))
 
     def test_polypolish_without_reads_exits(self, tmp_path):
         args = _make_args(tmp_path, method="polypolish", left=None, right=None)
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
         with pytest.raises(SystemExit):
             run(**vars(args))
@@ -186,9 +186,9 @@ class TestPolishRunGuards:
         """Polypolish requires paired reads."""
         (tmp_path / "R1.fq").write_text("@r\nA\n+\nI\n")
         args = _make_args(tmp_path, method="polypolish", right=None)
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.shutil.which", return_value=True):
             with pytest.raises(SystemExit):
                 run(**vars(args))
 
@@ -226,10 +226,10 @@ class TestPolishPypolca:
         mock_result = MagicMock()
         mock_result.returncode = 1
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", return_value=mock_result):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", return_value=mock_result):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 with pytest.raises(SystemExit) as exc:
                     run(**vars(args))
         assert exc.value.code == 1
@@ -241,10 +241,10 @@ class TestPolishPypolca:
         mock_result.returncode = 0
         # Output file deliberately NOT created
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", return_value=mock_result):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", return_value=mock_result):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 with pytest.raises(SystemExit) as exc:
                     run(**vars(args))
         assert exc.value.code == 1
@@ -265,10 +265,10 @@ class TestPolishPypolca:
             (outdir / "pypolca.report").write_text("")
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 run(**vars(args))
 
         assert (tmp_path / "polished.fasta").exists()
@@ -288,10 +288,10 @@ class TestPolishPypolca:
             (outdir / "pypolca.report").write_text("")
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 run(**vars(args))
 
         assert (tmp_path / "polished.fasta.vcf").exists()
@@ -311,10 +311,10 @@ class TestPolishPypolca:
             (outdir / "pypolca.report").write_text("POLCA report\n")
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 run(**vars(args))
 
         assert (tmp_path / "polished.fasta.pypolca_report.txt").exists()
@@ -337,10 +337,10 @@ class TestPolishPypolca:
             (outdir / "pypolca.report").write_text("")
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 run(**vars(args))
 
         pypolca_cmd = captured_cmds[0]
@@ -384,10 +384,10 @@ class TestPolishPolypolish:
         mock_result = MagicMock()
         mock_result.returncode = 0
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", return_value=mock_result):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", return_value=mock_result):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 with pytest.raises(SystemExit) as exc:
                     run(**vars(args))
         assert exc.value.code == 1
@@ -403,10 +403,10 @@ class TestPolishPolypolish:
             mock_result.returncode = 0
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 run(**vars(args))
 
         assert (tmp_path / "polished.fasta").exists()
@@ -426,10 +426,10 @@ class TestPolishPolypolish:
             mock_result.returncode = 0
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 run(**vars(args))
 
         bwa_mem_cmds = [c for c in captured_cmds if c[:2] == ["bwa", "mem"]]
@@ -473,10 +473,10 @@ class TestPolishRacon:
         mock_result = MagicMock()
         mock_result.returncode = 0
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", return_value=mock_result):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", return_value=mock_result):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 with pytest.raises(SystemExit) as exc:
                     run(**vars(args))
         assert exc.value.code == 1
@@ -492,10 +492,10 @@ class TestPolishRacon:
             mock_result.returncode = 0
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 run(**vars(args))
 
         assert (tmp_path / "polished.fasta").exists()
@@ -514,10 +514,10 @@ class TestPolishRacon:
             mock_result.returncode = 0
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.shutil.which", return_value=True):
                 run(**vars(args))
 
         minimap_cmds = [c for c in captured_cmds if c[:1] == ["minimap2"]]
@@ -569,11 +569,11 @@ class TestPolishNextpolish2:
         mock_popen.wait.return_value = 0
         mock_popen.returncode = 0
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", return_value=mock_result):
-            with patch("AAFTF.polish.subprocess.Popen", return_value=mock_popen):
-                with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", return_value=mock_result):
+            with patch("aaftf.polish.subprocess.Popen", return_value=mock_popen):
+                with patch("aaftf.polish.shutil.which", return_value=True):
                     with pytest.raises(SystemExit) as exc:
                         run(**vars(args))
         assert exc.value.code == 1
@@ -595,11 +595,11 @@ class TestPolishNextpolish2:
             mock_result.returncode = 0
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.subprocess.Popen", return_value=mock_popen):
-                with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.subprocess.Popen", return_value=mock_popen):
+                with patch("aaftf.polish.shutil.which", return_value=True):
                     run(**vars(args))
 
         assert (tmp_path / "polished.fasta").exists()
@@ -623,11 +623,11 @@ class TestPolishNextpolish2:
             mock_result.returncode = 0
             return mock_result
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
-        with patch("AAFTF.polish.subprocess.run", side_effect=_fake_run):
-            with patch("AAFTF.polish.subprocess.Popen", return_value=mock_popen):
-                with patch("AAFTF.polish.shutil.which", return_value=True):
+        with patch("aaftf.polish.subprocess.run", side_effect=_fake_run):
+            with patch("aaftf.polish.subprocess.Popen", return_value=mock_popen):
+                with patch("aaftf.polish.shutil.which", return_value=True):
                     run(**vars(args))
 
         yak_cmds = [c for c in captured_cmds if c[:2] == ["yak", "count"]]
@@ -690,7 +690,7 @@ class TestPolishPolypolishIntegration:
             pipe=True,
         )
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
         run(**vars(args))
 
@@ -716,7 +716,7 @@ class TestPolishPolypolishIntegration:
             pipe=True,
         )
 
-        from AAFTF.polish import run
+        from aaftf.polish import run
 
         run(**vars(args))
 

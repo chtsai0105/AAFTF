@@ -15,8 +15,11 @@ import shutil
 import sys
 from pathlib import Path
 
-from AAFTF.resources import FCSADAPTOR
-from AAFTF.utility import cleanup_workdir, make_workdir, require_databases, run_cmd
+from aaftf.resources import FCSADAPTOR
+from aaftf.utility import cleanup_workdir, make_workdir, require_databases, run_cmd
+
+__all__ = ["run"]
+
 
 logger = logging.getLogger(__name__)
 

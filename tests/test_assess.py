@@ -1,6 +1,6 @@
 """Unit tests for AAFTF/assess.py.
 
-Tests cover the pure-Python helper functions (make_regex_revcomp, findTelomere)
+Tests cover the pure-Python helper functions (make_regex_revcomp, find_telomere)
 and the full genome_asm_stats / run() pipeline against known small
 FASTA files.  No external tools are required.
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from AAFTF.assess import findTelomere, genome_asm_stats, make_regex_revcomp, run
+from aaftf.assess import find_telomere, genome_asm_stats, make_regex_revcomp, run
 from tests.conftest import (
     TELO_FWD_ONLY,
     TELO_NONE,
@@ -48,7 +48,7 @@ class TestRevcomp:
 
 
 # ---------------------------------------------------------------------------
-# findTelomere
+# find_telomere
 # ---------------------------------------------------------------------------
 
 
@@ -59,7 +59,7 @@ class TestFindTelomere:
     def _check(self, seq_str):
         from Bio.Seq import Seq
 
-        return findTelomere(Seq(seq_str), self.MONOMER, self.N)
+        return find_telomere(Seq(seq_str), self.MONOMER, self.N)
 
     def test_t2t_both_ends(self):
         fwd, rev = self._check(TELO_T2T)

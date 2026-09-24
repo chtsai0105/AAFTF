@@ -7,7 +7,7 @@ import io
 
 import pytest
 
-from AAFTF.fix_tbl import fix_tbl, parse_adjustments, parse_tbl
+from aaftf.fix_tbl import fix_tbl, parse_adjustments, parse_tbl
 
 pytestmark = pytest.mark.unit
 

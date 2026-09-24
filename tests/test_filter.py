@@ -19,9 +19,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from AAFTF.AAFTF_main import main
-from AAFTF.resources import DATABASES, SeqDBs
-from AAFTF.utility import db_write_dir
+from aaftf.main import main
+from aaftf.resources import DATABASES, SEQ_DBS
+from aaftf.utility import db_write_dir
 
 pytestmark = pytest.mark.unit
 
@@ -38,7 +38,7 @@ def _parse_filter(argv):
         captured["args"] = Namespace(**kwargs)
 
     with patch.object(sys, "argv", argv):
-        with patch("AAFTF.filter.run", side_effect=_capture):
+        with patch("aaftf.filter.run", side_effect=_capture):
             main()
     return captured.get("args")
 
@@ -196,10 +196,10 @@ class TestFilterParser:
 class TestFilterRunGuards:
     def test_no_left_exits(self, tmp_path):
         args = _make_filter_args(tmp_path, left=None)
-        from AAFTF.filter import run
+        from aaftf.filter import run
 
-        with patch("AAFTF.filter.download_file", side_effect=_mock_download):
-            with patch("AAFTF.filter.countfastq", return_value=0):
+        with patch("aaftf.filter.download_file", side_effect=_mock_download):
+            with patch("aaftf.filter.count_fastq", return_value=0):
                 with pytest.raises(SystemExit):
                     run(**vars(args))
 
@@ -216,11 +216,11 @@ class TestFilterContamdbCreation:
         workdir = Path(args.workdir)
         workdir.mkdir(parents=True, exist_ok=True)
 
-        from AAFTF.filter import run
+        from aaftf.filter import run
 
-        with patch("AAFTF.filter.download_file", side_effect=_mock_download):
-            with patch("AAFTF.filter.countfastq", return_value=100):
-                with patch("AAFTF.utility.subprocess.run"):
+        with patch("aaftf.filter.download_file", side_effect=_mock_download):
+            with patch("aaftf.filter.count_fastq", return_value=100):
+                with patch("aaftf.utility.subprocess.run"):
                     run(**vars(args))
 
         contamdb = workdir / "contamdb.fa"
@@ -233,11 +233,11 @@ class TestFilterContamdbCreation:
         args = _make_filter_args(tmp_path, left=left, aligner="bbduk", screen_local=[str(local_fa)])
         Path(args.workdir).mkdir(parents=True, exist_ok=True)
 
-        from AAFTF.filter import run
+        from aaftf.filter import run
 
-        with patch("AAFTF.filter.download_file", side_effect=_mock_download):
-            with patch("AAFTF.filter.countfastq", return_value=100):
-                with patch("AAFTF.utility.subprocess.run"):
+        with patch("aaftf.filter.download_file", side_effect=_mock_download):
+            with patch("aaftf.filter.count_fastq", return_value=100):
+                with patch("aaftf.utility.subprocess.run"):
                     run(**vars(args))
 
         contamdb = Path(args.workdir) / "contamdb.fa"
@@ -249,11 +249,11 @@ class TestFilterContamdbCreation:
         args = _make_filter_args(tmp_path, left=left, aligner="bbduk")
         Path(args.workdir).mkdir(parents=True, exist_ok=True)
 
-        from AAFTF.filter import run
+        from aaftf.filter import run
 
-        with patch("AAFTF.filter.download_file", side_effect=_mock_download):
-            with patch("AAFTF.filter.countfastq", return_value=100):
-                with patch("AAFTF.utility.subprocess.run"):
+        with patch("aaftf.filter.download_file", side_effect=_mock_download):
+            with patch("aaftf.filter.count_fastq", return_value=100):
+                with patch("aaftf.utility.subprocess.run"):
                     run(**vars(args))
 
         contamdb = Path(args.workdir) / "contamdb.fa"
@@ -271,11 +271,11 @@ def _run_filter_bbduk(tmp_path, left, right=None, **extra):
     Path(args.workdir).mkdir(parents=True, exist_ok=True)
     cmds = []
 
-    from AAFTF.filter import run
+    from aaftf.filter import run
 
-    with patch("AAFTF.filter.download_file", side_effect=_mock_download):
-        with patch("AAFTF.filter.countfastq", return_value=100):
-            with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+    with patch("aaftf.filter.download_file", side_effect=_mock_download):
+        with patch("aaftf.filter.count_fastq", return_value=100):
+            with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
                 run(**vars(args))
     return cmds, args
 
@@ -302,7 +302,7 @@ class TestFilterRunBbduk:
         cmds, _ = _run_filter_bbduk(tmp_path, left, right)
         assert any("sample_filtered_1.fastq.gz" in " ".join(c) for c in cmds)
 
-    def test_se_output_uses_U_suffix(self, tmp_path):
+    def test_se_output_uses_u_suffix(self, tmp_path):
         left = str(tmp_path / "sample_R1.fastq.gz")
         cmds, _ = _run_filter_bbduk(tmp_path, left, right=None)
         cmd_str = " ".join(cmds[0])
@@ -367,14 +367,14 @@ def _run_filter_bwa(tmp_path, left, right=None, **extra):
                 # create a stub alignBAM so isfile check passes
                 (workdir / "_stub.bam").touch()
 
-    from AAFTF.filter import run
+    from aaftf.filter import run
 
-    with patch("AAFTF.filter.download_file", side_effect=_mock_download):
-        with patch("AAFTF.filter.countfastq", return_value=100):
-            with patch("AAFTF.utility.subprocess.run", side_effect=_fake_run):
-                with patch("AAFTF.utility.subprocess.Popen", side_effect=lambda cmd, **kw: (popen_cmds.append(cmd), mock_proc)[1]):
-                    with patch("AAFTF.filter.bam_read_count", return_value=(50, 50)):
-                        with patch("AAFTF.utility.safe_remove"):
+    with patch("aaftf.filter.download_file", side_effect=_mock_download):
+        with patch("aaftf.filter.count_fastq", return_value=100):
+            with patch("aaftf.utility.subprocess.run", side_effect=_fake_run):
+                with patch("aaftf.utility.subprocess.Popen", side_effect=lambda cmd, **kw: (popen_cmds.append(cmd), mock_proc)[1]):
+                    with patch("aaftf.filter.bam_read_count", return_value=(50, 50)):
+                        with patch("aaftf.utility.safe_remove"):
                             run(**vars(args))
     return cmds, popen_cmds, args
 
@@ -406,12 +406,12 @@ class TestFilterRunBwa:
 class TestFilterDatabases:
     def _run(self, tmp_path, **extra):
         args = _make_filter_args(tmp_path, left=str(tmp_path / "sample_R1.fastq.gz"), **extra)
-        from AAFTF.filter import run
+        from aaftf.filter import run
 
         calls = []
-        with patch("AAFTF.filter.download_file", side_effect=lambda url, dest, force=False: (calls.append(url), _mock_download(url, dest))[1]):
-            with patch("AAFTF.filter.countfastq", return_value=100):
-                with patch("AAFTF.utility.subprocess.run"):
+        with patch("aaftf.filter.download_file", side_effect=lambda url, dest, force=False: (calls.append(url), _mock_download(url, dest))[1]):
+            with patch("aaftf.filter.count_fastq", return_value=100):
+                with patch("aaftf.utility.subprocess.run"):
                     run(**vars(args))
         return calls
 
@@ -426,5 +426,5 @@ class TestFilterDatabases:
 
     def test_screen_accession_fetched_from_eutils(self, tmp_path):
         calls = self._run(tmp_path, screen_accessions=["NC_001422"])
-        assert calls == [SeqDBs["nucleotide"] % "NC_001422"]
+        assert calls == [SEQ_DBS["nucleotide"] % "NC_001422"]
         assert calls[0].startswith("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?")

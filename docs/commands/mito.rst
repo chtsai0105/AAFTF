@@ -11,8 +11,8 @@ Algorithm
 1. Estimates read length from the input FASTQ (``GuessRL``).
 2. Selects a seed sequence: a user-supplied ``--seed`` FASTA, a ``--reference`` mitochondrial
    genome (also enables NOVOPlasty's reference-guided mode), or -- by default -- a bundled
-   *Aspergillus nidulans* cytochrome-b (COB) fragment (``AAFTF/data/mito-seed.fasta``).
-3. Writes a NOVOPlasty config file from the ``AAFTF/data/novoplasty-config.txt`` template
+   *Aspergillus nidulans* cytochrome-b (COB) fragment (``aaftf/data/mito-seed.fasta``).
+3. Writes a NOVOPlasty config file from the ``aaftf/data/novoplasty-config.txt`` template
    (substituting project name, min/max genome length, max memory, seed, read length, and the
    forward/reverse FASTQ paths) and runs ``NOVOPlasty.pl -c novo-config.txt``.
 4. Parses NOVOPlasty's output directory for (in priority order) a

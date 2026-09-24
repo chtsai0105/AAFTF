@@ -21,6 +21,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aaftf.utility import align_to_sorted_bam, check_file, cleanup_workdir, count_fastq, make_workdir, open_maybe_gz, print_cmd, require_tools, run_cmd
+
 try:
     import matplotlib
 
@@ -33,15 +35,13 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from AAFTF.utility import align_to_sorted_bam, checkfile, cleanup_workdir, countfastq, make_workdir, open_maybe_gz, printCMD, require_tools, run_cmd
+__all__ = ["HAS_MATPLOTLIB", "run", "map_reads", "run_flagstat", "run_mosdepth", "parse_mosdepth_summary"]
+
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Constants for quantized coverage classes
-# ---------------------------------------------------------------------------
-
 _DEFAULT_QUANTIZE = "0:1:4:100:200:"
+
 _COV_COLOURS = {
     "NO_COVERAGE": "#000080",
     "LOW_COVERAGE": "#006fff",
@@ -49,14 +49,12 @@ _COV_COLOURS = {
     "HIGH_COVERAGE": "#ff6c00",
     "VERY_HIGH_COVERAGE": "#800000",
 }
+
 _DEFAULT_LABELS = list(_COV_COLOURS)
 
 _SCAFFOLDS_PER_PAGE = 50
-_HEATMAP_MAX_LENGTH_RATIO = 10  # max longest/shortest contig length ratio per page
 
-# ---------------------------------------------------------------------------
-# Main entry point
-# ---------------------------------------------------------------------------
+_HEATMAP_MAX_LENGTH_RATIO = 10  # max longest/shortest contig length ratio per page
 
 
 def run(
@@ -97,7 +95,7 @@ def run(
         logger.error("--longread_preset is required when --longreads is provided (map-ont, map-pb, or map-hifi)")
         sys.exit(1)
 
-    if not checkfile(input):
+    if not check_file(input):
         logger.error(f"assembly file not found or empty: {input}")
         sys.exit(1)
 
@@ -107,7 +105,7 @@ def run(
     longreads = str(Path(longreads).resolve()) if longreads else None
 
     for label, fpath in [("--left", reads_left), ("--right", reads_right), ("--longreads", longreads)]:
-        if fpath and not checkfile(fpath):
+        if fpath and not check_file(fpath):
             logger.error(f"read file not found or empty ({label}): {fpath}")
             sys.exit(1)
 
@@ -143,7 +141,7 @@ def run(
         if fastq:
             logger.info(f"Counting reads in {Path(fastq).name}")
             try:
-                read_counts[key] = countfastq(fastq)
+                read_counts[key] = count_fastq(fastq)
             except (OSError, subprocess.CalledProcessError):
                 read_counts[key] = -1
 
@@ -323,11 +321,6 @@ def run(
         logger.info(f"Your next command might be:\nAAFTF assess -i {input}")
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumina_preset, longread_preset, aligner, debug):
     """Map reads to the genome assembly and produce sorted, indexed BAM files.
 
@@ -418,7 +411,7 @@ def run_flagstat(bam_file):
         String containing the flagstat output lines.
     """
     cmd = ["samtools", "flagstat", bam_file]
-    printCMD(cmd)
+    print_cmd(cmd)
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.stdout
 
@@ -495,6 +488,20 @@ def parse_mosdepth_summary(summary_file):
     return total, contigs
 
 
+def _parse_quantize_bins():
+    """Return the default mosdepth quantize bin labels and their colors.
+
+    Known labels get their canonical color; others fall back to grey.
+
+    Returns:
+        Tuple (labels, colors) where labels is a list of strings and colors
+        is a dict mapping label -> hex color string.
+    """
+    labels = list(_DEFAULT_LABELS)
+    colors = {lbl: _COV_COLOURS.get(lbl, "#888888") for lbl in labels}
+    return labels, colors
+
+
 def _coverage_breadth_from_dist(dist_file):
     """Read coverage breadth at >= 1x from mosdepth global distribution file.
 
@@ -515,25 +522,6 @@ def _coverage_breadth_from_dist(dist_file):
     except Exception:
         pass
     return None
-
-
-# ---------------------------------------------------------------------------
-# Quantized mosdepth helpers
-# ---------------------------------------------------------------------------
-
-
-def _parse_quantize_bins():
-    """Return the default mosdepth quantize bin labels and their colors.
-
-    Known labels get their canonical color; others fall back to grey.
-
-    Returns:
-        Tuple (labels, colors) where labels is a list of strings and colors
-        is a dict mapping label -> hex color string.
-    """
-    labels = list(_DEFAULT_LABELS)
-    colors = {lbl: _COV_COLOURS.get(lbl, "#888888") for lbl in labels}
-    return labels, colors
 
 
 def _read_quantized_bed(quantized_bed):
@@ -584,48 +572,6 @@ def _get_plot_prefix(input_file, report_file):
         basename = Path(basename).stem
     report_dir = str(Path(report_file).resolve().parent)
     return str(Path(report_dir, basename))
-
-
-# ---------------------------------------------------------------------------
-# Plot helpers
-# ---------------------------------------------------------------------------
-
-
-def _save_figure(fig, path, plot_format):
-    dpi = 150 if plot_format == "png" else None
-    fig.savefig(path, format=plot_format, dpi=dpi, bbox_inches="tight")
-    plt.close(fig)
-
-
-def _paginate_by_length_ratio(scaffold_rows, max_ratio=_HEATMAP_MAX_LENGTH_RATIO, max_per_page=_SCAFFOLDS_PER_PAGE):
-    """Group scaffolds (pre-sorted by length, descending) into pages.
-
-    Starts a new page once the running page's longest/shortest length
-    ratio would exceed max_ratio, or once max_per_page rows is reached.
-
-    Args:
-        scaffold_rows: List of contig dicts (with 'chrom' and 'length'),
-            sorted by length descending.
-        max_ratio: Max allowed ratio between the longest and shortest
-            contig length within one page.
-        max_per_page: Hard cap on rows per page.
-
-    Returns:
-        List of pages, each a list of chrom name strings.
-    """
-    pages = []
-    current, page_max_len = [], None
-    for row in scaffold_rows:
-        length = row.get("length") or 1
-        if current and (length < page_max_len / max_ratio or len(current) >= max_per_page):
-            pages.append(current)
-            current, page_max_len = [], None
-        if page_max_len is None:
-            page_max_len = length
-        current.append(row["chrom"])
-    if current:
-        pages.append(current)
-    return pages
 
 
 def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colors, plot_prefix, plot_format):
@@ -704,6 +650,43 @@ def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colors, plot_pref
             fig = _make_page(page, i + 1, len(pages))
             _save_figure(fig, path, plot_format)
             logger.info(f"Coverage heatmap written to: {path}")
+
+
+def _paginate_by_length_ratio(scaffold_rows, max_ratio=_HEATMAP_MAX_LENGTH_RATIO, max_per_page=_SCAFFOLDS_PER_PAGE):
+    """Group scaffolds (pre-sorted by length, descending) into pages.
+
+    Starts a new page once the running page's longest/shortest length
+    ratio would exceed max_ratio, or once max_per_page rows is reached.
+
+    Args:
+        scaffold_rows: List of contig dicts (with 'chrom' and 'length'),
+            sorted by length descending.
+        max_ratio: Max allowed ratio between the longest and shortest
+            contig length within one page.
+        max_per_page: Hard cap on rows per page.
+
+    Returns:
+        List of pages, each a list of chrom name strings.
+    """
+    pages = []
+    current, page_max_len = [], None
+    for row in scaffold_rows:
+        length = row.get("length") or 1
+        if current and (length < page_max_len / max_ratio or len(current) >= max_per_page):
+            pages.append(current)
+            current, page_max_len = [], None
+        if page_max_len is None:
+            page_max_len = length
+        current.append(row["chrom"])
+    if current:
+        pages.append(current)
+    return pages
+
+
+def _save_figure(fig, path, plot_format):
+    dpi = 150 if plot_format == "png" else None
+    fig.savefig(path, format=plot_format, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
 
 
 def _plot_coverage_barplot(contig_data, scaffold_rows, labels, colors, plot_prefix, plot_format):

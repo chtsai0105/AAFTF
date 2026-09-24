@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from AAFTF.sort import run
+from aaftf.sort import run
 from tests.conftest import SEQ1, SEQ2, SEQ3
 
 pytestmark = pytest.mark.unit

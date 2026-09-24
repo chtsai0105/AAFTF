@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
-from AAFTF.AAFTF_main import main
+from aaftf.main import main
 
 pytestmark = pytest.mark.unit
 
@@ -36,7 +36,7 @@ def _parse_assemble(argv):
         captured["args"] = Namespace(**kwargs)
 
     with patch.object(sys, "argv", argv):
-        with patch("AAFTF.assemble.run", side_effect=_capture):
+        with patch("aaftf.assemble.run", side_effect=_capture):
             main()
     return captured.get("args")
 
@@ -170,21 +170,21 @@ class TestAssembleParser:
 class TestAssembleRunGuards:
     def test_spades_no_left_exits(self, tmp_path):
         args = _make_asm_args(tmp_path, method="spades", left=None)
-        from AAFTF.assemble import run
+        from aaftf.assemble import run
 
         with pytest.raises(SystemExit):
             run(**vars(args))
 
     def test_megahit_no_left_exits(self, tmp_path):
         args = _make_asm_args(tmp_path, method="megahit", left=None)
-        from AAFTF.assemble import run
+        from aaftf.assemble import run
 
         with pytest.raises(SystemExit):
             run(**vars(args))
 
     def test_unicycler_no_left_exits(self, tmp_path):
         args = _make_asm_args(tmp_path, method="unicycler", left=None)
-        from AAFTF.assemble import run
+        from aaftf.assemble import run
 
         with pytest.raises(SystemExit):
             run(**vars(args))
@@ -207,9 +207,9 @@ def _run_spades(tmp_path, left, right=None, create_output=True, **extra):
             workdir.mkdir(parents=True, exist_ok=True)
             (workdir / "scaffolds.fasta").write_text(">contig1\nATCGATCG\n")
 
-    from AAFTF.assemble import run_spades
+    from aaftf.assemble import run_spades
 
-    with patch("AAFTF.utility.subprocess.run", side_effect=_fake_run):
+    with patch("aaftf.utility.subprocess.run", side_effect=_fake_run):
         run_spades(**vars(args))
     return cmds, args
 
@@ -304,9 +304,9 @@ def _run_megahit(tmp_path, left, right=None, create_output=True, **extra):
             workdir.mkdir(parents=True, exist_ok=True)
             (workdir / "final.contigs.fa").write_text(">contig1\nATCGATCG\n")
 
-    from AAFTF.assemble import run_megahit
+    from aaftf.assemble import run_megahit
 
-    with patch("AAFTF.utility.subprocess.run", side_effect=_fake_run):
+    with patch("aaftf.utility.subprocess.run", side_effect=_fake_run):
         run_megahit(**vars(args))
     return cmds, args
 
@@ -360,9 +360,9 @@ class TestAssembleRunUnicycler:
         args = _make_asm_args(tmp_path, method="unicycler", left=left, right=right)
         cmds = []
 
-        from AAFTF.assemble import run_unicycler
+        from aaftf.assemble import run_unicycler
 
-        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+        with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
             run_unicycler(**vars(args))
 
         assert "--short1" in cmds[0]
@@ -373,9 +373,9 @@ class TestAssembleRunUnicycler:
         args = _make_asm_args(tmp_path, method="unicycler", left=left, right=None)
         cmds = []
 
-        from AAFTF.assemble import run_unicycler
+        from aaftf.assemble import run_unicycler
 
-        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+        with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
             run_unicycler(**vars(args))
 
         assert "--unpaired" in cmds[0]
@@ -385,9 +385,9 @@ class TestAssembleRunUnicycler:
         args = _make_asm_args(tmp_path, method="unicycler", left=left)
         cmds = []
 
-        from AAFTF.assemble import run_unicycler
+        from aaftf.assemble import run_unicycler
 
-        with patch("AAFTF.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+        with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
             run_unicycler(**vars(args))
 
         assert cmds[0][0] == "unicycler"
@@ -401,21 +401,21 @@ class TestAssembleRunUnicycler:
 class TestAssembleUnimplementedMethods:
     def test_masurca_no_crash(self, tmp_path):
         args = _make_asm_args(tmp_path, method="masurca")
-        from AAFTF.assemble import run
+        from aaftf.assemble import run
 
-        with patch("AAFTF.utility.subprocess.run"):
+        with patch("aaftf.utility.subprocess.run"):
             run(**vars(args))  # should not raise
 
     def test_nextdenovo_no_crash(self, tmp_path):
         args = _make_asm_args(tmp_path, method="nextdenovo")
-        from AAFTF.assemble import run
+        from aaftf.assemble import run
 
-        with patch("AAFTF.utility.subprocess.run"):
+        with patch("aaftf.utility.subprocess.run"):
             run(**vars(args))
 
     def test_unknown_method_no_crash(self, tmp_path):
         args = _make_asm_args(tmp_path, method="unknownasm")
-        from AAFTF.assemble import run
+        from aaftf.assemble import run
 
-        with patch("AAFTF.utility.subprocess.run"):
+        with patch("aaftf.utility.subprocess.run"):
             run(**vars(args))

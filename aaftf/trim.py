@@ -10,12 +10,15 @@ import shutil
 import sys
 from pathlib import Path
 
-from AAFTF.utility import basename_from_reads, countfastq, run_cmd, safe_remove
+from aaftf.utility import basename_from_reads, count_fastq, run_cmd, safe_remove
 
-logger = logging.getLogger(__name__)
+__all__ = ["TRIMMOMATIC_TRUSEQSE", "TRIMMOMATIC_TRUSEQPE", "run", "run_bbduk", "run_trimmomatic", "run_fastp"]
+
 
 TRIMMOMATIC_TRUSEQSE = "adapters/TruSeq3-SE.fa"
+
 TRIMMOMATIC_TRUSEQPE = "adapters/TruSeq3-PE.fa"
+
 # process trimming reads with trimmomatic
 # Homebrew install of trimmomatic uses a shell script
 """
@@ -23,7 +26,10 @@ TRIMMOMATIC_TRUSEQPE = "adapters/TruSeq3-PE.fa"
 TRIMJAR=/usr/local/Cellar/trimmomatic/0.36/libexec/trimmomatic-0.36.jar
 exec java -jar $TRIMJAR "$@"
 """
+
 # while bioconda install uses a python script that launches java apps
+
+logger = logging.getLogger(__name__)
 
 
 # flake8: noqa: C901
@@ -55,7 +61,7 @@ def run(
     if not basename:
         basename = basename_from_reads(left)
 
-    total = countfastq(left)
+    total = count_fastq(left)
     if right:
         total = total * 2
     logger.info(f"Loading {total:,} total reads")
@@ -86,12 +92,12 @@ def run(
 
 def run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe):
     """Trim reads with BBDuk."""
-    MEM = f"-Xmx{memory}g"
+    java_mem = f"-Xmx{memory}g"
 
     logger.info("Adapter trimming using BBDuk")
     bbduk_base = [
         "bbduk.sh",
-        MEM,
+        java_mem,
         "ref=adapters",
         f"t={cpus}",
         "ktrim=r",
@@ -291,39 +297,39 @@ def run_fastp(left, right, basename, cpus, minlen, avgqual, merge, dedup, cutfro
     _report_trimmed(basename, right, pipe, cpus)
 
 
-def _find_trimmomatic():
-    """Finds the trimmomatic jar file."""
-    trim_path = shutil.which("trimmomatic")
-    if trim_path:
-        with open(str(Path(trim_path).resolve())) as trim_shell:
-            firstLine = trim_shell.readline()
-            if "#!/bin/bash" in firstLine:  # homebrew get jar location
-                for line in trim_shell:
-                    if line.startswith("exec java"):
-                        items = line.split(" ")
-                        for x in items:
-                            if x.endswith(".jar"):
-                                return x
-            elif "#!/usr/bin/env python" in firstLine:
-                trimjardir = Path(trim_path).resolve().parent
-                return str(trimjardir / "trimmomatic.jar")
-            else:
-                return False
-    else:
-        return False
-
-
 def _report_trimmed(basename, right, pipe, cpus):
     if right:
-        clean = countfastq(f"{basename}_1P.fastq.gz")
+        clean = count_fastq(f"{basename}_1P.fastq.gz")
         clean = clean * 2
         logger.info(f"{clean:,} reads remaining and writing to file")
         logger.info("Trimming finished:\nFor: {:}\nRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
         if not pipe:
             logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
     else:
-        clean = countfastq(f"{basename}_1U.fastq.gz")
+        clean = count_fastq(f"{basename}_1U.fastq.gz")
         logger.info(f"{clean:,} reads remaining and writing to file")
         logger.info("Trimming finished:\nSingle: {:}".format(basename + "_1U.fastq.gz"))
         if not pipe:
             logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -o {:} -c {:}".format(basename + "_1U.fastq.gz", basename, cpus))
+
+
+def _find_trimmomatic():
+    """Finds the trimmomatic jar file."""
+    trim_path = shutil.which("trimmomatic")
+    if trim_path:
+        with open(str(Path(trim_path).resolve())) as trim_shell:
+            first_line = trim_shell.readline()
+            if "#!/bin/bash" in first_line:  # homebrew get jar location
+                for line in trim_shell:
+                    if line.startswith("exec java"):
+                        items = line.split(" ")
+                        for x in items:
+                            if x.endswith(".jar"):
+                                return x
+            elif "#!/usr/bin/env python" in first_line:
+                trimjardir = Path(trim_path).resolve().parent
+                return str(trimjardir / "trimmomatic.jar")
+            else:
+                return False
+    else:
+        return False

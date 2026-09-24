@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from AAFTF import depth
+from aaftf import depth
 
 pytestmark = pytest.mark.integration
 

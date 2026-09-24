@@ -9,12 +9,66 @@ import logging
 import re
 import sys
 
+__all__ = ["run", "fix_tbl", "parse_tbl", "parse_adjustments"]
+
+
 logger = logging.getLogger(__name__)
 
 
 def run(table, report, output, **kwargs):
     """Run the fix_tbl subcommand."""
     fix_tbl(table, report, output)
+
+
+def fix_tbl(tbl_fh, adjustment_fh, output_handle):
+    """Read table and apply adjustments to feature coordinates."""
+    features = parse_tbl(tbl_fh)
+    adjustments = parse_adjustments(adjustment_fh)
+    for seqid, feats in features.items():
+        print(f">Feature {seqid}", file=output_handle)
+        adj = {}
+        if seqid in adjustments:
+            for adjustment in adjustments[seqid]:
+                original_length, action, trim_start, trim_end = adjustment
+                if action == "ACTION_TRIM":
+                    if trim_start == 1:
+                        adj["trim_left"] = trim_end
+                    elif trim_end == original_length:
+                        adj["trim_right"] = trim_start
+                    else:
+                        logger.info(f"Cannot trim effectively the adjustment is internal to the contig {seqid}:{trim_start}..{trim_end} in len={original_length}")
+        for feature in feats:
+            if feature[0] is not None and feature[0] != "":
+                fstart = feature[0]
+                fend = feature[1]
+                if "trim_left" in adj:
+                    modstart = ""
+                    modend = ""
+                    m = re.match(r"([<>])", fstart)  # compile this for speed?
+                    if m:
+                        modstart = m.group(1)
+                    m = re.match(r"([<>])", fend)  # compile this for speed?
+                    if m:
+                        modend = m.group(1)
+                    fstart = int(fstart.lstrip("<>"))
+                    fend = int(fend.lstrip("<>"))
+                    fstart -= adj["trim_left"]
+                    if fstart < 1:
+                        fstart = 1
+                    fend -= adj["trim_left"]
+                    if fend < 1:
+                        fend = 1
+                    fstart = f"{modstart}{fstart}"
+                    fend = f"{modend}{fend}"
+                    feature[0] = fstart
+                    feature[1] = fend
+                if "trim_right" in adj:
+                    fstart = int(feature[0].lstrip("<>"))
+                    fend = int(feature[1].lstrip("<>"))
+                    if fstart >= adj["trim_right"] or fend >= adj["trim_right"]:
+                        fend = adj["trim_right"]
+                        # status(f'Feature at {seqid}:{feature[0]}..{feature[1]} overlaps with right trim {adj["trim_right"]}')
+            print("\t".join(feature), file=output_handle)
 
 
 def parse_tbl(tbl_file_handle):
@@ -84,54 +138,3 @@ def parse_adjustments(adj_file_handle):
             logger.info(f"Skipping line: {row}")
             continue
     return adjustments
-
-
-def fix_tbl(tbl_fh, adjustment_fh, output_handle):
-    """Read table and apply adjustments to feature coordinates."""
-    features = parse_tbl(tbl_fh)
-    adjustments = parse_adjustments(adjustment_fh)
-    for seqid, feats in features.items():
-        print(f">Feature {seqid}", file=output_handle)
-        adj = {}
-        if seqid in adjustments:
-            for adjustment in adjustments[seqid]:
-                original_length, action, trim_start, trim_end = adjustment
-                if action == "ACTION_TRIM":
-                    if trim_start == 1:
-                        adj["trim_left"] = trim_end
-                    elif trim_end == original_length:
-                        adj["trim_right"] = trim_start
-                    else:
-                        logger.info(f"Cannot trim effectively the adjustment is internal to the contig {seqid}:{trim_start}..{trim_end} in len={original_length}")
-        for feature in feats:
-            if feature[0] is not None and feature[0] != "":
-                fstart = feature[0]
-                fend = feature[1]
-                if "trim_left" in adj:
-                    modstart = ""
-                    modend = ""
-                    m = re.match(r"([<>])", fstart)  # compile this for speed?
-                    if m:
-                        modstart = m.group(1)
-                    m = re.match(r"([<>])", fend)  # compile this for speed?
-                    if m:
-                        modend = m.group(1)
-                    fstart = int(fstart.lstrip("<>"))
-                    fend = int(fend.lstrip("<>"))
-                    fstart -= adj["trim_left"]
-                    if fstart < 1:
-                        fstart = 1
-                    fend -= adj["trim_left"]
-                    if fend < 1:
-                        fend = 1
-                    fstart = f"{modstart}{fstart}"
-                    fend = f"{modend}{fend}"
-                    feature[0] = fstart
-                    feature[1] = fend
-                if "trim_right" in adj:
-                    fstart = int(feature[0].lstrip("<>"))
-                    fend = int(feature[1].lstrip("<>"))
-                    if fstart >= adj["trim_right"] or fend >= adj["trim_right"]:
-                        fend = adj["trim_right"]
-                        # status(f'Feature at {seqid}:{feature[0]}..{feature[1]} overlaps with right trim {adj["trim_right"]}')
-            print("\t".join(feature), file=output_handle)

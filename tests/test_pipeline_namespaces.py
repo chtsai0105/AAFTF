@@ -47,9 +47,9 @@ def _run_pipeline_up_to_sort(args):
         namespace_dict.update(extra_args)
         return Namespace(**namespace_dict)
 
-    sortOpts = ["debug"]
+    sort_opts = ["debug"]
     sort_args = create_namespace(
-        sortOpts,
+        sort_opts,
         required_args={
             "input": "test.polish.fasta",
             "out": "test.final.fasta",
@@ -59,9 +59,9 @@ def _run_pipeline_up_to_sort(args):
         },
     )
 
-    assessOpts = ["debug"]
+    assess_opts = ["debug"]
     assess_args = create_namespace(
-        assessOpts,
+        assess_opts,
         required_args={
             "input": "test.final.fasta",
             "report": False,

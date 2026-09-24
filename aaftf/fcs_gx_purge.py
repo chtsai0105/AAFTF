@@ -6,14 +6,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-from AAFTF.utility import checkfile, cleanup_workdir, fastastats, filter_fasta, make_workdir, next_step_name, printCMD
+from aaftf.utility import check_file, cleanup_workdir, fasta_stats, filter_fasta, make_workdir, next_step_name, print_cmd
+
+__all__ = ["run"]
+
 
 logger = logging.getLogger(__name__)
 
+
 # logging - we may need to think about whether this has
 # separate name for the different runfolder
-
-
 # flake8: noqa: C901
 def run(
     input,
@@ -33,8 +35,8 @@ def run(
         logger.info(f"{db}.gxi not found, needs to have setup the fcs_gx db - https://github.com/ncbi/fcs/wiki/FCS-GX")
         sys.exit(1)
 
-    numSeqs, assemblySize = fastastats(str(Path(input)))
-    logger.info(f"Assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
+    num_seqs, assembly_size = fasta_stats(str(Path(input)))
+    logger.info(f"Assembly is {num_seqs:,} contigs and {assembly_size:,} bp")
 
     # now filter for taxonomy with sourmash lca classify
     logger.info("Running fcs_gx to get taxonomy classification for each contig")
@@ -52,7 +54,7 @@ def run(
         "--out-dir",
         workdir,
     ]
-    printCMD(fcsgx_compute)
+    print_cmd(fcsgx_compute)
     fcs_log = "fcs_gx.log"
     with open(str(Path(workdir, fcs_log)), "w") as logfile:
         subprocess.run(fcsgx_compute, stderr=logfile)
@@ -61,37 +63,37 @@ def run(
     # output tsv:
     # seq_id	start_pos	end_pos	seq_len	action	div	agg_cont_cov	top_tax_name
 
-    Seq2Drop = {}
+    seqs_to_drop = {}
 
-    fcsgxTSV = str(Path(workdir, f"{fname}.{taxid}.fcs_gx_report.txt"))
-    if not Path(fcsgxTSV).is_file():
-        logger.info(f"fcs_gx did not produce file {fcsgxTSV}")
+    fcsgx_tsv = str(Path(workdir, f"{fname}.{taxid}.fcs_gx_report.txt"))
+    if not Path(fcsgx_tsv).is_file():
+        logger.info(f"fcs_gx did not produce file {fcsgx_tsv}")
         return
-    with open(fcsgxTSV) as fcsgx_out:
+    with open(fcsgx_tsv) as fcsgx_out:
         for line in fcsgx_out:
             if not line.startswith("#"):
                 line = line.strip()
                 cols = line.split("\t")
-                Seq2Drop[cols[0]] = 1
+                seqs_to_drop[cols[0]] = 1
 
     # drop contigs from taxonomy before calculating coverage
-    logger.info(f"Dropping {len(Seq2Drop)} contigs from fcs-gx taxonomy screen")
-    numSeqs, assemblySize = filter_fasta(input, outfile, lambda seq_id: seq_id not in Seq2Drop)
+    logger.info(f"Dropping {len(seqs_to_drop)} contigs from fcs-gx taxonomy screen")
+    num_seqs, assembly_size = filter_fasta(input, outfile, lambda seq_id: seq_id not in seqs_to_drop)
 
     if debug:
-        print("Contigs dropped due to taxonomy: {:}".format(",".join(Seq2Drop)))
+        print("Contigs dropped due to taxonomy: {:}".format(",".join(seqs_to_drop)))
 
-    logger.info(f"fcs-gx assembly is {numSeqs:,} contigs and {assemblySize:,} bp")
-    nextOut = next_step_name(outfile, ".rmdup.fasta")
+    logger.info(f"fcs-gx assembly is {num_seqs:,} contigs and {assembly_size:,} bp")
+    next_out = next_step_name(outfile, ".rmdup.fasta")
 
-    if checkfile(fcsgxTSV):
+    if check_file(fcsgx_tsv):
         outbase = Path(outfile).name
         basedir = str(Path(outfile).resolve().parent)
         if "." in outbase:
             outbase = outbase.rsplit(".", 1)[0]
-        shutil.copy(fcsgxTSV, str(Path(basedir, f"{outbase}.fcs_gx-taxonomy.tsv")))
+        shutil.copy(fcsgx_tsv, str(Path(basedir, f"{outbase}.fcs_gx-taxonomy.tsv")))
 
     cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
-        logger.info(f"Your next command might be:\nAAFTF rmdup -i {outfile} -o {nextOut}")
+        logger.info(f"Your next command might be:\nAAFTF rmdup -i {outfile} -o {next_out}")
