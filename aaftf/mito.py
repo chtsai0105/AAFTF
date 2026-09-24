@@ -8,6 +8,7 @@ import sys
 import uuid
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
@@ -23,21 +24,45 @@ _PACKAGE_DATA = files("aaftf") / "data"
 
 
 def run(
-    left,
-    right,
-    out="mito.fasta",
-    workdir=None,
-    minlen=10000,
-    maxlen=100000,
-    seed=None,
-    starting=None,
-    reference=None,
-    memory=8,
-    debug=False,
-    pipe=False,
-    **kwargs,
-):
-    """Run the NOVOplasty tool."""
+    left: str,
+    right: str,
+    out: str = "mito.fasta",
+    workdir: str | None = None,
+    minlen: int = 10000,
+    maxlen: int = 100000,
+    seed: str | None = None,
+    starting: str | None = None,
+    reference: str | None = None,
+    memory: int = 8,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Assemble a mitochondrial genome from paired reads with NOVOPlasty.
+
+    Writes a NOVOPlasty config from the bundled template and runs it in the work directory. A
+    circularized assembly is rotated to start at ``starting`` (default: the cob gene); otherwise
+    the contigs are written as ``contig_N``. Returns early, writing nothing, if NOVOPlasty
+    produced no assembly.
+
+    Args:
+        left: Forward reads FASTQ.
+        right: Reverse reads FASTQ.
+        out: Output FASTA path.
+        workdir: Working directory; a temporary one is created when None.
+        minlen: Minimum expected genome size (NOVOPlasty genome range).
+        maxlen: Maximum expected genome size (NOVOPlasty genome range).
+        seed: Seed FASTA; falls back to ``reference``, then the bundled seed.
+        starting: FASTA of the sequence to rotate a circular genome to start at.
+        reference: Reference genome FASTA passed to NOVOPlasty.
+        memory: Max memory in GB for NOVOPlasty.
+        debug: Keep the work directory.
+        pipe: Unused; accepted for pipeline consistency.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
+
+    Raises:
+        RuntimeError: If NOVOPlasty produces no assembly.
+    """
     require_tools(["NOVOPlasty.pl", "minimap2"])
     # first we need to generate working directory
     unique_id = str(uuid.uuid4())[:8]
@@ -88,23 +113,16 @@ def run(
         p1 = subprocess.Popen(cmd, cwd=workdir, stdout=logfile, stderr=logfile)
         p1.communicate()
 
-    # now parse the results
+    # now parse the results, preferring a circular assembly over partial ones
+    outputs = sorted(os.listdir(workdir))
     draft_mito = None
-    circular = False
-    for f in os.listdir(workdir):
-        if f.startswith("Circularized_assembly_"):
-            draft_mito = str(Path(workdir, f))
-            circular = True
-            break
-        if f.startswith("Contigs_1_"):
-            draft_mito = str(Path(workdir, f))
-            break
-        if f.startswith("Uncircularized_assemblies_"):
-            draft_mito = str(Path(workdir, f))
+    for output_prefix in ("Circularized_assembly_", "Contigs_1_", "Uncircularized_assemblies_"):
+        draft_mito = next((str(Path(workdir, f)) for f in outputs if f.startswith(output_prefix)), None)
+        if draft_mito:
             break
     if draft_mito is None:
-        logger.info("NOVOplasty did not produce an assembly - check log for errors")
-        return
+        raise RuntimeError(f"NOVOplasty did not produce an assembly - check {novolog}")
+    circular = Path(draft_mito).name.startswith("Circularized_assembly_")
     if circular:
         logger.info("NOVOplasty assembled complete circular genome")
         if starting:
@@ -128,8 +146,19 @@ def run(
     cleanup_workdir(workdir, debug, custom_workdir)
 
 
-def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
-    """Reorient the MT assembly based on a starting gene (if found)."""
+def _orient_to_start(fasta_in: str, fasta_out: str, folder: str = ".", start: str | None = None) -> None:
+    """Rotate a circular MT assembly to begin at a starting gene and write it as ``mt``.
+
+    The start sequence is aligned to the assembly with minimap2; with exactly one in-range hit
+    the sequence is rotated (and reverse complemented for a minus-strand hit). Otherwise the
+    last sequence of ``fasta_in`` is written unrotated and an error is logged.
+
+    Args:
+        fasta_in: FASTA of the circular assembly.
+        fasta_out: Output FASTA path.
+        folder: Directory for the temporary start-sequence FASTA.
+        start: FASTA file of the start sequence; None uses the built-in COB consensus.
+    """
     # if not starting, then use cytochrome oxidase (cob)
     start_file = str(Path(folder, f"{uuid.uuid4()}.fasta"))
     if not start:
@@ -190,6 +219,13 @@ def _orient_to_start(fasta_in, fasta_out, folder=".", start=False):
             write_fasta(outfile, "mt", initial_seq)
 
 
-def _rev_comp(seq):
-    """Reverse complement a DNA string, preserving case."""
+def _rev_comp(seq: str) -> str:
+    """Reverse complement a DNA string, preserving case.
+
+    Args:
+        seq: DNA sequence.
+
+    Returns:
+        The reverse complement.
+    """
     return seq.translate(COMPLEMENT)[::-1]

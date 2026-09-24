@@ -1,10 +1,11 @@
 """Unit tests for AAFTF/mito.py helpers."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from aaftf.mito import _rev_comp
+from aaftf.mito import _rev_comp, run
 
 pytestmark = pytest.mark.unit
 
@@ -78,7 +79,9 @@ class TestNovoplastyInputs:
         with patch("aaftf.mito.require_tools"), patch("aaftf.mito.estimate_read_length", return_value=150):
             with patch("aaftf.mito.subprocess.Popen") as popen:
                 popen.return_value.communicate.return_value = (b"", b"")
-                run(left=str(tmp_path / "R1.fq"), right=str(tmp_path / "R2.fq"), out=str(tmp_path / "mt.fa"), workdir=str(workdir), **kwargs)
+                # no NOVOPlasty output is faked, so run() stops after writing its inputs
+                with pytest.raises(RuntimeError, match="did not produce an assembly"):
+                    run(left=str(tmp_path / "R1.fq"), right=str(tmp_path / "R2.fq"), out=str(tmp_path / "mt.fa"), workdir=str(workdir), **kwargs)
         return workdir
 
     def test_default_seed_copied_from_package_and_config_filled(self, tmp_path):
@@ -95,3 +98,33 @@ class TestNovoplastyInputs:
         workdir = self._run(tmp_path, seed=str(own_seed))
         assert not (workdir / "mito-seed.fasta").exists()
         assert str(own_seed.resolve()) in (workdir / "novo-config.txt").read_text()
+
+
+class TestNovoplastyOutputChoice:
+    """run() picks NOVOPlasty's circular assembly first, then Contigs_1, then the uncircularised file."""
+
+    def _run(self, tmp_path, outputs):
+        def _fake_popen(cmd, cwd, **kwargs):
+            for name, seq in outputs.items():
+                Path(cwd, name).write_text(f">x\n{seq}\n")
+            return type("P", (), {"communicate": lambda self: None})()
+
+        orient = []
+        out = tmp_path / "mt.fasta"
+        with patch("aaftf.mito.require_tools"), patch("aaftf.mito.estimate_read_length", return_value=150):
+            with patch("aaftf.mito.subprocess.Popen", side_effect=_fake_popen):
+                with patch("aaftf.mito._orient_to_start", side_effect=lambda draft, out, **kw: orient.append(Path(draft).name)):
+                    run(left="R1.fq", right="R2.fq", out=str(out), workdir=str(tmp_path / "wd"))
+        return orient, out
+
+    def test_circular_preferred(self, tmp_path):
+        orient, _ = self._run(tmp_path, {"Contigs_1_x.fasta": "AAAA", "Circularized_assembly_1_x.fasta": "CCCC", "Uncircularized_assemblies_x.fasta": "GGGG"})
+        assert orient == ["Circularized_assembly_1_x.fasta"]
+
+    def test_contigs_preferred_over_uncircularized(self, tmp_path):
+        orient, out = self._run(tmp_path, {"Uncircularized_assemblies_x.fasta": "GGGG", "Contigs_1_x.fasta": "AAAA"})
+        assert orient == [] and "AAAA" in out.read_text()
+
+    def test_no_assembly_raises(self, tmp_path):
+        with pytest.raises(RuntimeError, match="NOVOplasty did not produce an assembly"):
+            self._run(tmp_path, {})

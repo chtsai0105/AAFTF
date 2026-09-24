@@ -8,7 +8,9 @@ trimmed region, or on an excluded contig, are dropped.
 
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import Any, TextIO
 
 __all__ = ["TblFeature", "run", "fix_tbl", "parse_tbl", "parse_adjustments"]
 
@@ -32,24 +34,43 @@ class TblFeature:
     """
 
     key: str
-    intervals: list = field(default_factory=list)
-    qualifiers: list = field(default_factory=list)
+    intervals: list[list[str]] = field(default_factory=list)
+    qualifiers: list[str] = field(default_factory=list)
 
-    def to_tbl(self):
-        """Return the feature as .tbl text."""
+    def to_tbl(self) -> str:
+        """Return the feature as .tbl text.
+
+        Returns:
+            The feature's lines (key line, extra intervals, qualifiers), newline-terminated.
+        """
         lines = [f"{self.intervals[0][0]}\t{self.intervals[0][1]}\t{self.key}"]
         lines += [f"{start}\t{end}" for start, end in self.intervals[1:]]
         lines += self.qualifiers
         return "\n".join(lines) + "\n"
 
 
-def run(table, report, output, **kwargs):
-    """Run the fix_tbl subcommand."""
+def run(table: TextIO, report: TextIO, output: TextIO, **kwargs: Any) -> None:
+    """Run the fix_tbl subcommand.
+
+    Args:
+        table: Open .tbl file to fix.
+        report: Open NCBI FCS action report.
+        output: Open handle the fixed .tbl is written to.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``debug``, ``pipe``, ...); ignored.
+    """
     fix_tbl(table, report, output)
 
 
-def fix_tbl(tbl_fh, adjustment_fh, output_handle):
-    """Write ``tbl_fh`` to ``output_handle`` with coordinates fixed for the FCS trims in ``adjustment_fh``."""
+def fix_tbl(tbl_fh: Iterable[str], adjustment_fh: Iterable[str], output_handle: TextIO) -> None:
+    """Write ``tbl_fh`` to ``output_handle`` with coordinates fixed for the FCS trims in ``adjustment_fh``.
+
+    Excluded contigs, and features entirely inside trimmed regions, are dropped with a warning.
+
+    Args:
+        tbl_fh: Lines of the .tbl file.
+        adjustment_fh: Lines of the NCBI FCS action report.
+        output_handle: Handle the fixed .tbl is written to.
+    """
     features = parse_tbl(tbl_fh)
     adjustments = parse_adjustments(adjustment_fh)
     for seqid, feats in features.items():
@@ -66,9 +87,22 @@ def fix_tbl(tbl_fh, adjustment_fh, output_handle):
             output_handle.write(fixed.to_tbl())
 
 
-def parse_tbl(tbl_file_handle):
-    """Parse an NCBI .tbl file into ``{seqid: [TblFeature, ...]}`` (in file order)."""
-    features = {}
+def parse_tbl(tbl_file_handle: Iterable[str]) -> dict[str, list[TblFeature]]:
+    """Parse an NCBI .tbl file into ``{seqid: [TblFeature, ...]}`` (in file order).
+
+    Blank and ``#`` lines are skipped; unrecognised lines are skipped with a warning.
+
+    Args:
+        tbl_file_handle: Lines of the .tbl file.
+
+    Returns:
+        Features per sequence ID, in file order.
+
+    Raises:
+        ValueError: On a malformed header, a feature line before any header, or a coordinate
+            line that has no feature key and does not continue the previous feature.
+    """
+    features: dict[str, list[TblFeature]] = {}
     sequence_name = None
     for lineno, line in enumerate(tbl_file_handle, 1):
         line = line.rstrip("\r\n")
@@ -99,14 +133,21 @@ def parse_tbl(tbl_file_handle):
     return features
 
 
-def parse_adjustments(adj_file_handle):
+def parse_adjustments(adj_file_handle: Iterable[str]) -> dict[str, list[tuple[int, str, int, int]]]:
     """Parse an NCBI FCS action report into ``{seqid: [(length, action, start, end), ...]}``.
 
     The report is tab-separated (accession, length, action, range(s), ...) after a
     ``#accession`` header line; lines before that header are ignored. An
-    ``ACTION_EXCLUDE`` row without ranges covers the whole sequence.
+    ``ACTION_EXCLUDE`` row without ranges covers the whole sequence. Rows with a non-numeric
+    length are skipped with a warning.
+
+    Args:
+        adj_file_handle: Lines of the FCS action report.
+
+    Returns:
+        ``(length, action, start, end)`` tuples (1-based inclusive ranges) per sequence ID.
     """
-    adjustments = {}
+    adjustments: dict[str, list[tuple[int, str, int, int]]] = {}
     in_table = False
     for line in adj_file_handle:
         if not in_table:
@@ -115,9 +156,9 @@ def parse_adjustments(adj_file_handle):
         row = line.rstrip("\r\n").split("\t")
         if len(row) < 3 or not row[0] or row[0].startswith("#"):
             continue
-        seqid, length, action = row[0], row[1], row[2]
+        seqid, action = row[0], row[2]
         try:
-            length = int(length)
+            length = int(row[1])
         except ValueError:
             logger.warning(f"skipping FCS report line with a non-numeric length: {line.strip()}")
             continue
@@ -128,8 +169,19 @@ def parse_adjustments(adj_file_handle):
     return adjustments
 
 
-def _kept_window(seqid, trims):
-    """Return the ``(first, last)`` original coordinates of ``seqid`` that remain, or None if nothing does."""
+def _kept_window(seqid: str, trims: list[tuple[int, str, int, int]]) -> tuple[int, int | float] | None:
+    """Return the ``(first, last)`` original coordinates of ``seqid`` that remain, or None if nothing does.
+
+    Only trims touching a contig end move the window; internal trims are logged and ignored.
+
+    Args:
+        seqid: Sequence ID (used in warnings).
+        trims: ``(length, action, start, end)`` tuples for this sequence.
+
+    Returns:
+        The kept window; ``last`` is ``float("inf")`` when the 3' end was not trimmed. None if the
+        sequence was excluded or fully trimmed.
+    """
     first, last = 1, float("inf")
     for length, action, start, end in trims:
         if action == "ACTION_EXCLUDE" or (start == 1 and end == length):
@@ -143,11 +195,19 @@ def _kept_window(seqid, trims):
     return (first, last) if first <= last else None
 
 
-def _clip_feature(feat, first, last):
+def _clip_feature(feat: TblFeature, first: int, last: int | float) -> TblFeature | None:
     """Return ``feat`` clipped to ``first..last`` and shifted so ``first`` becomes 1, or None if nothing is left.
 
     The first coordinate is the feature's 5' end on either strand, so it gets ``<``
     when that end was cut off, and the last coordinate gets ``>`` when the 3' end was.
+
+    Args:
+        feat: Feature to clip; not modified.
+        first: First kept original coordinate.
+        last: Last kept original coordinate (may be ``float("inf")``).
+
+    Returns:
+        A new clipped feature, or None if no interval overlaps the window.
     """
     offset = first - 1
     kept = []
@@ -156,7 +216,7 @@ def _clip_feature(feat, first, last):
         low, high = sorted((start, end))
         if high < first or low > last:
             continue
-        low, high = max(low, first), min(high, last)
+        low, high = max(low, first), int(min(high, last))  # last may be float("inf")
         new_start, new_end = (high, low) if start > end else (low, high)
         kept.append((i, new_start, new_end, new_start != start, new_end != end))
     if not kept:

@@ -20,7 +20,6 @@ Most of these can be installed via conda packages. Noting that some tools have d
 ## Assemblers
 - SPAdes - https://github.com/ablab/spades
 - megahit - https://github.com/voutcn/megahit
-- dipspades - (SPAdes 3.11.1 - note it is not part of later SPAdes packages; legacy docs no longer available online)
 - NOVOplasty - https://github.com/ndierckx/NOVOPlasty for MT genome assembly
 - unicycler - https://github.com/rrwick/Unicycler (which runs spades)
 
@@ -185,33 +184,51 @@ The specified assembler can be made through the `--method` option.
 The full set of options are below.
 
 ```
-usage: AAFTF assemble [-h] [-q] [--method METHOD] -o OUT [-w WORKDIR]
-                      [-c cpus] [-m MEMORY] [-l LEFT] [-r RIGHT] [-v]
+usage: AAFTF assemble [-h] -l LEFT -o OUT [-r RIGHT] [-w WORKDIR]
+                      [--method {spades,megahit,unicycler}] [--merged MERGED]
                       [--tmpdir TMPDIR] [--assembler_args ASSEMBLER_ARGS]
-                      [--haplocontigs] [--pipe]
+                      [-c cpus] [-m MEMORY] [--pipe] [-q] [-v] [--no-careful]
+                      [--no-isolate] [-lr LONGREADS]
 
 Run assembler on cleaned reads
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  -q, --quiet           Only show warnings and errors
-  --method METHOD       Assembly method: spades, dipspades, megahit
-  -o OUT, --out OUT     Output assembly FASTA
-  -w WORKDIR, --workdir WORKDIR
-                        assembly output directory
-  -c cpus, --cpus cpus  Number of CPUs/threads to use.
-  -m MEMORY, --memory MEMORY
-                        Memory (in GB) setting for SPAdes. Default is 32
+
+required arguments:
   -l LEFT, --left LEFT  Left (Forward) reads
+  -o OUT, --out OUT     Output assembly FASTA
+
+optional arguments:
   -r RIGHT, --right RIGHT
                         Right (Reverse) reads
-  -v, --verbose         Show debug messages and tool stderr, and keep temporary
-                        working directories
+  -w WORKDIR, --workdir WORKDIR
+                        assembly output directory
+  --method {spades,megahit,unicycler}
+                        Assembly method: spades, megahit, unicycler (default:
+                        spades)
+  --merged MERGED       Merged reads from flash or fastp or just single end
+                        reads
   --tmpdir TMPDIR       Assembler temporary dir
   --assembler_args ASSEMBLER_ARGS
                         Additional SPAdes/Megahit arguments
-  --haplocontigs        For dipSPAdes take the haplocontigs file
+  -c cpus, --cpus cpus  Number of CPUs/threads to use. (default: 1)
+  -m MEMORY, --memory MEMORY
+                        Memory (in GB) setting for SPAdes (default: 32)
   --pipe                AAFTF is running in pipeline mode
+  -q, --quiet           Only show warnings and errors
+  -v, --verbose         Show debug messages and tool stderr, and keep
+                        temporary working directories
+
+SPAdes options:
+  --no-careful          Disable --careful mode in spades (Default: --careful
+                        is on) (default: True)
+  --no-isolate          Disable --isolate mode in spades (Default: --isolate
+                        is on) (default: True)
+
+Unicycler options:
+  -lr LONGREADS, --longreads LONGREADS
+                        Long Read fastq (pacbio or ONT)
 ```
 
 ```

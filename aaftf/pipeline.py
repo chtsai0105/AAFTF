@@ -8,6 +8,8 @@ Every step runs with its own ``AAFTF <step>`` defaults; only the options given t
 import argparse as ap
 import functools
 import logging
+from types import ModuleType
+from typing import Any
 
 import aaftf.assemble as assemble
 import aaftf.assess as assess
@@ -27,37 +29,62 @@ logger = logging.getLogger(__name__)
 
 
 def run(
-    left,
-    basename,
-    phylum,
-    right=None,
-    cpus=1,
-    tmpdir=None,
-    assembler_args=None,
-    method="spades",
-    memory=None,
-    minlen=75,
-    screen_accessions=None,
-    screen_urls=None,
-    mincontiglen=500,
-    workdir=None,
-    sourdb=None,
-    mincovpct=5,
-    debug=False,
-    quiet=False,
-    **kwargs,
-):
-    """Run the whole AAFTF pipeline, skipping steps whose output file already exists."""
+    left: str,
+    basename: str,
+    phylum: list[str],
+    right: str | None = None,
+    cpus: int = 1,
+    tmpdir: str | None = None,
+    assembler_args: list[str] | None = None,
+    method: str = "spades",
+    memory: int | None = None,
+    minlen: int = 75,
+    screen_accessions: list[str] | None = None,
+    screen_urls: list[str] | None = None,
+    mincontiglen: int = 500,
+    workdir: str | None = None,
+    sourdb: str | None = None,
+    mincovpct: int = 5,
+    debug: bool = False,
+    quiet: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the whole AAFTF pipeline, skipping steps whose output file already exists.
+
+    Args:
+        left: Left/forward (or single-end) raw FASTQ reads.
+        basename: Prefix for every output file (``{basename}_1P.fastq.gz``, ``{basename}.final.fasta``, ...).
+        phylum: Phyla whose sourmash matches are kept by ``sourpurge``.
+        right: Right/reverse raw FASTQ reads, or None for single-end data.
+        cpus: Threads for every step that takes ``-c/--cpus``.
+        tmpdir: Assembler temporary directory.
+        assembler_args: Extra arguments passed through to the assembler.
+        method: Assembler to use (``spades``, ``megahit`` or ``unicycler``).
+        memory: Memory in GB for steps that take ``-m/--memory``; None keeps each step's default.
+        minlen: Minimum read length after trimming.
+        screen_accessions: GenBank accessions to screen out of the reads in ``filter``.
+        screen_urls: URLs of sequences to screen out of the reads in ``filter``.
+        mincontiglen: Minimum contig length kept by ``rmdup`` and ``sort``.
+        workdir: Working directory for steps that take ``-w/--workdir``; None keeps each step's default.
+        sourdb: Sourmash LCA database for ``sourpurge``.
+        mincovpct: Minimum percent of N50 coverage below which ``sourpurge`` removes contigs.
+        debug: Show debug output and keep temporary files in every step.
+        quiet: Only show warnings and errors in every step.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``pipe``, ...); ignored.
+
+    Raises:
+        RuntimeError: If a step finishes without producing its expected output file.
+    """
     # passed to every step that has an option of the same name
     shared = {"cpus": cpus, "memory": memory, "workdir": workdir, "debug": debug, "quiet": quiet}
-    trimmed = [basename + "_1P.fastq.gz", basename + "_2P.fastq.gz" if right else None]
-    filtered = [basename + "_filtered_1.fastq.gz", basename + "_filtered_2.fastq.gz" if right else None]
+    trimmed_1, trimmed_2 = basename + "_1P.fastq.gz", (basename + "_2P.fastq.gz" if right else None)
+    filtered_1, filtered_2 = basename + "_filtered_1.fastq.gz", (basename + "_filtered_2.fastq.gz" if right else None)
 
-    _run_step(trim, "trim", trimmed[0], shared, left=left, right=right, basename=basename, minlen=minlen)
-    _run_step(aaftf_filter, "filter", filtered[0], shared, left=trimmed[0], right=trimmed[1], basename=basename, screen_accessions=screen_accessions, screen_urls=screen_urls)
+    _run_step(trim, "trim", trimmed_1, shared, left=left, right=right, basename=basename, minlen=minlen)
+    _run_step(aaftf_filter, "filter", filtered_1, shared, left=trimmed_1, right=trimmed_2, basename=basename, screen_accessions=screen_accessions, screen_urls=screen_urls)
 
     assembly = basename + f".{method}.fasta"
-    _run_step(assemble, "assemble", assembly, shared, left=filtered[0], right=filtered[1], out=assembly, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
+    _run_step(assemble, "assemble", assembly, shared, left=filtered_1, right=filtered_2, out=assembly, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
 
     vecscreen_file = basename + ".vecscreen.fasta"
     _run_step(vecscreen, "vecscreen", vecscreen_file, shared, infile=assembly, outfile=vecscreen_file)
@@ -70,8 +97,8 @@ def run(
         shared,
         input=vecscreen_file,
         outfile=sourpurge_file,
-        left=filtered[0],
-        right=filtered[1],
+        left=filtered_1,
+        right=filtered_2,
         phylum=phylum,
         sourdb=sourdb,
         mincovpct=mincovpct,
@@ -81,7 +108,7 @@ def run(
     _run_step(rmdup, "rmdup", rmdup_file, shared, input=sourpurge_file, out=rmdup_file, minlen=mincontiglen)
 
     polish_file = basename + ".polish.fasta"
-    _run_step(polish, "polish", polish_file, shared, infile=rmdup_file, outfile=polish_file, left=filtered[0], right=filtered[1])
+    _run_step(polish, "polish", polish_file, shared, infile=rmdup_file, outfile=polish_file, left=filtered_1, right=filtered_2)
 
     final_file = basename + ".final.fasta"
     _run_step(aaftf_sort, "sort", final_file, shared, input=polish_file, out=final_file, minlen=mincontiglen)
@@ -89,8 +116,19 @@ def run(
     assess.run(**_step_kwargs("assess", shared, input=final_file))
 
 
-def _run_step(module, name, output, shared, **step_options):
-    """Run ``module.run()`` for step ``name`` unless ``output`` already exists, then check that it does."""
+def _run_step(module: ModuleType, name: str, output: str, shared: dict[str, Any], **step_options: Any) -> None:
+    """Run ``module.run()`` for step ``name`` unless ``output`` already exists, then check that it does.
+
+    Args:
+        module: The AAFTF subcommand module whose ``run()`` to call.
+        name: Subcommand name, used to look up its CLI defaults and in log messages.
+        output: File the step must produce; the step is skipped if it already exists.
+        shared: Pipeline-wide options (see ``_step_kwargs``).
+        **step_options: Step-specific keyword arguments that override the defaults.
+
+    Raises:
+        RuntimeError: If ``output`` is missing or empty after the step runs.
+    """
     if check_file(output):
         logger.info(f"AAFTF {name} output found: {output}")
         return
@@ -99,12 +137,21 @@ def _run_step(module, name, output, shared, **step_options):
         raise RuntimeError(f"AAFTF {name} failed: {output} is missing or empty")
 
 
-def _step_kwargs(name, shared, **step_options):
+def _step_kwargs(name: str, shared: dict[str, Any], **step_options: Any) -> dict[str, Any]:
     """Return the run() keyword arguments for step ``name``: its CLI defaults, overridden by the pipeline's options.
 
     ``shared`` options are only passed to steps that have them, and a ``None``
     shared value (e.g. no pipeline ``--memory``) keeps the step's own default.
     Shared values take the type of the step's default (assemble's ``--memory`` is a string).
+    ``pipe`` is always set to True.
+
+    Args:
+        name: Subcommand name whose CLI defaults to start from.
+        shared: Pipeline-wide options (``cpus``, ``memory``, ``workdir``, ``debug``, ``quiet``).
+        **step_options: Step-specific keyword arguments; these override everything else.
+
+    Returns:
+        Keyword arguments ready to pass to the step module's ``run()``.
     """
     kwargs = dict(_subcommand_defaults()[name])
     for key, value in shared.items():
@@ -117,7 +164,7 @@ def _step_kwargs(name, shared, **step_options):
 
 
 @functools.cache
-def _subcommand_defaults():
+def _subcommand_defaults() -> dict[str, dict[str, Any]]:
     """Return ``{subcommand: {dest: default}}`` read from the AAFTF subcommand parsers."""
     from aaftf._menu import register_subcommands  # _menu imports this module, so import it when first needed
 

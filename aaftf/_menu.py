@@ -58,8 +58,11 @@ __all__ = [
 ]
 
 
-def register_subcommands(parser):
+def register_subcommands(parser: ap.ArgumentParser) -> ap._SubParsersAction:
     """Add every AAFTF subcommand to ``parser``, listed in ``AAFTF --help`` under three group titles.
+
+    Args:
+        parser: The top-level ``AAFTF`` parser.
 
     Returns:
         The subparsers action holding all the subcommands.
@@ -82,8 +85,15 @@ def register_subcommands(parser):
     return subparsers
 
 
-def database_menu(subparsers):
-    """Add the database subcommand parser."""
+def database_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the database subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``database`` subcommand parser.
+    """
     parser_database = subparsers.add_parser(
         "database",
         formatter_class=CustomHelpFormatter,
@@ -107,7 +117,7 @@ def database_menu(subparsers):
     return parser_database
 
 
-def menu_common_args(target):
+def menu_common_args(target: ap._ActionsContainer) -> ap._ActionsContainer:
     """Add the arguments common to every AAFTF subcommand parser.
 
     ``target`` is normally a subcommand's "optional arguments" group (from
@@ -115,6 +125,12 @@ def menu_common_args(target):
     after all of that subcommand's own optional arguments have been added,
     so ``--pipe``, ``-q/--quiet`` and ``-v/--verbose`` render as the final
     entries of that group.
+
+    Args:
+        target: The argument group (or parser) to add the arguments to.
+
+    Returns:
+        ``target``, for chaining.
     """
     target.add_argument("--pipe", action="store_true", help="AAFTF is running in pipeline mode")
     target.add_argument("-q", "--quiet", action="store_true", dest="quiet", help="Only show warnings and errors")
@@ -122,8 +138,15 @@ def menu_common_args(target):
     return target
 
 
-def trim_menu(subparsers):
-    """Add the trim subcommand parser."""
+def trim_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the trim subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``trim`` subcommand parser.
+    """
     parser_trim = subparsers.add_parser(
         "trim",
         formatter_class=CustomHelpFormatter,
@@ -221,8 +244,15 @@ def trim_menu(subparsers):
     return parser_trim
 
 
-def mito_menu(subparsers):
-    """Add the mito subcommand parser."""
+def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the mito subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``mito`` subcommand parser.
+    """
     parser_mito = subparsers.add_parser(
         "mito",
         description="De novo assembly of mitochondrial genome using NOVOplasty, takes PE Illumina adapter trimmed data.",
@@ -266,8 +296,15 @@ def mito_menu(subparsers):
     return parser_mito
 
 
-def filter_menu(subparsers):
-    """Add the filter subcommand parser."""
+def filter_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the filter subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``filter`` subcommand parser.
+    """
     parser_filter = subparsers.add_parser(
         "filter",
         description="Filter reads which match contaminant databases such as phiX",
@@ -316,8 +353,15 @@ def filter_menu(subparsers):
     return parser_filter
 
 
-def assemble_menu(subparsers):
-    """Add the assemble subcommand parser."""
+def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the assemble subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``assemble`` subcommand parser.
+    """
     parser_asm = subparsers.add_parser(
         "assemble",
         description="Run assembler on cleaned reads",
@@ -331,7 +375,7 @@ def assemble_menu(subparsers):
     required.add_argument(
         "-l",
         "--left",
-        required=True,  # every implemented --method (spades/dipspades/megahit/unicycler) requires this
+        required=True,  # every implemented --method (spades/megahit/unicycler) requires this
         help="Left (Forward) reads",
     )
 
@@ -350,9 +394,9 @@ def assemble_menu(subparsers):
     optional.add_argument(
         "--method",
         type=str,
-        choices=["spades", "dipspades", "megahit", "unicycler"],
+        choices=["spades", "megahit", "unicycler"],
         default="spades",
-        help="Assembly method: spades, dipspades, megahit, unicycler",
+        help="Assembly method: spades, megahit, unicycler",
     )
 
     optional.add_argument("--merged", dest="merged", help="Merged reads from flash or fastp or just single end reads")
@@ -381,10 +425,6 @@ def assemble_menu(subparsers):
         help="Disable --isolate mode in spades (Default: --isolate is on)",
     )
 
-    dipspades_group = parser_asm.add_argument_group(title="dipSPAdes options")
-
-    dipspades_group.add_argument("--haplocontigs", dest="haplocontigs", default=False, action="store_true", help="For dipSPAdes take the haplocontigs file")
-
     unicycler_group = parser_asm.add_argument_group(title="Unicycler options")
 
     unicycler_group.add_argument("-lr", "--longreads", help="Long Read fastq (pacbio or ONT)")
@@ -393,8 +433,15 @@ def assemble_menu(subparsers):
     return parser_asm
 
 
-def vecscreen_menu(subparsers):
-    """Add the vecscreen subcommand parser."""
+def vecscreen_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the vecscreen subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``vecscreen`` subcommand parser.
+    """
     parser_vecscreen = subparsers.add_parser(
         "vecscreen",
         description="Screen contigs for vector and common contaminantion",
@@ -430,8 +477,15 @@ def vecscreen_menu(subparsers):
     return parser_vecscreen
 
 
-def fcs_screen_menu(subparsers):
-    """Add the fcs_screen subcommand parser."""
+def fcs_screen_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the fcs_screen subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``fcs_screen`` subcommand parser.
+    """
     parser_fcs_screen = subparsers.add_parser(
         "fcs_screen",
         description="Screen with NCBI fcs tool contigs for vector and common contaminantion",
@@ -475,8 +529,15 @@ def fcs_screen_menu(subparsers):
     return parser_fcs_screen
 
 
-def fcs_gx_purge_menu(subparsers):
-    """Add the fcs_gx_purge subcommand parser."""
+def fcs_gx_purge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the fcs_gx_purge subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``fcs_gx_purge`` subcommand parser.
+    """
     parser_fcsgx = subparsers.add_parser(
         "fcs_gx_purge",
         description="Purge contigs based on fcs_gx results",
@@ -522,8 +583,15 @@ def fcs_gx_purge_menu(subparsers):
     return parser_fcsgx
 
 
-def sourpurge_menu(subparsers):
-    """Add the sourpurge subcommand parser."""
+def sourpurge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the sourpurge subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``sourpurge`` subcommand parser.
+    """
     parser_sour = subparsers.add_parser(
         "sourpurge",
         description="Purge contigs based on sourmash results",
@@ -581,8 +649,15 @@ def sourpurge_menu(subparsers):
     return parser_sour
 
 
-def rmdup_menu(subparsers):
-    """Add the rmdup subcommand parser."""
+def rmdup_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the rmdup subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``rmdup`` subcommand parser.
+    """
     parser_rmdup = subparsers.add_parser(
         "rmdup",
         description="Remove duplicate contigs",
@@ -646,8 +721,15 @@ def rmdup_menu(subparsers):
     return parser_rmdup
 
 
-def polish_menu(subparsers):
-    """Add the polish subcommand parser."""
+def polish_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the polish subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``polish`` subcommand parser.
+    """
     parser_polish = subparsers.add_parser(
         "polish",
         description="Polish contig sequences with pypolca, Polypolish, or NextPolish2",
@@ -702,8 +784,15 @@ def polish_menu(subparsers):
     return parser_polish
 
 
-def sort_menu(subparsers):
-    """Add the sort subcommand parser."""
+def sort_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the sort subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``sort`` subcommand parser.
+    """
     parser_sort = subparsers.add_parser(
         "sort",
         description="Sort contigs by length and rename FASTA headers",
@@ -728,8 +817,15 @@ def sort_menu(subparsers):
     return parser_sort
 
 
-def assess_menu(subparsers):
-    """Add the assess subcommand parser."""
+def assess_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the assess subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``assess`` subcommand parser.
+    """
     parser_assess = subparsers.add_parser(
         "assess",
         description="Assess completeness of genome assembly",
@@ -762,8 +858,15 @@ def assess_menu(subparsers):
     return parser_assess
 
 
-def fix_tbl_menu(subparsers):
-    """Add the fix_tbl subcommand parser."""
+def fix_tbl_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the fix_tbl subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``fix_tbl`` subcommand parser.
+    """
     parser_fix = subparsers.add_parser(
         "fix_tbl",
         description="Fix NCBI tbl file from a trim report from NCBI-FCS",
@@ -786,8 +889,15 @@ def fix_tbl_menu(subparsers):
     return parser_fix
 
 
-def depth_menu(subparsers):
-    """Add the depth subcommand parser."""
+def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the depth subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``depth`` subcommand parser.
+    """
     parser_depth = subparsers.add_parser(
         "depth",
         description=("Calculate depth of coverage by mapping Illumina and/or long reads to a genome assembly with minimap2 (or bwa), then running mosdepth to compute per-contig depth statistics.  Contigs with mean depth > assembly_mean + 3*SD are flagged as possible contaminants or organellar sequences."),
@@ -890,8 +1000,15 @@ def depth_menu(subparsers):
     return parser_depth
 
 
-def pipeline_menu(subparsers):
-    """Add the pipeline subcommand parser."""
+def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the pipeline subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``pipeline`` subcommand parser.
+    """
     parser_pipeline = subparsers.add_parser(
         "pipeline",
         description="Run the AAFTF pipeline: trim, filter, assemble, vecscreen, sourpurge, rmdup, polish, sort and assess. Each step uses its own defaults (see AAFTF <step> -h); only the options below override them.",
@@ -904,7 +1021,7 @@ def pipeline_menu(subparsers):
 
     required.add_argument("-l", "--left", type=str, required=True, help="left/forward reads of paired-end FASTQ or single-end FASTQ.")
 
-    required.add_argument("-o", "--out", type=str, required=True, dest="basename", help="Output basename, default to base name of --left reads")
+    required.add_argument("-o", "--out", type=str, required=True, dest="basename", help="Output basename (prefix for every step's output files)")
 
     required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or Phyla to keep matches, i.e. Ascomycota")
 
@@ -912,7 +1029,7 @@ def pipeline_menu(subparsers):
 
     optional.add_argument("--tmpdir", type=str, help="Assembler temporary dir")
     optional.add_argument("--assembler_args", action="append", help="Additional SPAdes/Megahit arguments")
-    optional.add_argument("--method", type=str, default="spades", help="Assembly method: spades, dipspades, megahit")
+    optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler"], default="spades", help="Assembly method: spades, megahit, unicycler")
 
     optional.add_argument("-r", "--right", type=str, help="right/reverse reads of paired-end FASTQ.")
 
@@ -938,8 +1055,15 @@ def pipeline_menu(subparsers):
     return parser_pipeline
 
 
-def dependency_menu(subparsers):
-    """Add the dependency subcommand parser."""
+def dependency_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the dependency subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``dependency`` subcommand parser.
+    """
     parser_dependency = subparsers.add_parser(
         "dependency",
         formatter_class=CustomHelpFormatter,

@@ -15,18 +15,12 @@ The assembler is selected with ``--method``:
   ``--workdir`` already exists from a prior run, AAFTF instead resumes with
   ``spades.py --restart-from last`` rather than restarting from scratch. Final assembly is copied
   from SPAdes' ``scaffolds.fasta``.
-* **dipspades** -- SPAdes' diploid-aware assembler (only available in SPAdes <= 3.11.1; not
-  packaged in later SPAdes releases). Supports resuming via ``dipspades.py --continue``. Final
-  assembly is copied from ``consensus_contigs.fasta``, with paired/unpaired haplotig FASTAs also
-  copied out if ``--haplocontigs`` matched files under the ``dipspades/`` subdirectory.
 * **megahit** -- fast De Bruijn graph assembler, generally lower accuracy than SPAdes but much
   faster/lower memory; does not support resuming (an existing workdir with the same name errors).
   Final assembly is copied from ``final.contigs.fa``.
 * **unicycler** -- wraps SPAdes with additional scaffolding logic; supports combining
   short reads with ``--longreads`` (hybrid assembly). Final assembly is copied from
   ``assembly.fasta``.
-* **masurca** / **nextdenovo** -- accepted as ``--method`` values but not yet implemented; AAFTF
-  will print a message and exit without assembling.
 
 Cutoffs / defaults
 ===================
@@ -40,7 +34,7 @@ Cutoffs / defaults
      - Meaning
    * - ``--method``
      - spades
-     - spades / dipspades / megahit / unicycler
+     - spades / megahit / unicycler
    * - ``-m/--memory``
      - 32 (GB)
      - Passed to SPAdes ``--mem`` / megahit ``--memory``
@@ -64,11 +58,11 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF assemble --method {spades,dipspades,megahit,unicycler} -o OUT
+    AAFTF assemble --method {spades,megahit,unicycler} -o OUT
                    [-w WORKDIR] [-c CPUS] [-m MEMORY]
                    [-l LEFT] [-r RIGHT] [-lr LONGREADS] [--single/--merged FILE]
                    [--careful/--no-careful] [--isolate/--no-isolate]
-                   [--tmpdir DIR] [--assembler_args ARG ...] [--haplocontigs FILE]
+                   [--tmpdir DIR] [--assembler_args ARG ...]
                    [-v] [--pipe]
 
 ``-o/--out`` is required (output assembly FASTA path). ``--assembler_args`` may be repeated to

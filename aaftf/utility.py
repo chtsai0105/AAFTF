@@ -11,9 +11,11 @@ import subprocess
 import textwrap
 import urllib.request
 import uuid
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from http.client import HTTPMessage
 from itertools import islice
 from pathlib import Path
-from typing import NamedTuple
+from typing import IO, Any, BinaryIO, NamedTuple, TextIO, cast
 
 import psutil
 from Bio.SeqIO.FastaIO import SimpleFastaParser
@@ -79,29 +81,65 @@ class CustomHelpFormatter(ap.HelpFormatter):
     in the help message if not already present.
     """
 
-    def _fill_text(self, text, width, indent):
-        """Format the class/function docstring with appropriate wrapping."""
-        text = [self._whitespace_matcher.sub(" ", paragraph.strip()) for paragraph in text.split("\n\n") if paragraph.strip()]
-        return "\n\n".join([textwrap.fill(line, width) for line in text])
+    def _fill_text(self, text: str, width: int, indent: str) -> str:
+        """Re-wrap a description/epilog paragraph by paragraph, keeping blank-line breaks.
 
-    def _split_lines(self, text, width):
-        """Enable multi-line display in argument help message."""
-        text = [self._whitespace_matcher.sub(" ", line.strip()) for line in text.split("\n") if line.strip()]
-        return [wrapped_line for line in text for wrapped_line in textwrap.wrap(line, width)]
+        Args:
+            text: Description or epilog text; paragraphs are separated by blank lines.
+            width: Maximum line width.
+            indent: Indentation argparse asks for; ignored.
 
-    def _get_help_string(self, action):
-        """Allow additional message after default parameter displayed."""
+        Returns:
+            The re-wrapped text.
+        """
+        paragraphs = [self._whitespace_matcher.sub(" ", paragraph.strip()) for paragraph in text.split("\n\n") if paragraph.strip()]
+        return "\n\n".join([textwrap.fill(paragraph, width) for paragraph in paragraphs])
+
+    def _split_lines(self, text: str, width: int) -> list[str]:
+        """Wrap argument help, keeping the help string's own line breaks.
+
+        Args:
+            text: Argument help text.
+            width: Maximum line width.
+
+        Returns:
+            The wrapped lines.
+        """
+        lines = [self._whitespace_matcher.sub(" ", line.strip()) for line in text.split("\n") if line.strip()]
+        return [wrapped_line for line in lines for wrapped_line in textwrap.wrap(line, width)]
+
+    def _get_help_string(self, action: ap.Action) -> str | None:
+        """Append ``(default: ...)`` to an argument's help unless it already mentions its default.
+
+        Nothing is appended when the default is suppressed, None or False, or when the argument
+        has no help text.
+
+        Args:
+            action: The argument whose help is being formatted.
+
+        Returns:
+            The help string (a %-format template argparse fills in).
+        """
         help = action.help
+        if help is None:
+            return None
         pattern = r"\(default: .+\)"
-        if re.search(pattern, action.help) is None:
+        if re.search(pattern, help) is None:
             if action.default is not ap.SUPPRESS and action.default is not None and action.default is not False:
                 defaulting_nargs = [ap.OPTIONAL, ap.ZERO_OR_MORE]
                 if action.option_strings or action.nargs in defaulting_nargs:
                     help += " (default: %(default)s)"
         return help
 
-    def _format_action(self, action):
-        """List a SubcommandGroup's subcommands directly under its group title, without a header line."""
+    def _format_action(self, action: ap.Action) -> str:
+        """List a SubcommandGroup's subcommands directly under its group title, without a header line.
+
+        Args:
+            action: The action to format; any non-``SubcommandGroup`` is formatted as usual.
+
+        Returns:
+            The formatted help text for the action.
+        """
         if isinstance(action, SubcommandGroup):
             return "".join(self._format_action(sub) for sub in action.subcommands)
         return super()._format_action(action)
@@ -115,21 +153,51 @@ class SubcommandGroup(ap.Action):
     (``help=argparse.SUPPRESS``) to show them in sections. It is never parsed.
     """
 
-    def __init__(self, subcommands):
-        """Store ``subcommands``, the help entries (from the subparsers action's ``_choices_actions``) to list."""
+    def __init__(self, subcommands: list[ap.Action]) -> None:
+        """Store the subcommand help entries to list.
+
+        Args:
+            subcommands: Help entries taken from the subparsers action's ``_choices_actions``.
+        """
         super().__init__(option_strings=[], dest=ap.SUPPRESS, nargs=0, metavar="")
         self.subcommands = subcommands
 
-    def _get_subactions(self):
-        """Let the help formatter size its columns to fit the listed subcommands."""
+    def _get_subactions(self) -> list[ap.Action]:
+        """Let the help formatter size its columns to fit the listed subcommands.
+
+        Returns:
+            The listed subcommand help entries.
+        """
         return self.subcommands
 
-    def __call__(self, parser, namespace, values, option_string=None):
-        """Never called: this action is not registered with the parser."""
+    def __call__(self, parser: ap.ArgumentParser, namespace: ap.Namespace, values: Any, option_string: str | None = None) -> None:
+        """Do nothing; never called, because this action is not registered with the parser.
+
+        Args:
+            parser: Unused.
+            namespace: Unused.
+            values: Unused.
+            option_string: Unused.
+        """
 
 
 class PafHit(NamedTuple):
-    """One alignment from minimap2's PAF output (its 12 standard columns; coordinates are 0-based)."""
+    """One alignment from minimap2's PAF output (its 12 standard columns; coordinates are 0-based).
+
+    Attributes:
+        query: Query sequence name.
+        query_len: Query sequence length.
+        query_start: Query start (0-based).
+        query_end: Query end (exclusive).
+        strand: ``+`` or ``-``.
+        target: Target sequence name.
+        target_len: Target sequence length.
+        target_start: Target start (0-based).
+        target_end: Target end (exclusive).
+        matches: Number of matching bases.
+        aln_len: Alignment block length, including gaps.
+        mapq: Mapping quality (0-255).
+    """
 
     query: str
     query_len: int
@@ -145,31 +213,68 @@ class PafHit(NamedTuple):
     mapq: int
 
 
-def concat_files(paths, dest):
-    """Concatenate files (gzipped ones are decompressed) into ``dest``."""
+def concat_files(paths: Iterable[str | Path], dest: str | Path) -> None:
+    """Concatenate files (gzipped ones are decompressed) into ``dest``.
+
+    Args:
+        paths: Files to concatenate, in order.
+        dest: Output file (overwritten).
+    """
     with open(dest, "wb") as out:
         for path in paths:
             with open_maybe_gz(path, "rb") as fh:
                 shutil.copyfileobj(fh, out)
 
 
-def open_maybe_gz(path, mode="rt"):
-    """Open ``path`` with gzip if its name ends in ``.gz``, else as a plain file."""
-    return (gzip.open if str(path).endswith(".gz") else open)(path, mode)
+def open_maybe_gz(path: str | Path, mode: str = "rt") -> IO[Any]:
+    """Open ``path`` with gzip if its name ends in ``.gz``, else as a plain file.
+
+    Args:
+        path: File to open.
+        mode: Open mode, e.g. ``"rt"`` or ``"rb"``.
+
+    Returns:
+        The open file object.
+    """
+    return cast(IO[Any], (gzip.open if str(path).endswith(".gz") else open)(path, mode))
 
 
-def estimate_read_length(input):
-    """Guess the read length in a FASTQ file, rounded to the nearest 10bp."""
+def estimate_read_length(input: str | Path) -> int:
+    """Guess the read length in a FASTQ file, rounded to the nearest 10bp.
+
+    Uses the longest of the first 500 reads.
+
+    Args:
+        input: FASTQ file, optionally gzipped.
+
+    Returns:
+        The estimated read length.
+    """
     with open_maybe_gz(input) as infile:
         records = islice(FastqGeneralIterator(infile), 500)
         max_len = max(len(seq) for _, seq, _ in records)
     return round(max_len, -1)
 
 
-def check_file(input):
-    """Check that file to read is valid."""
+def check_file(input: str | Path) -> bool:
+    """Check that ``input`` is an existing, non-empty regular file.
 
-    def _get_size(filename):
+    Args:
+        input: File path to check.
+
+    Returns:
+        True if the file exists and is at least 1 byte long.
+    """
+
+    def _get_size(filename: str | Path) -> int:
+        """Return the size of ``filename`` in bytes.
+
+        Args:
+            filename: File path.
+
+        Returns:
+            File size in bytes.
+        """
         st = os.stat(filename)
         return st.st_size
 
@@ -178,13 +283,16 @@ def check_file(input):
     return False
 
 
-def available_cpus():
+def available_cpus() -> int:
     """Return how many CPUs this process may use.
 
     Checks, in order: the SLURM allocation (``SLURM_CPUS_PER_TASK``), the CPU
     affinity set (respects ``taskset``, SLURM CPU binding and cgroup cpusets),
     then the machine's CPU count where affinity is unavailable (macOS, Windows).
     CPU time quotas such as ``docker --cpus`` are not detected.
+
+    Returns:
+        Number of usable CPUs (at least 1).
     """
     slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK", "")
     if slurm_cpus.isdigit() and int(slurm_cpus) > 0:
@@ -194,7 +302,7 @@ def available_cpus():
     return os.cpu_count() or 1
 
 
-def get_ram(max_lim=0):
+def get_ram(max_lim: float = 0) -> float:
     """Get the available RAM on system, in GB, kept safely under the true value.
 
     Rounded down to the nearest 10 once available RAM exceeds 10 GB;
@@ -205,15 +313,25 @@ def get_ram(max_lim=0):
     HPC allocations.
 
     Args:
-        max_lim: Optional upper bound (GB) to cap the result at.
+        max_lim: Optional upper bound (GB) to cap the result at; 0 means no cap.
+
+    Returns:
+        Available RAM in GB.
     """
     avail_gb = psutil.virtual_memory().available / (1024.0**3)
     safe_gb = avail_gb // 10 * 10 if avail_gb > 10 else max(round(avail_gb, 1) - 0.1, 0)
     return min(safe_gb, max_lim) if max_lim else safe_gb
 
 
-def fasta_stats(input):
-    """Return (number of records, total sequence length) of a FASTA file."""
+def fasta_stats(input: str | Path) -> tuple[int, int]:
+    """Return (number of records, total sequence length) of a FASTA file.
+
+    Args:
+        input: Uncompressed FASTA file.
+
+    Returns:
+        Tuple (number of records, total sequence length).
+    """
     count = length = 0
     with open(input) as f:
         for line in f:
@@ -224,12 +342,18 @@ def fasta_stats(input):
     return count, length
 
 
-def filter_fasta(fasta_in, fasta_out, keep, wrap=60):
+def filter_fasta(fasta_in: str | Path, fasta_out: str | Path, keep: Callable[[str], Any], wrap: int = 60) -> tuple[int, int]:
     """Write records whose ID passes ``keep(id)`` to fasta_out, wrapped at ``wrap`` columns.
 
     The ID is the first whitespace-delimited word of the header (as Biopython's
     ``record.id``); the full header line is kept. The default 60-column wrap
     matches Biopython's ``SeqIO.write``.
+
+    Args:
+        fasta_in: Input FASTA file.
+        fasta_out: Output FASTA file (overwritten).
+        keep: Predicate called with each record ID; truthy keeps the record.
+        wrap: Sequence line width.
 
     Returns:
         Tuple (number of records written, total length written).
@@ -244,23 +368,44 @@ def filter_fasta(fasta_in, fasta_out, keep, wrap=60):
     return count, length
 
 
-def write_fasta(fh, header, seq, wrap=60):
-    """Write one FASTA record to an open file handle, wrapped at ``wrap`` columns."""
+def write_fasta(fh: TextIO, header: str, seq: str, wrap: int = 60) -> None:
+    """Write one FASTA record to an open file handle, wrapped at ``wrap`` columns.
+
+    Args:
+        fh: Text file handle open for writing.
+        header: Header line without the leading ``>``.
+        seq: Sequence; if empty, only the header is written.
+        wrap: Sequence line width.
+    """
     fh.write(f">{header}\n")
     if seq:
         fh.write(f"{softwrap(seq, wrap)}\n")
 
 
-def softwrap(string, every=60):
-    """Softwrap lines in a textstring (60 columns by default, as Biopython's SeqIO.write)."""
+def softwrap(string: str, every: int = 60) -> str:
+    """Softwrap lines in a textstring (60 columns by default, as Biopython's SeqIO.write).
+
+    Args:
+        string: Text to wrap.
+        every: Line width.
+
+    Returns:
+        The text split into newline-joined chunks of ``every`` characters.
+    """
     return "\n".join(string[i : i + every] for i in range(0, len(string), every))
 
 
-def count_fastq(input):
+def count_fastq(input: str) -> int:
     """Count the number of records in a FASTQ file (gzip or regular).
 
     Gzipped input is decompressed with pigz (or gzip) when available, which is
     much faster than Python's gzip module.
+
+    Args:
+        input: FASTQ file path; a ``.gz`` suffix marks it as gzipped.
+
+    Returns:
+        Number of records (line count divided by 4).
 
     Raises:
         OSError: If the file is missing or not valid gzip.
@@ -269,6 +414,7 @@ def count_fastq(input):
     decompressor = input.endswith(".gz") and (shutil.which("pigz") or shutil.which("gzip"))
     if decompressor:
         with subprocess.Popen([decompressor, "-dc", input], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as proc:
+            assert proc.stdout is not None  # stdout=PIPE always sets it
             lines = _count_lines(proc.stdout)
         if proc.returncode:
             raise subprocess.CalledProcessError(proc.returncode, [decompressor, "-dc", input])
@@ -278,8 +424,12 @@ def count_fastq(input):
     return lines // 4
 
 
-def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, debug=False):
+def align_to_sorted_bam(align_cmd: Sequence[str], bam_out: str | Path, threads: int = 1, cwd: str | Path | None = None, debug: bool = False) -> None:
     """Pipe an aligner's SAM output straight into ``samtools sort``.
+
+    The BAM is indexed (``<bam_out>.bai``) as it is written. If either command
+    fails, any partial BAM/index is removed so a rerun does not mistake it for
+    a finished alignment.
 
     Args:
         align_cmd: Aligner command list that writes SAM to stdout.
@@ -289,9 +439,8 @@ def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, debug=False):
         cwd: Working directory for both commands.
         debug: Show both commands' stderr (hidden otherwise).
 
-    The BAM is indexed (``<bam_out>.bai``) as it is written. Exits the program
-    if either command fails, removing any partial BAM/index so a rerun does not
-    mistake it for a finished alignment.
+    Raises:
+        RuntimeError: If the aligner or ``samtools sort`` exits non-zero.
     """
     bam_path = Path(bam_out).resolve()
     sort_cmd = samtools_sort_cmd("-", str(bam_path), threads, write_index=True)
@@ -300,6 +449,7 @@ def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, debug=False):
     print_cmd(sort_cmd)
     p1 = subprocess.Popen(align_cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=stderr)
     p2 = subprocess.Popen(sort_cmd, cwd=cwd, stdin=p1.stdout, stderr=stderr)
+    assert p1.stdout is not None  # stdout=PIPE always sets it
     p1.stdout.close()
     p2.communicate()
     if p1.wait() != 0 or p2.returncode != 0:
@@ -308,7 +458,7 @@ def align_to_sorted_bam(align_cmd, bam_out, threads=1, cwd=None, debug=False):
         raise RuntimeError(f"{align_cmd[0]} | samtools sort failed for {bam_out}")
 
 
-def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None, tmp_prefix=None, write_index=False):
+def samtools_sort_cmd(input_file: str, output_bam: str, threads: int = 1, memory_per_thread: str | None = None, tmp_prefix: str | None = None, write_index: bool = False) -> list[str]:
     """Return a ``samtools sort`` command list (samtools >= 1.13; pixi pins >= 1.24).
 
     Args:
@@ -318,6 +468,9 @@ def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None,
         memory_per_thread: Memory per thread string, e.g. ``'1G'``.
         tmp_prefix: Prefix for temporary sort files (passed as -T).
         write_index: Also write ``<output_bam>.bai`` while sorting.
+
+    Returns:
+        The command as a list of arguments.
     """
     cmd = ["samtools", "sort", "-@", str(threads)]
     if memory_per_thread:
@@ -332,19 +485,29 @@ def samtools_sort_cmd(input_file, output_bam, threads=1, memory_per_thread=None,
     return cmd
 
 
-def print_cmd(cmd):
-    """Print out a command for debugging."""
+def print_cmd(cmd: Sequence[str]) -> None:
+    """Print a command, wrapped at 80 columns with a coloured ``CMD:`` prefix.
+
+    Args:
+        cmd: Command list.
+    """
     stringcmd = "{:}".format(" ".join(cmd))
     prefix = "\033[96mCMD:\033[00m "
     wrapper = textwrap.TextWrapper(initial_indent=prefix, width=80, subsequent_indent=" " * 8, break_long_words=False)
     print(wrapper.fill(stringcmd))
 
 
-def bam_read_count(bamfile):
+def bam_read_count(bamfile: str) -> tuple[int, int]:
     """Return (mapped, unmapped) counts of reads in a BAM file.
 
     Uses ``samtools flagstat`` primary counts, so secondary and supplementary
     alignments are not counted as extra reads.
+
+    Args:
+        bamfile: BAM file path.
+
+    Returns:
+        Tuple (mapped reads, unmapped reads).
     """
     stats = {}
     for line in execute(["samtools", "flagstat", "-O", "tsv", bamfile], quiet=True):
@@ -356,12 +519,15 @@ def bam_read_count(bamfile):
 
 # from https://stackoverflow.com/questions/4417546/
 # constantly-print-subprocess-output-while-process-is-running
-def paf_hits(cmd, **execute_args):
+def paf_hits(cmd: Sequence[str], **execute_args: Any) -> Iterator[PafHit]:
     """Run a PAF-producing command (e.g. ``minimap2 -x ...``) and yield each alignment as a ``PafHit``.
 
     Args:
         cmd: Command list whose stdout is PAF.
         **execute_args: Passed to ``execute`` (``cwd``, ``debug``, ``quiet``).
+
+    Yields:
+        One ``PafHit`` per PAF line with at least 12 columns.
     """
     for line in execute(cmd, **execute_args):
         cols = line.rstrip("\n").split("\t")
@@ -370,7 +536,7 @@ def paf_hits(cmd, **execute_args):
         yield PafHit(cols[0], int(cols[1]), int(cols[2]), int(cols[3]), cols[4], cols[5], *map(int, cols[6:12]))
 
 
-def execute(cmd, cwd=None, debug=False, quiet=False):
+def execute(cmd: Sequence[str], cwd: str | Path | None = None, debug: bool = False, quiet: bool = False) -> Iterator[str]:
     """Run a command and yield its stdout line by line.
 
     Args:
@@ -378,6 +544,9 @@ def execute(cmd, cwd=None, debug=False, quiet=False):
         cwd: Working directory.
         debug: Show the command's stderr (hidden otherwise).
         quiet: Don't print the command (e.g. when it runs once per contig).
+
+    Yields:
+        Each stdout line, including its trailing newline.
 
     Raises:
         subprocess.CalledProcessError: If the command fails and all its output
@@ -387,6 +556,7 @@ def execute(cmd, cwd=None, debug=False, quiet=False):
     if not quiet:
         print_cmd(cmd)
     proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, text=True, stderr=None if debug else subprocess.DEVNULL)
+    assert proc.stdout is not None  # stdout=PIPE always sets it
     finished = False
     try:
         yield from proc.stdout
@@ -400,12 +570,19 @@ def execute(cmd, cwd=None, debug=False, quiet=False):
         raise subprocess.CalledProcessError(return_code, cmd)
 
 
-def calc_nx(lengths, fraction=0.5):
+def calc_nx(lengths: Sequence[int], fraction: float = 0.5) -> tuple[int, int]:
     """Return (NX, LX) for a set of contig lengths.
 
     NX is the length of the contig at which the longest contigs first cover
     ``fraction`` of the total length; LX is how many contigs that takes.
-    Returns (0, 0) for an empty input. The input is not modified.
+    The input is not modified.
+
+    Args:
+        lengths: Contig lengths.
+        fraction: Fraction of the total length to cover, e.g. 0.5 for N50.
+
+    Returns:
+        Tuple (NX, LX); (0, 0) for an empty input.
     """
     target = sum(lengths) * fraction
     cumulative = 0
@@ -416,7 +593,7 @@ def calc_nx(lengths, fraction=0.5):
     return 0, 0
 
 
-def run_cmd(cmd, debug=False, cwd=None, stdout=None, env=None, quiet_stdout=False):
+def run_cmd(cmd: Sequence[str], debug: bool = False, cwd: str | Path | None = None, stdout: IO[Any] | int | None = None, env: dict[str, str] | None = None, quiet_stdout: bool = False) -> subprocess.CompletedProcess[bytes]:
     """Print a command, then run it with stderr hidden unless ``debug``.
 
     Args:
@@ -428,7 +605,7 @@ def run_cmd(cmd, debug=False, cwd=None, stdout=None, env=None, quiet_stdout=Fals
         quiet_stdout: Also hide stdout unless ``debug``.
 
     Returns:
-        subprocess.CompletedProcess.
+        The finished process; the exit status is not checked.
     """
     print_cmd(cmd)
     if quiet_stdout and not debug:
@@ -436,24 +613,47 @@ def run_cmd(cmd, debug=False, cwd=None, stdout=None, env=None, quiet_stdout=Fals
     return subprocess.run(cmd, cwd=cwd, stdout=stdout, stderr=None if debug else subprocess.DEVNULL, env=env)
 
 
-def require_tools(tools, hint=None):
-    """Raise FileNotFoundError naming any of ``tools`` that are not on PATH."""
+def require_tools(tools: Iterable[str], hint: str | None = None) -> None:
+    """Raise FileNotFoundError naming any of ``tools`` that are not on PATH.
+
+    Args:
+        tools: Executable names to look up.
+        hint: Advice appended to the error; a generic install hint when None.
+
+    Raises:
+        FileNotFoundError: If any tool is missing from PATH.
+    """
     missing = [tool for tool in tools if shutil.which(tool) is None]
     if missing:
         hint = hint or "Install them (e.g. `conda install -c bioconda <tool>`) and make sure the correct environment is activated."
         raise FileNotFoundError(f"required tool(s) not found on PATH: {', '.join(missing)}\n{hint}")
 
 
-def next_step_name(outfile, suffix):
-    """Suggest the next step's output name: ``outfile`` up to its first '_' (else first '.') plus ``suffix``."""
+def next_step_name(outfile: str, suffix: str) -> str:
+    """Suggest the next step's output name: ``outfile`` up to its first '_' (else first '.') plus ``suffix``.
+
+    Args:
+        outfile: This step's output filename.
+        suffix: Suffix for the next step, e.g. ``".sourpurge.fasta"``.
+
+    Returns:
+        The suggested filename.
+    """
     for sep in ("_", "."):
         if sep in outfile:
             return outfile.split(sep)[0] + suffix
     return outfile + suffix
 
 
-def basename_from_reads(reads):
-    """Derive a sample basename from a reads filename: the name up to its first '_' (else first '.')."""
+def basename_from_reads(reads: str | Path) -> str:
+    """Derive a sample basename from a reads filename: the name up to its first '_' (else first '.').
+
+    Args:
+        reads: Reads file path; only its final component is used.
+
+    Returns:
+        The sample basename.
+    """
     name = Path(reads).name
     for sep in ("_", "."):
         if sep in name:
@@ -461,16 +661,22 @@ def basename_from_reads(reads):
     return name
 
 
-def require_databases(names, hint=None):
+def require_databases(names: Iterable[str], hint: str | None = None) -> list[str]:
     """Return the stored paths of catalog databases ``names`` (keys of ``resources.DATABASES``).
 
     Subcommands never download these themselves: if any is missing from every
-    ``db_dirs()`` folder, log the ``AAFTF database`` command that fetches them
-    and exit.
+    ``db_dirs()`` folder, raise an error naming the ``AAFTF database`` command
+    that fetches them.
 
     Args:
         names: Database abbreviations, e.g. ``["phix", "univec"]``.
         hint: Extra alternative to suggest, e.g. "or pass --sourdb PATH".
+
+    Returns:
+        Paths of the database files, in the order of ``names``.
+
+    Raises:
+        FileNotFoundError: If any database is not found.
     """
     paths, missing = [], []
     for name in names:
@@ -486,45 +692,69 @@ def require_databases(names, hint=None):
     return paths
 
 
-def find_db_file(name):
-    """Return the first existing copy of database file ``name`` in ``db_dirs()``, or None."""
+def find_db_file(name: str) -> str | None:
+    """Return the first existing copy of database file ``name`` in ``db_dirs()``, or None.
+
+    Args:
+        name: Database filename.
+
+    Returns:
+        Path of the first copy found, or None.
+    """
     for folder in db_dirs():
         if (folder / name).is_file():
             return str(folder / name)
     return None
 
 
-def db_dirs():
+def db_dirs() -> list[Path]:
     """Return the database folders to search, in order.
 
     ``$AAFTF_DB`` may list several folders separated like ``$PATH`` (``:`` on
     Linux/macOS), e.g. a shared read-only folder followed by a personal one.
     When it is unset, the home cache (``home_db_cache()``) is used.
+
+    Returns:
+        Resolved folder paths.
     """
     folders = [Path(p).expanduser().resolve() for p in os.environ.get("AAFTF_DB", "").split(os.pathsep) if p]
     return folders or [home_db_cache()]
 
 
-def home_db_cache():
-    """Return the default database folder: ``$XDG_CACHE_HOME/aaftf``, else ``~/.cache/aaftf``."""
+def home_db_cache() -> Path:
+    """Return the default database folder: ``$XDG_CACHE_HOME/aaftf``, else ``~/.cache/aaftf``.
+
+    Returns:
+        The resolved folder path (not created).
+    """
     return (Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "aaftf").expanduser().resolve()
 
 
-def db_file(name, force=False):
+def db_file(name: str, force: bool = False) -> str:
     """Return the path to use for database file ``name``.
 
     An existing copy in any ``db_dirs()`` folder is reused; otherwise (or when
     ``force`` asks for a fresh download) it is placed in ``db_write_dir()``.
+
+    Args:
+        name: Database filename.
+        force: Ignore existing copies.
+
+    Returns:
+        The file path.
     """
     existing = None if force else find_db_file(name)
     return existing or str(db_write_dir() / name)
 
 
-def db_write_dir():
+def db_write_dir() -> Path:
     """Return the folder new databases are downloaded to (created if needed).
 
     This is the first ``db_dirs()`` folder that can be written to, falling back
     to the home cache if none can.
+
+    Returns:
+        The writable folder.
     """
     for folder in db_dirs():
         try:
@@ -538,7 +768,7 @@ def db_write_dir():
     return fallback
 
 
-def download_file(url, dest, force=False):
+def download_file(url: str, dest: str, force: bool = False) -> str:
     """Download ``url`` to ``dest`` unless it already exists.
 
     Writes to a temporary file and renames it on success, so an interrupted
@@ -551,6 +781,10 @@ def download_file(url, dest, force=False):
 
     Returns:
         ``dest``.
+
+    Raises:
+        Exception: Any download or write error is logged and re-raised after the
+            temporary file is removed.
     """
     if Path(dest).exists() and not force:
         logger.info(f"Already present: {dest}")
@@ -580,7 +814,7 @@ def download_file(url, dest, force=False):
     return dest
 
 
-def warn_if_home_cache():
+def warn_if_home_cache() -> None:
     """Warn once if databases are going to the home cache because ``$AAFTF_DB`` is unset or unwritable."""
     global _home_cache_warned
     home = home_db_cache()
@@ -592,15 +826,26 @@ def warn_if_home_cache():
     logger.warning(f"{reason}, so databases are saved to {home}. Some are large (the sourmash databases and the FCS container image are several GB each) and may exceed a home-directory quota. To store them elsewhere: export AAFTF_DB=/path/with/space")
 
 
-def open_url(request, timeout):
-    """Open a URL or ``urllib.request.Request``, following HTTP 308 redirects (which Python < 3.11 does not)."""
+def open_url(request: str | urllib.request.Request, timeout: float) -> Any:
+    """Open a URL or ``urllib.request.Request``, following HTTP 308 redirects (which Python < 3.11 does not).
+
+    Args:
+        request: URL string or prepared request.
+        timeout: Socket timeout in seconds.
+
+    Returns:
+        The response object (usable as a context manager).
+    """
     return _url_opener().open(request, timeout=timeout)
 
 
-def safe_remove(path):
+def safe_remove(path: str | Path) -> None:
     """Remove a file, symlink or directory tree; do nothing if it does not exist.
 
     A symlink is removed itself, never the directory it points to.
+
+    Args:
+        path: Path to remove.
     """
     path = Path(path)
     if path.is_dir() and not path.is_symlink():
@@ -609,7 +854,7 @@ def safe_remove(path):
         path.unlink(missing_ok=True)
 
 
-def setup_logging(debug=False, quiet=False):
+def setup_logging(debug: bool = False, quiet: bool = False) -> None:
     """Send AAFTF log messages to stderr.
 
     Args:
@@ -624,7 +869,7 @@ def setup_logging(debug=False, quiet=False):
     package_logger.propagate = False
 
 
-def make_workdir(workdir, prefix):
+def make_workdir(workdir: str | None, prefix: str) -> tuple[str, bool]:
     """Create a subcommand's working directory.
 
     Args:
@@ -636,17 +881,21 @@ def make_workdir(workdir, prefix):
         Tuple (workdir, custom_workdir); pass both to ``cleanup_workdir``.
     """
     custom_workdir = bool(workdir)
-    if not custom_workdir:
-        workdir = f"aaftf-{prefix}_{uuid.uuid4().hex[:8]}"
-    Path(workdir).mkdir(parents=True, exist_ok=True)
-    return workdir, custom_workdir
+    folder = workdir or f"aaftf-{prefix}_{uuid.uuid4().hex[:8]}"
+    Path(folder).mkdir(parents=True, exist_ok=True)
+    return folder, custom_workdir
 
 
-def cleanup_workdir(workdir, debug, custom_workdir):
+def cleanup_workdir(workdir: str | Path, debug: bool, custom_workdir: bool) -> None:
     """Remove an auto-generated workdir, unless debugging or the user supplied it.
 
     A user-supplied ``--workdir`` (which may be shared, e.g. by ``pipeline``, or
     even the current directory) is never deleted.
+
+    Args:
+        workdir: Working directory from ``make_workdir``.
+        debug: Keep the directory for inspection.
+        custom_workdir: Whether the user supplied ``workdir``.
     """
     if not debug and not custom_workdir:
         safe_remove(workdir)
@@ -660,23 +909,61 @@ class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
     for anything else, so both it and an http_error_308 dispatcher are needed.
     """
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(self, req: urllib.request.Request, fp: IO[bytes], code: int, msg: str, headers: HTTPMessage, newurl: str) -> urllib.request.Request | None:
+        """Treat a 308 as a 307 and build the redirected request with the base handler.
+
+        Args:
+            req: Original request.
+            fp: Response body.
+            code: HTTP status code.
+            msg: HTTP reason phrase.
+            headers: Response headers.
+            newurl: Redirect target URL.
+
+        Returns:
+            The new request, or None if the base handler declines to redirect.
+        """
         if code == 308:
             code = 307  # method-preserving permanent redirect
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
-    def http_error_308(self, req, fp, code, msg, headers):
+    def http_error_308(self, req: urllib.request.Request, fp: IO[bytes], code: int, msg: str, headers: HTTPMessage) -> Any:
+        """Handle an HTTP 308 response the same way as a 302.
+
+        Args:
+            req: Original request.
+            fp: Response body.
+            code: HTTP status code.
+            msg: HTTP reason phrase.
+            headers: Response headers.
+
+        Returns:
+            The response for the redirected request.
+        """
         return self.http_error_302(req, fp, code, msg, headers)
 
 
 class _StatusFormatter(logging.Formatter):
     """Format records as ``[Mon DD HH:MM AM] message``; warnings and errors get a level prefix."""
 
-    def __init__(self, color):
+    def __init__(self, color: bool) -> None:
+        """Set the date format and whether to colour the timestamp.
+
+        Args:
+            color: Colour the timestamp green (for terminals).
+        """
         super().__init__(datefmt="%b %d %I:%M %p")
         self.color = color
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
+        """Format one log record.
+
+        Args:
+            record: The log record.
+
+        Returns:
+            The formatted message line.
+        """
         stamp = f"[{self.formatTime(record, self.datefmt)}]"
         if self.color:
             stamp = f"\033[92m{stamp}\033[00m"
@@ -686,8 +973,15 @@ class _StatusFormatter(logging.Formatter):
         return f"{stamp} {message}"
 
 
-def _count_lines(fh):
-    """Count lines in a binary stream, including a final line with no newline."""
+def _count_lines(fh: BinaryIO | IO[bytes]) -> int:
+    """Count lines in a binary stream, including a final line with no newline.
+
+    Args:
+        fh: Binary stream read in 1 MiB chunks until EOF.
+
+    Returns:
+        Number of lines.
+    """
     lines = 0
     last = b"\n"
     for chunk in iter(lambda: fh.read(1 << 20), b""):
@@ -697,6 +991,10 @@ def _count_lines(fh):
 
 
 @functools.cache
-def _url_opener():
-    """Build (once) the urllib opener used by ``open_url``."""
+def _url_opener() -> urllib.request.OpenerDirector:
+    """Build (once) the urllib opener used by ``open_url``.
+
+    Returns:
+        An opener that follows HTTP 308 redirects.
+    """
     return urllib.request.build_opener(_Redirect308Handler())

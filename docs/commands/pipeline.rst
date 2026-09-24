@@ -49,7 +49,7 @@ Cutoffs / defaults
      - Passed to every step that has the option
    * - ``--method``
      - spades
-     - Assembler method (spades / dipspades / megahit)
+     - Assembler method (spades / megahit / unicycler)
    * - ``-ml/--minlen``
      - 75
      - Minimum read length kept by trim
@@ -67,7 +67,7 @@ Invocation
 
     AAFTF pipeline -l LEFT [-r RIGHT] -o BASENAME -p PHYLUM [PHYLUM ...]
                    [-c CPUS] [-m MEMORY] [-ml MINLEN]
-                   [-mc MINCONTIGLEN] [--method {spades,dipspades,megahit}]
+                   [-mc MINCONTIGLEN] [--method {spades,megahit,unicycler}]
                    [-a ACCESSIONS ...] [-u URLS ...] [--sourdb PATH]
                    [--mincovpct PCT] [-w WORKDIR]
                    [--assembler_args ARG ...] [--tmpdir DIR] [-v] [--pipe]

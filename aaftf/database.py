@@ -11,6 +11,7 @@ import logging
 import os
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 from aaftf.resources import DATABASES
 from aaftf.utility import db_dirs, db_file, db_write_dir, download_file, find_db_file, open_url, warn_if_home_cache
@@ -21,7 +22,7 @@ __all__ = ["run"]
 logger = logging.getLogger(__name__)
 
 
-def run(databases=None, force=False, **kwargs):
+def run(databases: list[str] | None = None, force: bool = False, **kwargs: Any) -> None:
     """Execute the ``database`` subcommand.
 
     Args:
@@ -30,6 +31,10 @@ def run(databases=None, force=False, **kwargs):
         force: Re-download even if a copy already exists (into the first
             writable database folder).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``debug``, ...); ignored.
+
+    Raises:
+        ValueError: If a database name is not recognised.
+        RuntimeError: If any download fails.
     """
     if not databases:
         _list_db()
@@ -59,7 +64,7 @@ def run(databases=None, force=False, **kwargs):
     logger.info("Download complete. Run 'AAFTF database' to see where each database is stored.")
 
 
-def _list_db():
+def _list_db() -> None:
     """List every database with its abbreviation, file, size, users and storage folder.
 
     Missing databases show their remote (estimated) size and "not downloaded".
@@ -75,6 +80,7 @@ def _list_db():
     pending_unknown = False
     for abbr, entry in DATABASES.items():
         local_path = find_db_file(entry["filename"])
+        size: int | None
         if local_path:
             size = Path(local_path).stat().st_size
             downloaded_total += size
@@ -110,8 +116,15 @@ def _list_db():
     print("\nDownload with: AAFTF database NAME [NAME ...]   (abbreviation or file name, or 'all')")
 
 
-def _human_size(num_bytes):
-    """Format a byte count as a human-readable string (e.g. ``1.2 GB``)."""
+def _human_size(num_bytes: float) -> str:
+    """Format a byte count as a human-readable string (e.g. ``1.2 GB``).
+
+    Args:
+        num_bytes: Size in bytes.
+
+    Returns:
+        The size in B/KB/MB/GB/TB (1024-based) with one decimal place.
+    """
     size = float(num_bytes)
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size < 1024 or unit == "TB":
@@ -120,8 +133,15 @@ def _human_size(num_bytes):
     return f"{size:.1f} TB"  # pragma: no cover - unreachable, but keeps a return for every path
 
 
-def _remote_size(url):
-    """Return the remote file size in bytes via an HTTP HEAD request, or ``None`` if unavailable."""
+def _remote_size(url: str) -> int | None:
+    """Return the remote file size in bytes via an HTTP HEAD request, or ``None`` if unavailable.
+
+    Args:
+        url: URL of the remote file.
+
+    Returns:
+        The ``Content-Length`` in bytes, or None if the header is missing or the request fails.
+    """
     try:
         req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "AAFTF/1.0"})
         with open_url(req, timeout=10) as response:
@@ -131,14 +151,25 @@ def _remote_size(url):
         return None
 
 
-def _resolve(names):
-    """Map database abbreviations / file names (or ``all``) to abbreviations, in order, without duplicates."""
+def _resolve(names: list[str]) -> list[str]:
+    """Map database abbreviations / file names (or ``all``) to abbreviations, in order, without duplicates.
+
+    Args:
+        names: Database abbreviations or file names (case-insensitive), or ``all``.
+
+    Returns:
+        Keys of ``DATABASES`` in the order first requested.
+
+    Raises:
+        ValueError: If any name matches no database.
+    """
     lookup = {}
     for abbr, entry in DATABASES.items():
         lookup[abbr.lower()] = abbr
         lookup[entry["filename"].lower()] = abbr
 
-    selected, unknown = [], []
+    selected: list[str] = []
+    unknown: list[str] = []
     for name in names:
         key = name.lower()
         if key == "all":

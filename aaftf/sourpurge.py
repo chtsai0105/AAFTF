@@ -3,6 +3,7 @@
 import logging
 import shutil
 from pathlib import Path
+from typing import Any
 
 from Bio import SeqIO
 
@@ -18,23 +19,47 @@ logger = logging.getLogger(__name__)
 # separate name for the different runfolder
 # flake8: noqa: C901
 def run(
-    input,
-    outfile,
-    phylum,
-    workdir=None,
-    cpus=1,
-    left=None,
-    right=None,
-    sourdb=None,
-    sourdb_type="gbk",
-    kmer="31",
-    mincovpct=5,
-    taxonomy=False,
-    debug=False,
-    pipe=False,
-    **kwargs,
-):
-    """Run the sourpurge routines to detect and remove contaminant contigs."""
+    input: str,
+    outfile: str,
+    phylum: list[str],
+    workdir: str | None = None,
+    cpus: int = 1,
+    left: str | None = None,
+    right: str | None = None,
+    sourdb: str | None = None,
+    sourdb_type: str = "gbk",
+    kmer: str = "31",
+    mincovpct: int = 5,
+    taxonomy: bool = False,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the sourpurge routines to detect and remove contaminant contigs.
+
+    Each contig is classified with ``sourmash lca classify``; classified contigs whose lineage
+    contains none of ``phylum`` are dropped. If reads are given they are mapped back with BWA and
+    contigs whose mean coverage is at most ``mincovpct`` percent of the average N50-contig
+    coverage are dropped too. The sourmash CSV is copied next to ``input`` as
+    ``<input stem>.sourmash-taxonomy.csv``.
+
+    Args:
+        input: Assembly FASTA to screen.
+        outfile: Output FASTA of retained contigs.
+        phylum: Taxon names (usually phyla) to keep.
+        workdir: Working directory; a temporary one is created when None.
+        cpus: Number of threads for BWA.
+        left: Forward reads FASTQ; enables the coverage filter.
+        right: Reverse reads FASTQ for paired-end data.
+        sourdb: Path to a sourmash LCA database; when None the one for ``sourdb_type`` is used.
+        sourdb_type: Installed database to use: ``gbk``, ``gtdbrep`` or ``gtdb``.
+        kmer: k-mer size (as a string) used for ``sourmash compute``.
+        mincovpct: Coverage cutoff as a percent of the average N50-contig coverage.
+        taxonomy: Only report the taxonomic classifications and return without filtering.
+        debug: Print per-contig details and keep the work directory.
+        pipe: Suppress the "next command" hint (set when run from ``pipeline``).
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
+    """
     workdir, custom_workdir = make_workdir(workdir, "sourpurge")
     bamthreads = min(cpus, 4)
 
@@ -72,7 +97,7 @@ def run(
     sour_classify = ["sourmash", "lca", "classify", "--db", sour_db, "--query", sour_sketch]
     # output csv: ID,status,superkingdom,phylum,class,order,family,genus,species,strain
     contig_taxonomy = {}
-    unique_tax = []
+    unique_tax: set[str] = set()
     sourmash_tsv = str(Path(workdir, "sourmash.csv"))
     with open(sourmash_tsv, "w") as sour_out:
         for line in execute(sour_classify, workdir, debug):
@@ -85,11 +110,10 @@ def run(
                 idx = 1
                 contig_taxonomy[cols[0]] = cols[idx + 1 :]
                 tax_clean = [x for x in cols[idx + 1 :] if x]
-                unique_tax.append("{:}".format(";".join(tax_clean)))
+                unique_tax.add(";".join(tax_clean))
             elif cols[1].strip() == "nomatch":
                 idx = cols.index("nomatch")
                 contig_taxonomy[cols[0]] = cols[idx + 1 :]
-    unique_tax = set(unique_tax)
     logger.info("Found {:} taxonomic classifications for contigs:\n{:}".format(len(unique_tax), "\n".join(unique_tax)))
     if taxonomy:  # --taxonomy only reports the classifications
         return
@@ -160,29 +184,31 @@ def run(
 
         # get average coverage of N50 contigs
         n50_cov = []
-        for k, v in coverage.items():
+        for contig, (contig_len, cov) in coverage.items():
             if debug:
-                print(f"{k}; Len: {v[0]}; Cov: {v[1]:.2f}")
-            if v[0] >= n50:
-                n50_cov.append(v[1])
-        n50_avg_cov = sum(n50_cov) / len(n50_cov)
-        minpct = mincovpct / 100
-        # should we make this a variable? 5% was something arbitrary
-        min_coverage = float(n50_avg_cov * minpct)
-        logger.info(f"Average coverage for N50 contigs is {int(n50_avg_cov)}X")
+                print(f"{contig}; Len: {contig_len}; Cov: {cov:.2f}")
+            if contig_len >= n50:
+                n50_cov.append(cov)
+        if not n50_cov:
+            logger.warning(f"No contig of at least the N50 length ({n50:,} bp) has coverage data; skipping the low-coverage filter")
+        else:
+            n50_avg_cov = sum(n50_cov) / len(n50_cov)
+            minpct = mincovpct / 100
+            # should we make this a variable? 5% was something arbitrary
+            min_coverage = float(n50_avg_cov * minpct)
+            logger.info(f"Average coverage for N50 contigs is {int(n50_avg_cov)}X")
 
-        # Start list of contigs to drop
-        for k, v in coverage.items():
-            if v[1] <= min_coverage:
-                contigs_to_drop.append(k)
-        logger.info(f"Found {len(contigs_to_drop):,} contigs with coverage less than {min_coverage:.2f}X ({mincovpct}%)")
+            # Start list of contigs to drop
+            for contig, (_, cov) in coverage.items():
+                if cov <= min_coverage:
+                    contigs_to_drop.append(contig)
+            logger.info(f"Found {len(contigs_to_drop):,} contigs with coverage less than {min_coverage:.2f}X ({mincovpct}%)")
 
     if debug:
         print("Contigs dropped due to coverage: {:}".format(",".join(contigs_to_drop)))
         print("Contigs dropped due to taxonomy: {:}".format(",".join(tax_to_drop)))
 
-    drop_final = contigs_to_drop + tax_to_drop
-    drop_final = set(drop_final)
+    drop_final = set(contigs_to_drop + tax_to_drop)
     logger.info(f"Dropping {len(drop_final):,} total contigs based on taxonomy and coverage")
     num_seqs, assembly_size = filter_fasta(sour_tax, outfile, lambda seq_id: seq_id not in drop_final)
     logger.info(f"Sourpurged assembly is {num_seqs:,} contigs and {assembly_size:,} bp")

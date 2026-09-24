@@ -1,10 +1,9 @@
-"""This runs routines to identify contaminant contigs.
+"""Identify and remove contaminant, vector and mitochondrial contigs from an assembly.
 
 The contaminants are presumably sequences that were not screened out
-in the filter step.
-The vector library UniVec and known or user specified contaminanting
-sequences (by GenBank accession number) can be provided for
-additional cleanup
+in the filter step. Contigs are screened with BLASTN against the UniVec
+vector library and against eukaryotic, prokaryotic and mitochondrial
+contaminant databases.
 
 The default libraries for screening are located in resources.py
 and include common Euk, Prok, and MITO contaminants.
@@ -13,8 +12,10 @@ and include common Euk, Prok, and MITO contaminants.
 import csv
 import logging
 import os
+from collections.abc import Iterator
 from pathlib import Path
 from subprocess import DEVNULL, call
+from typing import Any
 
 # biopython needed
 from Bio import SeqIO
@@ -54,22 +55,36 @@ _CONTAM_BLAST_DBS = {"UniVec": "univec", "CONTAM_EUKS": "euks", "CONTAM_PROKS": 
 
 
 def run(
-    infile,
-    outfile,
-    workdir=None,
-    cpus=1,
-    percent_id=None,
-    stringency="high",
-    debug=False,
-    pipe=False,
-    **kwargs,
-):
-    """Runs vectorscreening via BLASTN against a vectorDB.
+    infile: str,
+    outfile: str,
+    workdir: str | None = None,
+    cpus: int = 1,
+    percent_id: str | None = None,
+    stringency: str = "high",
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Screen an assembly for contaminants and vectors with BLASTN.
 
     Pipeline: build the contamination BLAST databases, screen out Euk/Prok
     contaminants, screen for mitochondrial contigs, run repeated VecScreen
     (UniVec) rounds to trim/split vector hits, then write the cleaned
     assembly and a separate mitochondrial-contigs FASTA.
+
+    Args:
+        infile: Input assembly FASTA.
+        outfile: Output cleaned FASTA; only its basename is used, so it is written to the
+            current directory.
+        workdir: Working directory; a temporary one is created if None.
+        cpus: Number of BLAST threads.
+        percent_id: BLASTN ``-perc_identity`` cutoff (as a string) for the Euk/Prok screen;
+            defaults to ``BLAST_PERCENT_ID_CONTAM_MATCH``.
+        stringency: ``"high"`` keeps moderate and strong vector hits; anything else keeps
+            only strong hits.
+        debug: Keep the working directory when True.
+        pipe: Suppress the "next command" hint when True (running inside ``pipeline``).
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
     """
     workdir, custom_workdir = make_workdir(workdir, "vecscreen")
     percentid_cutoff = percent_id or BLAST_PERCENT_ID_CONTAM_MATCH
@@ -87,7 +102,7 @@ def run(
         final_outfile = f"{prefix}.vecscreen.fasta"
     _build_contam_databases(workdir)
 
-    contigs_to_remove = {}
+    contigs_to_remove: dict[str, tuple[str, str, float]] = {}
     regions_to_trim = _screen_euk_prok_contamination(infile, workdir, prefix, cpus, percentid_cutoff)
     euk_cleaned = _write_euk_cleaned(infile, regions_to_trim, workdir, prefix)
     mito_hits = _screen_mitochondria(euk_cleaned, workdir, prefix, cpus, contigs_to_remove)
@@ -110,8 +125,12 @@ def run(
     cleanup_workdir(workdir, debug, custom_workdir)
 
 
-def _build_contam_databases(workdir):
-    """Build a BLAST nucleotide DB in ``workdir`` for each contamination screen, from the downloaded databases."""
+def _build_contam_databases(workdir: str) -> None:
+    """Build a BLAST nucleotide DB in ``workdir`` for each contamination screen.
+
+    Args:
+        workdir: Directory in which the combined FASTA files and BLAST DBs are written.
+    """
     logger.info("Building BLAST databases for contamination screen.")
     sources = require_databases(list(_CONTAM_BLAST_DBS.values()))
     for blast_name, source in zip(_CONTAM_BLAST_DBS, sources):
@@ -120,8 +139,14 @@ def _build_contam_databases(workdir):
         _make_blastdb("nucl", combined_fasta, str(Path(workdir, blast_name)))
 
 
-def _make_blastdb(type, file, name):
-    """Create the BLASTN database for the vecscreen vector search."""
+def _make_blastdb(type: str, file: str, name: str) -> None:
+    """Run ``makeblastdb`` unless an up-to-date index already exists.
+
+    Args:
+        type: BLAST DB type, ``"nucl"`` or ``"prot"``.
+        file: Input FASTA file.
+        name: Output database name (path prefix).
+    """
     idxfile = name
     if type == "nucl":
         idxfile += ".nin"
@@ -134,14 +159,24 @@ def _make_blastdb(type, file, name):
         call(cmd, stdout=DEVNULL, stderr=DEVNULL)
 
 
-def _screen_euk_prok_contamination(infile, workdir, prefix, cpus, percentid_cutoff):
-    """BLASTN infile against the Euk/Prok contamination DBs.
+def _screen_euk_prok_contamination(infile: str, workdir: str, prefix: str, cpus: int, percentid_cutoff: str) -> dict[str, list[tuple[int, int, str, str, float]]]:
+    """BLASTN ``infile`` against the Euk/Prok contamination DBs and collect qualifying hits.
 
-    Returns {contig_id: [(start, end, db_name, hit_id, pident), ...]}.
+    A hit qualifies at >=98% identity over >=50 bp, >=94% over >=100 bp, or >=90% over >=200 bp.
+
+    Args:
+        infile: Query assembly FASTA.
+        workdir: Directory holding the BLAST DBs and receiving the reports.
+        prefix: Prefix for the BLAST report file names.
+        cpus: Number of BLAST threads.
+        percentid_cutoff: BLASTN ``-perc_identity`` value.
+
+    Returns:
+        Mapping of contig id to a list of ``(start, end, db_name, hit_id, pident)`` tuples.
     """
     # qaccver saccver pident length mismatch gapopen qstart qend
     # sstart send evalue bitscore
-    regions_to_trim = {}
+    regions_to_trim: dict[str, list[tuple[int, int, str, str, float]]] = {}
     for contam in ["CONTAM_EUKS", "CONTAM_PROKS"]:
         logger.info(f"{contam} Contamination Screen")
         for row in _run_blastn_screen(infile, workdir, prefix, contam, cpus, percentid_cutoff):
@@ -152,8 +187,20 @@ def _screen_euk_prok_contamination(infile, workdir, prefix, cpus, percentid_cuto
     return regions_to_trim
 
 
-def _run_blastn_screen(query, workdir, prefix, dbname, cpus, percent_identity):
-    """Run blastn (tab-6 output) for ``query`` against a DB built in ``workdir``, and return the parsed rows."""
+def _run_blastn_screen(query: str, workdir: str, prefix: str, dbname: str, cpus: int, percent_identity: str) -> list[list[str]]:
+    """Run blastn (tab-6 output) for ``query`` against a DB built in ``workdir``.
+
+    Args:
+        query: Query FASTA file.
+        workdir: Directory holding the DB and receiving the report.
+        prefix: Prefix used in the report file name.
+        dbname: Name of the BLAST DB inside ``workdir``.
+        cpus: Number of BLAST threads.
+        percent_identity: BLASTN ``-perc_identity`` value.
+
+    Returns:
+        The report rows, each a list of column strings.
+    """
     blastreport = str(Path(workdir, f"{dbname}.{prefix}.blastn"))
     blastnargs = ["blastn", "-query", query, "-db", str(Path(workdir, dbname)), "-num_threads", str(cpus), "-dust", "yes", "-soft_masking", "true", "-perc_identity", percent_identity, "-lcase_masking", "-outfmt", "6", "-out", blastreport]
     print_cmd(blastnargs)
@@ -162,11 +209,17 @@ def _run_blastn_screen(query, workdir, prefix, dbname, cpus, percent_identity):
         return list(csv.reader(report, delimiter="\t"))
 
 
-def _write_euk_cleaned(infile, regions_to_trim, workdir, prefix):
+def _write_euk_cleaned(infile: str, regions_to_trim: dict[str, list[tuple[int, int, str, str, float]]], workdir: str, prefix: str) -> str:
     """Split out Euk/Prok-contaminated regions found by ``_screen_euk_prok_contamination``.
 
-    Writes a cleaned FASTA and returns its path, or returns ``infile``
-    unchanged if there was nothing to trim.
+    Args:
+        infile: Input assembly FASTA.
+        regions_to_trim: Contaminated regions per contig id.
+        workdir: Directory for the cleaned FASTA.
+        prefix: Prefix for the cleaned FASTA file name.
+
+    Returns:
+        Path to the cleaned FASTA, or ``infile`` unchanged if there was nothing to trim.
     """
     if not regions_to_trim:
         return infile
@@ -193,10 +246,18 @@ def _write_euk_cleaned(infile, regions_to_trim, workdir, prefix):
     return euk_cleaned
 
 
-def _screen_mitochondria(euk_cleaned, workdir, prefix, cpus, contigs_to_remove):
-    """BLASTN against the MITO DB; flags long hits for removal in ``contigs_to_remove`` (mutated in place).
+def _screen_mitochondria(euk_cleaned: str, workdir: str, prefix: str, cpus: int, contigs_to_remove: dict[str, tuple[str, str, float]]) -> list[str]:
+    """BLASTN against the MITO DB and flag hits of >=120 bp for removal.
 
-    Returns the list of contig ids identified as mitochondrial.
+    Args:
+        euk_cleaned: Query FASTA (output of the Euk/Prok screen).
+        workdir: Directory holding the DB and receiving the report.
+        prefix: Prefix for the report file name.
+        cpus: Number of BLAST threads.
+        contigs_to_remove: Mapping of contig id to ``(screen, hit_id, pident)``; mutated in place.
+
+    Returns:
+        Contig ids identified as mitochondrial.
     """
     logger.info("Mitochondria Contamination Screen")
     mito_hits = []
@@ -208,11 +269,21 @@ def _screen_mitochondria(euk_cleaned, workdir, prefix, cpus, contigs_to_remove):
     return mito_hits
 
 
-def _run_vecscreen_rounds(euk_cleaned, workdir, prefix, cpus, stringency, contigs_to_remove):
+def _run_vecscreen_rounds(euk_cleaned: str, workdir: str, prefix: str, cpus: int, stringency: str, contigs_to_remove: dict[str, tuple[str, str, float]]) -> str:
     """Repeatedly BLASTN against UniVec, trimming/splitting vector hits each round until none remain.
 
-    ``contigs_to_remove`` is mutated in place by ``_parse_clean_blastn``.
-    Returns the path to the final, fully vector-cleaned FASTA.
+    An existing round report in ``workdir`` is reused rather than recomputed.
+
+    Args:
+        euk_cleaned: Starting query FASTA.
+        workdir: Directory holding the UniVec DB and round outputs.
+        prefix: Prefix for the per-round file names.
+        cpus: Number of BLAST threads.
+        stringency: Vector-hit stringency passed to ``_parse_clean_blastn``.
+        contigs_to_remove: Contigs already flagged for removal; their hits are skipped.
+
+    Returns:
+        Path to the final, fully vector-cleaned FASTA.
     """
     logger.info("Starting VecScreen, will remove terminal matches and split internal matches")
     rnd = 0
@@ -266,10 +337,18 @@ def _run_vecscreen_rounds(euk_cleaned, workdir, prefix, cpus, stringency, contig
     return cleanfile
 
 
-def _parse_clean_blastn(fastafile, prefix, blastn, stringent, contigs_to_remove=None):
+def _parse_clean_blastn(fastafile: str, prefix: str, blastn: str, stringent: str, contigs_to_remove: dict[str, tuple[str, str, float]] | None = None) -> tuple[int, str]:
     """Parse a VecScreen BLASTN report and write a vector-trimmed/split FASTA.
 
-    Returns (found_vector_seq, cleaned_fasta_path).
+    Args:
+        fastafile: FASTA that was screened.
+        prefix: Path prefix; the output is written to ``<prefix>.clean.fsa``.
+        blastn: VecScreen BLASTN tab report.
+        stringent: ``"high"`` keeps moderate and strong hits, otherwise only strong ones.
+        contigs_to_remove: Contigs whose hits are skipped; None means none.
+
+    Returns:
+        Tuple of (number of qualifying vector hits, cleaned FASTA path).
     """
     cleaned = prefix + ".clean.fsa"
     if contigs_to_remove is None:
@@ -279,7 +358,7 @@ def _parse_clean_blastn(fastafile, prefix, blastn, stringent, contigs_to_remove=
     return found_vector_seq, cleaned
 
 
-def _classify_vector_hits(blastn, stringent, contigs_to_remove):
+def _classify_vector_hits(blastn: str, stringent: str, contigs_to_remove: dict[str, tuple[str, str, float]]) -> tuple[dict[str, list[tuple[str, int, list[int], int, bool, str | None]]], int]:
     """Read a VecScreen-style BLASTN tab report and classify each surviving hit.
 
     Input rows have columns: qaccver saccver pident length mismatch gapopen
@@ -294,16 +373,22 @@ def _classify_vector_hits(blastn, stringent, contigs_to_remove):
     ``stringent == "high"`` additionally keeps moderate hits, otherwise only
     strong hits are kept.
 
-    Returns (vec_hits, found_vector_seq):
-      vec_hits: {contig_id: [(hit_id, qlen, loc, score, terminal, position), ...]}
-      found_vector_seq: number of qualifying hits found
+    Args:
+        blastn: VecScreen BLASTN tab report.
+        stringent: ``"high"`` keeps moderate and strong hits, otherwise only strong ones.
+        contigs_to_remove: Contigs whose hits are skipped.
+
+    Returns:
+        Tuple ``(vec_hits, found_vector_seq)`` where ``vec_hits`` maps contig id to a list of
+        ``(hit_id, qlen, loc, score, terminal, position)`` and ``found_vector_seq`` is the
+        number of qualifying hits.
     """
-    vec_hits = {}
+    vec_hits: dict[str, list[tuple[str, int, list[int], int, bool, str | None]]] = {}
     found_vector_seq = 0
     with open(blastn) as vectab:
         rdr = csv.reader(vectab, delimiter="\t")
         for row in rdr:
-            (qaccver, saccver, pid, length, mismatch, gapopen, qstart, qend, sstart, send, evalue, bitscore, score, qlen) = row
+            (qaccver, saccver, pid, length, mismatch, gapopen, qstart, qend, sstart, send, evalue, bitscore, score_str, qlen) = row
             if qaccver in contigs_to_remove:
                 continue
 
@@ -317,7 +402,7 @@ def _classify_vector_hits(blastn, stringent, contigs_to_remove):
                 terminal = True
                 position = "3"
 
-            score = int(score)
+            score = int(score_str)
             match_strength = 0  # weak=0, moderate=1, strong=2
             if terminal:
                 if score >= 19:
@@ -341,7 +426,7 @@ def _classify_vector_hits(blastn, stringent, contigs_to_remove):
 
 
 # flake8: noqa: C901
-def _write_trimmed_and_split(fastafile, vec_hits, cleaned):
+def _write_trimmed_and_split(fastafile: str, vec_hits: dict[str, list[tuple[str, int, list[int], int, bool, str | None]]], cleaned: str) -> None:
     """Write ``cleaned`` FASTA, trimming terminal vector hits and splitting out internal ones.
 
     For each record with hits in ``vec_hits``: terminal 5' hits push the
@@ -351,6 +436,11 @@ def _write_trimmed_and_split(fastafile, vec_hits, cleaned):
     into one cut, handled naturally across ``_run_vecscreen_rounds``'
     repeated rounds rather than here). Records/pieces shorter than 200bp are
     dropped.
+
+    Args:
+        fastafile: Input FASTA.
+        vec_hits: Vector hits per contig id, from ``_classify_vector_hits``.
+        cleaned: Output FASTA path.
     """
     with open(cleaned, "w") as output_handle:
         for record in SeqIO.parse(fastafile, "fasta"):
@@ -396,16 +486,32 @@ def _write_trimmed_and_split(fastafile, vec_hits, cleaned):
                         write_fasta(output_handle, f"split{num + 1}_{record.id}", new_seq)
 
 
-def _group(lst, n):
-    """This groups sets by a size."""
+def _group(lst: list[int], n: int) -> Iterator[tuple[int, ...]]:
+    """Yield consecutive non-overlapping ``n``-sized tuples from ``lst``, dropping a short tail.
+
+    Args:
+        lst: Values to group.
+        n: Group size.
+
+    Yields:
+        Tuples of ``n`` consecutive values.
+    """
     for i in range(0, len(lst), n):
         val = lst[i : i + n]
         if len(val) == n:
             yield tuple(val)
 
 
-def _write_final_outputs(outfile_vec, contigs_to_remove, mito_hits, outfile, mitochondria):
-    """Split the vecscreen output into the cleaned assembly and a mitochondrial-contigs FASTA."""
+def _write_final_outputs(outfile_vec: str, contigs_to_remove: dict[str, tuple[str, str, float]], mito_hits: list[str], outfile: str, mitochondria: str) -> None:
+    """Split the vecscreen output into the cleaned assembly and a mitochondrial-contigs FASTA.
+
+    Args:
+        outfile_vec: Vector-cleaned FASTA.
+        contigs_to_remove: Contigs excluded from the cleaned assembly.
+        mito_hits: Removed contigs that are written to the mitochondrial FASTA.
+        outfile: Output cleaned assembly FASTA.
+        mitochondria: Output mitochondrial-contigs FASTA.
+    """
     n_clean = n_mito = 0
     with open(outfile, "w") as oh, open(mitochondria, "w") as mh:
         for record in SeqIO.parse(outfile_vec, "fasta"):

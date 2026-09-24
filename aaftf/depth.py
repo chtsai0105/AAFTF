@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from aaftf.utility import align_to_sorted_bam, check_file, cleanup_workdir, count_fastq, make_workdir, open_maybe_gz, print_cmd, require_tools, run_cmd
 
@@ -57,22 +58,22 @@ _HEATMAP_MAX_LENGTH_RATIO = 10  # max longest/shortest contig length ratio per p
 
 
 def run(
-    input,
-    out="coverage_stats.txt",
-    left=None,
-    right=None,
-    longreads=None,
-    longread_preset=None,
-    aligner="minimap2",
-    cpus=1,
-    workdir=None,
-    debug=False,
-    pipe=False,
-    min_contig_len=500,
-    no_plot=False,
-    plot_format="pdf",
-    **kwargs,
-):
+    input: str,
+    out: str = "coverage_stats.txt",
+    left: str | None = None,
+    right: str | None = None,
+    longreads: str | None = None,
+    longread_preset: str | None = None,
+    aligner: str = "minimap2",
+    cpus: int = 1,
+    workdir: str | None = None,
+    debug: bool = False,
+    pipe: bool = False,
+    min_contig_len: int = 500,
+    no_plot: bool = False,
+    plot_format: str = "pdf",
+    **kwargs: Any,
+) -> None:
     """Execute depth-of-coverage analysis for a genome assembly.
 
     Maps Illumina and/or long reads to the assembly, computes per-contig
@@ -82,6 +83,29 @@ def run(
 
     When plotting is not disabled (--no-plot), mosdepth is run in quantized
     mode and three coverage plots are produced alongside the text report.
+
+    Args:
+        input: Path to the genome assembly FASTA.
+        out: Path of the coverage report to write.
+        left: Forward (or single-end) Illumina FASTQ, or None.
+        right: Reverse Illumina FASTQ, or None.
+        longreads: Long-read FASTQ, or None.
+        longread_preset: minimap2 preset for long reads (``map-ont``, ``map-pb`` or ``map-hifi``);
+            required when ``longreads`` is given.
+        aligner: Aligner for Illumina reads (``minimap2`` or ``bwa``).
+        cpus: Number of CPU threads.
+        workdir: Working directory for intermediate files; a default is created when None.
+        debug: If True, show subprocess stderr and keep the working directory.
+        pipe: If True, suppress the "next command" hint (running inside the pipeline).
+        min_contig_len: Minimum contig length included in the outlier statistics.
+        no_plot: If True, skip quantized mosdepth and plot generation.
+        plot_format: Plot file format (``pdf``, ``svg`` or ``png``).
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
+
+    Raises:
+        ValueError: If neither ``left`` nor ``longreads`` is given, or ``longreads`` lacks a preset.
+        FileNotFoundError: If the assembly or a read file is missing or empty.
+        RuntimeError: If mapping produces no BAM or mosdepth produces no summary file.
     """
     # ------------------------------------------------------------------
     # Validate inputs
@@ -296,7 +320,7 @@ def run(
     # ------------------------------------------------------------------
     # Coverage plots
     # ------------------------------------------------------------------
-    if quantized_bed and Path(quantized_bed).exists():
+    if labels and colors and quantized_bed and Path(quantized_bed).exists():
         logger.info("Reading quantized coverage BED...")
         contig_data = _read_quantized_bed(quantized_bed)
         plot_prefix = _get_plot_prefix(input, out)
@@ -314,7 +338,18 @@ def run(
         logger.info(f"Your next command might be:\nAAFTF assess -i {input}")
 
 
-def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumina_preset, longread_preset, aligner, debug):
+def map_reads(
+    genome: str,
+    reads_left: str | None,
+    reads_right: str | None,
+    longreads: str | None,
+    workdir: str,
+    cpus: int,
+    illumina_preset: str,
+    longread_preset: str | None,
+    aligner: str,
+    debug: bool,
+) -> tuple[str | None, str | None, str | None]:
     """Map reads to the genome assembly and produce sorted, indexed BAM files.
 
     Illumina reads are mapped with minimap2 (default) or bwa mem.
@@ -337,7 +372,11 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
         Tuple (bam_illumina, bam_longreads, bam_combined).
         bam_illumina and bam_longreads are None when the respective read
         type was not provided.  bam_combined is the single BAM to use for
-        mosdepth (merged when both types are present).
+        mosdepth (merged when both types are present); None if no reads were given.
+
+    Raises:
+        RuntimeError: If ``bwa index``, or ``samtools merge``/``index`` of the combined BAM, fails.
+        ValueError: If ``longreads`` is given without ``longread_preset``.
     """
     bam_illumina = None
     bam_longreads = None
@@ -366,11 +405,14 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
 
     # --- Long reads ---
     if longreads:
+        if not longread_preset:
+            raise ValueError("--longread_preset is required when --longreads is provided (map-ont, map-pb, or map-hifi)")
         bam_longreads = str(Path(workdir, "longreads.sorted.bam"))
         map_cmd = ["minimap2", "-ax", longread_preset, "-t", str(cpus), genome, longreads]
         align_to_sorted_bam(map_cmd, bam_longreads, cpus, debug=debug)
 
     # --- Combine ---
+    bam_combined: str | None
     if bam_illumina and bam_longreads:
         bam_combined = str(Path(workdir, "combined.sorted.bam"))
         merge_cmd = [
@@ -383,8 +425,8 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
             bam_illumina,
             bam_longreads,
         ]
-        run_cmd(merge_cmd, debug)
-        run_cmd(["samtools", "index", bam_combined], debug)
+        if run_cmd(merge_cmd, debug).returncode != 0 or run_cmd(["samtools", "index", bam_combined], debug).returncode != 0:
+            raise RuntimeError(f"samtools merge/index failed for {bam_combined}")
     elif bam_illumina:
         bam_combined = bam_illumina
     else:
@@ -393,7 +435,7 @@ def map_reads(genome, reads_left, reads_right, longreads, workdir, cpus, illumin
     return bam_illumina, bam_longreads, bam_combined
 
 
-def run_flagstat(bam_file):
+def run_flagstat(bam_file: str) -> str:
     """Run samtools flagstat on a BAM file.
 
     Args:
@@ -401,14 +443,27 @@ def run_flagstat(bam_file):
 
     Returns:
         String containing the flagstat output lines.
+
+    Raises:
+        RuntimeError: If samtools flagstat fails.
     """
     cmd = ["samtools", "flagstat", bam_file]
     print_cmd(cmd)
     result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"samtools flagstat failed for {bam_file}: {result.stderr.strip()}")
     return result.stdout
 
 
-def run_mosdepth(bam_file, workdir, cpus, labels=None, quantize_str=_DEFAULT_QUANTIZE, prefix="coverage", debug=False):
+def run_mosdepth(
+    bam_file: str,
+    workdir: str,
+    cpus: int,
+    labels: list[str] | None = None,
+    quantize_str: str = _DEFAULT_QUANTIZE,
+    prefix: str = "coverage",
+    debug: bool = False,
+) -> tuple[Path, Path | None]:
     """Run mosdepth to calculate per-contig depth statistics.
 
     When `labels` is given, mosdepth is run in quantized mode: a quantized
@@ -445,7 +500,9 @@ def run_mosdepth(bam_file, workdir, cpus, labels=None, quantize_str=_DEFAULT_QUA
     return summary_file, quantized_bed
 
 
-def parse_mosdepth_summary(summary_file):
+def parse_mosdepth_summary(
+    summary_file: str | Path,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     """Parse a mosdepth summary file into per-contig rows.
 
     The summary file produced by mosdepth has tab-separated columns:
@@ -480,7 +537,7 @@ def parse_mosdepth_summary(summary_file):
     return total, contigs
 
 
-def _parse_quantize_bins():
+def _parse_quantize_bins() -> tuple[list[str], dict[str, str]]:
     """Return the default mosdepth quantize bin labels and their colors.
 
     Known labels get their canonical color; others fall back to grey.
@@ -494,8 +551,10 @@ def _parse_quantize_bins():
     return labels, colors
 
 
-def _coverage_breadth_from_dist(dist_file):
-    """Read coverage breadth at >= 1x from mosdepth global distribution file.
+def _coverage_breadth_from_dist(dist_file: str | Path) -> float | None:
+    """Read coverage breadth at >= 1x from a mosdepth global distribution file.
+
+    Any error while reading the file is swallowed and reported as None.
 
     Args:
         dist_file: Path to *.mosdepth.global.dist.txt.
@@ -516,7 +575,7 @@ def _coverage_breadth_from_dist(dist_file):
     return None
 
 
-def _read_quantized_bed(quantized_bed):
+def _read_quantized_bed(quantized_bed: str | Path) -> dict[str, list[tuple[int, int, str]]]:
     """Read a mosdepth quantized BED file into a per-contig interval dict.
 
     Args:
@@ -526,7 +585,7 @@ def _read_quantized_bed(quantized_bed):
         Dict mapping contig name → list of (start, end, label) tuples
         in order of appearance.
     """
-    data = {}
+    data: dict[str, list[tuple[int, int, str]]] = {}
     with open_maybe_gz(quantized_bed) as fh:
         for line in fh:
             parts = line.rstrip("\n").split("\t")
@@ -542,11 +601,11 @@ def _read_quantized_bed(quantized_bed):
     return data
 
 
-def _get_plot_prefix(input_file, report_file):
+def _get_plot_prefix(input_file: str | Path, report_file: str | Path) -> str:
     """Derive the output path prefix for plot files.
 
-    Strips .fasta/.fa/.fasta.gz/.fa.gz from the input basename and
-    places the result in the same directory as the report file.
+    Strips .fasta/.fa/.fasta.gz/.fa.gz from the input basename (otherwise the
+    last suffix) and places the result in the same directory as the report file.
 
     Args:
         input_file: Path to the genome assembly FASTA.
@@ -566,7 +625,14 @@ def _get_plot_prefix(input_file, report_file):
     return str(Path(report_dir, basename))
 
 
-def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colors, plot_prefix, plot_format):
+def _plot_coverage_heatmap(
+    contig_data: dict[str, list[tuple[int, int, str]]],
+    scaffold_rows: list[dict[str, Any]],
+    labels: list[str],
+    colors: dict[str, str],
+    plot_prefix: str,
+    plot_format: str,
+) -> None:
     """Write per-scaffold coverage-class heatmap.
 
     Each scaffold is one horizontal row; regions are colored by coverage class. Scaffolds are paginated by length ratio (see
@@ -592,7 +658,17 @@ def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colors, plot_pref
     # same size everywhere, regardless of how many rows a given page has.
     ytick_fontsize = max(5, min(9, 200 // max(len(p) for p in pages)))
 
-    def _make_page(scaffold_idx_list, page_idx, total_pages):
+    def _make_page(scaffold_idx_list: list[str], page_idx: int, total_pages: int) -> Any:
+        """Build one heatmap page figure.
+
+        Args:
+            scaffold_idx_list: Contig names to draw on this page, one per row.
+            page_idx: 1-based page number (shown in the title).
+            total_pages: Total number of pages.
+
+        Returns:
+            The matplotlib Figure for this page.
+        """
         n = len(scaffold_idx_list)
         fig_h = max(4, n * 0.35 + 2)
         fig, ax = plt.subplots(figsize=(14, fig_h))
@@ -644,7 +720,11 @@ def _plot_coverage_heatmap(contig_data, scaffold_rows, labels, colors, plot_pref
             logger.info(f"Coverage heatmap written to: {path}")
 
 
-def _paginate_by_length_ratio(scaffold_rows, max_ratio=_HEATMAP_MAX_LENGTH_RATIO, max_per_page=_SCAFFOLDS_PER_PAGE):
+def _paginate_by_length_ratio(
+    scaffold_rows: list[dict[str, Any]],
+    max_ratio: float = _HEATMAP_MAX_LENGTH_RATIO,
+    max_per_page: int = _SCAFFOLDS_PER_PAGE,
+) -> list[list[str]]:
     """Group scaffolds (pre-sorted by length, descending) into pages.
 
     Starts a new page once the running page's longest/shortest length
@@ -660,14 +740,15 @@ def _paginate_by_length_ratio(scaffold_rows, max_ratio=_HEATMAP_MAX_LENGTH_RATIO
     Returns:
         List of pages, each a list of chrom name strings.
     """
-    pages = []
-    current, page_max_len = [], None
+    pages: list[list[str]] = []
+    current: list[str] = []
+    page_max_len = 0
     for row in scaffold_rows:
         length = row.get("length") or 1
         if current and (length < page_max_len / max_ratio or len(current) >= max_per_page):
             pages.append(current)
-            current, page_max_len = [], None
-        if page_max_len is None:
+            current = []
+        if not current:
             page_max_len = length
         current.append(row["chrom"])
     if current:
@@ -675,13 +756,29 @@ def _paginate_by_length_ratio(scaffold_rows, max_ratio=_HEATMAP_MAX_LENGTH_RATIO
     return pages
 
 
-def _save_figure(fig, path, plot_format):
+def _save_figure(fig: Any, path: str, plot_format: str) -> None:
+    """Save a matplotlib figure to disk and close it.
+
+    PNG output is rendered at 150 dpi; other formats use the matplotlib default.
+
+    Args:
+        fig: matplotlib Figure to save.
+        path: Output file path.
+        plot_format: File format passed to ``savefig`` (``pdf``, ``svg`` or ``png``).
+    """
     dpi = 150 if plot_format == "png" else None
     fig.savefig(path, format=plot_format, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
 
 
-def _plot_coverage_barplot(contig_data, scaffold_rows, labels, colors, plot_prefix, plot_format):
+def _plot_coverage_barplot(
+    contig_data: dict[str, list[tuple[int, int, str]]],
+    scaffold_rows: list[dict[str, Any]],
+    labels: list[str],
+    colors: dict[str, str],
+    plot_prefix: str,
+    plot_format: str,
+) -> None:
     """Write per-scaffold stacked bar chart of coverage-class proportions.
 
     Args:
@@ -710,7 +807,17 @@ def _plot_coverage_barplot(contig_data, scaffold_rows, labels, colors, plot_pref
     legend_patches = [Patch(facecolor=colors.get(lbl, "#888888"), label=lbl) for lbl in labels]
     pages = [scaffolds[i : i + _SCAFFOLDS_PER_PAGE] for i in range(0, len(scaffolds), _SCAFFOLDS_PER_PAGE)]
 
-    def _make_page(page_scaffolds, page_num, total_pages):
+    def _make_page(page_scaffolds: list[str], page_num: int, total_pages: int) -> Any:
+        """Build one stacked-bar page figure.
+
+        Args:
+            page_scaffolds: Contig names to draw on this page, one per bar.
+            page_num: 1-based page number (shown in the title).
+            total_pages: Total number of pages.
+
+        Returns:
+            The matplotlib Figure for this page.
+        """
         n = len(page_scaffolds)
         fig_h = max(4, n * 0.35 + 2)
         fig, ax = plt.subplots(figsize=(12, fig_h))
@@ -762,7 +869,7 @@ def _plot_coverage_barplot(contig_data, scaffold_rows, labels, colors, plot_pref
             logger.info(f"Coverage barplot written to: {path}")
 
 
-def _plot_depth_histogram(contig_rows, mean_depth, plot_prefix, plot_format):
+def _plot_depth_histogram(contig_rows: list[dict[str, Any]], mean_depth: float, plot_prefix: str, plot_format: str) -> None:
     """Write histogram and boxplot of per-scaffold mean coverage depths.
 
     Args:

@@ -19,7 +19,7 @@ __all__ = ["main"]
 logger = logging.getLogger("aaftf.main")
 
 
-def main():
+def main() -> int:
     """Parse the command line, run the chosen subcommand, and return a shell exit code.
 
     Returns:
@@ -73,8 +73,14 @@ def main():
     return 0
 
 
-def _cap_to_available(args):
-    """Lower -c/--cpus and -m/--memory to what this machine/job can provide, with a warning."""
+def _cap_to_available(args: ap.Namespace) -> None:
+    """Lower -c/--cpus and -m/--memory to what this machine/job can provide, with a warning.
+
+    ``args`` is modified in place; options the subcommand lacks (or left unset) are ignored.
+
+    Args:
+        args: Parsed command-line arguments.
+    """
     cpus = getattr(args, "cpus", None)
     if cpus and cpus > (avail_cpus := available_cpus()):
         logger.warning(f"-c/--cpus {cpus} is more than the {avail_cpus} CPUs available to this job; using {avail_cpus}")

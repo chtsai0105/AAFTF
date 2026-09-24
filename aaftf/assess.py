@@ -7,8 +7,10 @@ contig statistics.
 import logging
 import re
 from pathlib import Path
+from typing import Any, TextIO
 
 from Bio import SeqIO
+from Bio.Seq import Seq
 
 from aaftf.utility import COMPLEMENT, calc_nx, open_maybe_gz
 
@@ -18,10 +20,18 @@ __all__ = ["run", "genome_asm_stats", "find_telomere", "make_regex_revcomp"]
 logger = logging.getLogger(__name__)
 
 
-def run(input, report=None, telomere_monomer="TAAC{3,5}", telomere_n_repeat=2, telomere_window=200, **kwargs):
-    """This is the general run command to calculate the genome statistics.
+def run(input: str, report: str | None = None, telomere_monomer: str = "TAAC{3,5}", telomere_n_repeat: int = 2, telomere_window: int = 200, **kwargs: Any) -> None:
+    """Print assembly statistics, including telomere counts, and optionally save them.
 
-    This function will also attempt to find the telomere repeats and count these.
+    A missing ``input`` is only logged; the subsequent read then fails.
+
+    Args:
+        input: Assembly FASTA (optionally gzipped).
+        report: File to also write the report to.
+        telomere_monomer: Telomere monomer regex.
+        telomere_n_repeat: Minimum monomer matches at a contig end to call a telomere.
+        telomere_window: Number of bp scanned at each contig end.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
     """
     if not Path(input).exists():
         logger.info(f"Inputfile {input} was not readable, check parameters")
@@ -33,10 +43,21 @@ def run(input, report=None, telomere_monomer="TAAC{3,5}", telomere_n_repeat=2, t
     genome_asm_stats(input, output_handle, telomere_monomer, telomere_n_repeat, telomere_window)
 
 
-def genome_asm_stats(fasta_file, output_handle, telomere_repeat, n_minimum, telomere_window=200):
-    """Calculate genome assembly statistics."""
+def genome_asm_stats(fasta_file: str, output_handle: TextIO | None, telomere_repeat: str, n_minimum: int, telomere_window: int = 200) -> None:
+    """Calculate genome assembly statistics, print them and optionally write them to a handle.
+
+    Reports contig count, total length, min/max/median/mean, L50/N50, L90/N90, GC%, N gaps, soft
+    masking and telomere counts.
+
+    Args:
+        fasta_file: Assembly FASTA (optionally gzipped).
+        output_handle: Open handle the report is also written to, or None.
+        telomere_repeat: Telomere monomer regex.
+        n_minimum: Minimum monomer matches at a contig end to call a telomere.
+        telomere_window: Number of bp scanned at each contig end.
+    """
     lengths = []
-    gc = 0
+    gc_bases = 0
     total_ns = 0
     n_gap_count = 0
     total_masked = 0
@@ -55,13 +76,13 @@ def genome_asm_stats(fasta_file, output_handle, telomere_repeat, n_minimum, telo
             seq_str = str(record.seq)
             total_masked += sum(1 for c in seq_str if c.islower())
             seq_upper = seq_str.upper()
-            gc += sum(seq_upper.count(x) for x in ["G", "C", "S"])
+            gc_bases += sum(seq_upper.count(x) for x in ["G", "C", "S"])
             total_ns += seq_upper.count("N")
             n_gap_count += len(re.findall(r"N+", seq_upper))
 
     lengths.sort()
     total_len = sum(lengths)
-    gc = 100.0 * (gc / total_len)
+    gc = 100.0 * (gc_bases / total_len)
     n50, l50 = calc_nx(lengths, 0.5)
     n90, l90 = calc_nx(lengths, 0.9)
     report = f"Assembly statistics for: {fasta_file}\n"
@@ -89,11 +110,22 @@ def genome_asm_stats(fasta_file, output_handle, telomere_repeat, n_minimum, telo
         output_handle.write(report)
 
 
-def find_telomere(seq, monomer="TAACCC", min_copies=2, window_size=200):
-    """Takes nucleotide sequence and checks if the sequence contains telomere repeats.
+def find_telomere(seq: Seq | str, monomer: str = "TAACCC", min_copies: int = 2, window_size: int = 200) -> tuple[bool, bool]:
+    """Check whether each end of a sequence contains telomere repeats.
 
-    Using code based on find_telomeres.py from Markus Hiltunen.
-    https://github.com/markhilt/genome_analysis_tools
+    Counts non-overlapping matches of the monomer or its reverse complement (case-insensitive)
+    in the first and last ``window_size`` bp; sequences no longer than two windows are split in
+    half instead. Based on find_telomeres.py from Markus Hiltunen
+    (https://github.com/markhilt/genome_analysis_tools).
+
+    Args:
+        seq: Nucleotide sequence.
+        monomer: Telomere monomer regex.
+        min_copies: Minimum matches needed at an end.
+        window_size: Number of bp scanned at each end.
+
+    Returns:
+        ``(start_has_telomere, end_has_telomere)``.
     """
     fwd_pattern = monomer.strip()
     rev_pattern = make_regex_revcomp(fwd_pattern)
@@ -119,11 +151,18 @@ def find_telomere(seq, monomer="TAACCC", min_copies=2, window_size=200):
     return forward, reverse
 
 
-def make_regex_revcomp(pattern):
-    """Reverse complement sequence or regexp.
+def make_regex_revcomp(pattern: str) -> str:
+    """Reverse complement a DNA sequence or simple regex.
 
-    Using code based on find_telomeres.py from Markus Hiltunen.
-    https://github.com/markhilt/genome_analysis_tools
+    Handles single bases and ``[...]`` classes with optional ``{m,n}``/``+``/``*``/``?``
+    quantifiers, which stay attached to their base; other symbols pass through. Based on
+    find_telomeres.py from Markus Hiltunen (https://github.com/markhilt/genome_analysis_tools).
+
+    Args:
+        pattern: Sequence or regex to reverse complement.
+
+    Returns:
+        The reverse-complemented pattern.
     """
     token_re = re.compile(r"(\[[^\]]+\]|\w)(?:(\{[0-9,]+\}|\+|\*|\?))?")
 

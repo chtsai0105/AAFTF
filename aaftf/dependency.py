@@ -3,6 +3,7 @@
 import importlib
 import logging
 import shutil
+from typing import Any
 
 __all__ = ["REQUIRED_TOOLS", "OPTIONAL_TOOLS", "REQUIRED_PYTHON_PACKAGES", "run"]
 
@@ -52,8 +53,17 @@ REQUIRED_PYTHON_PACKAGES = {
 logger = logging.getLogger(__name__)
 
 
-def run(**kwargs):
-    """Check whether AAFTF's external tool and Python package dependencies are installed."""
+def run(**kwargs: Any) -> None:
+    """Check whether AAFTF's external tool and Python package dependencies are installed.
+
+    Prints an OK/MISSING line for every required and optional tool and required package.
+
+    Args:
+        **kwargs: Parsed CLI attributes (``command``, ``func``, ``debug``, ...); ignored.
+
+    Raises:
+        FileNotFoundError: If any required tool or Python package is missing.
+    """
     missing_required = _print_tool_table("Checking required external tools...", _check_tools(REQUIRED_TOOLS))
     print()
     missing_optional = _print_tool_table("Checking optional external tools...", _check_tools(OPTIONAL_TOOLS))
@@ -79,7 +89,16 @@ def run(**kwargs):
             logger.info(f"NOTE: {len(missing_optional)} optional tool(s) missing (only needed for specific subcommands).")
 
 
-def _print_tool_table(title, results):
+def _print_tool_table(title: str, results: list[tuple[str, str | None, str]]) -> list[str]:
+    """Log ``title`` and print an OK/MISSING line for each checked tool.
+
+    Args:
+        title: Heading logged before the table.
+        results: ``(tool, path, used_by)`` tuples from ``_check_tools``; ``path`` is None if not found.
+
+    Returns:
+        Names of the tools that were not found.
+    """
     logger.info(title)
     missing = []
     for tool, path, used_by in results:
@@ -91,7 +110,15 @@ def _print_tool_table(title, results):
     return missing
 
 
-def _check_tools(tools):
+def _check_tools(tools: dict[str, str]) -> list[tuple[str, str | None, str]]:
+    """Look up each tool on ``PATH``.
+
+    Args:
+        tools: Mapping of executable name to the subcommands that use it.
+
+    Returns:
+        ``(tool, path, used_by)`` tuples sorted by tool name; ``path`` is None if not on ``PATH``.
+    """
     results = []
     for tool, used_by in sorted(tools.items()):
         path = shutil.which(tool)
@@ -99,7 +126,15 @@ def _check_tools(tools):
     return results
 
 
-def _check_python_packages(packages):
+def _check_python_packages(packages: dict[str, str]) -> list[tuple[str, bool]]:
+    """Try importing each Python package.
+
+    Args:
+        packages: Mapping of import name to distribution name.
+
+    Returns:
+        ``(distribution name, importable)`` tuples sorted by import name.
+    """
     results = []
     for module_name, dist_name in sorted(packages.items()):
         try:

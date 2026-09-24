@@ -6,6 +6,7 @@ tools. See resources.py for these defaults.
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from aaftf.resources import SEQ_DBS
 from aaftf.utility import align_to_sorted_bam, bam_read_count, basename_from_reads, cleanup_workdir, concat_files, count_fastq, db_file, download_file, make_workdir, require_databases, run_cmd
@@ -18,21 +19,47 @@ logger = logging.getLogger(__name__)
 
 # flake8: noqa: C901
 def run(
-    left,
-    right=None,
-    workdir=None,
-    cpus=1,
-    screen_accessions=None,
-    screen_urls=None,
-    screen_local=None,
-    basename=None,
-    aligner="bbduk",
-    memory=8,
-    debug=False,
-    pipe=False,
-    **kwargs,
-):
-    """Generic run command for this submodule for filtering reads."""
+    left: str,
+    right: str | None = None,
+    workdir: str | None = None,
+    cpus: int = 1,
+    screen_accessions: list[str] | None = None,
+    screen_urls: list[str] | None = None,
+    screen_local: list[str] | None = None,
+    basename: str | None = None,
+    aligner: str = "bbduk",
+    memory: int = 8,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Remove reads matching the contamination database (PhiX, UniVec and any extra sequences).
+
+    Builds ``contamdb.fa`` in the work directory from the PhiX/UniVec databases plus any extra
+    accessions, URLs or local FASTA files. With ``aligner="bbduk"`` reads are k-mer filtered by
+    BBDuk (paired reads are interleaved first and de-interleaved afterwards); otherwise reads are
+    aligned with bowtie2, bwa or minimap2 and the unmapped reads are extracted with
+    ``samtools fastq``. Cleaned reads are written to ``{basename}_filtered_*.fastq.gz`` in the
+    current directory.
+
+    Args:
+        left: Forward (or single-end) FASTQ file.
+        right: Reverse FASTQ file for paired-end data.
+        workdir: Working directory; a temporary one is created when None.
+        cpus: Number of threads.
+        screen_accessions: GenBank nucleotide accessions to download and add to the screen.
+        screen_urls: URLs of FASTA files to download and add to the screen.
+        screen_local: Local FASTA files to add to the screen.
+        basename: Output file prefix; derived from ``left`` when None.
+        aligner: One of ``bbduk``, ``bowtie2``, ``bwa`` or ``minimap2``.
+        memory: Java heap size in GB for BBDuk.
+        debug: Show external tool output and keep the work directory.
+        pipe: Suppress the "next command" hint (set when run from ``pipeline``).
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
+
+    Raises:
+        ValueError: If ``left`` is not given.
+    """
     workdir, custom_workdir = make_workdir(workdir, "filter")
     bamthreads = min(cpus, 4)
 
@@ -189,8 +216,15 @@ def run(
                 logger.info(f"Your next command might be:\nAAFTF assemble -l {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
 
-def _rebuild_index_if_stale(marker_file, contamdb, build_cmd, debug):
-    """(Re)build an aligner index if its marker file is missing or older than contamdb."""
+def _rebuild_index_if_stale(marker_file: str, contamdb: str, build_cmd: list[str], debug: bool) -> None:
+    """Run ``build_cmd`` if the index marker file is missing or older than ``contamdb``.
+
+    Args:
+        marker_file: An index file whose presence/ctime marks a built index.
+        contamdb: The contamination FASTA the index is built from.
+        build_cmd: Index-building command to run.
+        debug: Passed to ``run_cmd`` to show tool output.
+    """
     marker = Path(marker_file)
     if not marker.exists() or marker.stat().st_ctime < Path(contamdb).stat().st_ctime:
         run_cmd(build_cmd, debug, quiet_stdout=True)

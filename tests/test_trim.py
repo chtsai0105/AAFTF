@@ -383,7 +383,7 @@ class TestTrimRunTrimmomatic:
 
         from aaftf.trim import run
 
-        with patch("aaftf.trim._find_trimmomatic", return_value=False):
+        with patch("aaftf.trim._find_trimmomatic", return_value=None):
             with patch("aaftf.trim.count_fastq", return_value=100):
                 with pytest.raises(FileNotFoundError):
                     run(**vars(args))
@@ -415,3 +415,36 @@ class TestTrimRunTrimmomatic:
         # trimmomatic writes gzipped output directly (by the .gz extension)
         assert any(a.endswith("_1P.fastq.gz") for a in cmds[0])
         assert any(a.endswith("_2P.fastq.gz") for a in cmds[0])
+
+
+class TestTrimmomaticAdaptorLookup:
+    """run_trimmomatic finds the adaptors next to the jar or under <prefix>/share/trimmomatic."""
+
+    def _run(self, tmp_path, jar):
+        args = _make_trim_args(tmp_path, method="trimmomatic", left=str(tmp_path / "s_R1.fastq.gz"), right=str(tmp_path / "s_R2.fastq.gz"), trimmomatic_adaptors="missing.fa")
+        cmds = []
+        with patch("aaftf.trim._find_trimmomatic", return_value=str(jar)):
+            with patch("aaftf.trim.count_fastq", return_value=100):
+                with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+                    with patch("aaftf.trim.safe_remove"):
+                        from aaftf.trim import run
+
+                        run(**vars(args))
+        return next(a for a in cmds[0] if a.startswith("ILLUMINACLIP:"))
+
+    def _adaptor(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(">adapt\nATCG\n")
+        return path
+
+    def test_adaptors_next_to_jar(self, tmp_path):
+        adaptors = self._adaptor(tmp_path / "share" / "trimmomatic" / "adapters" / "TruSeq3-PE.fa")
+        assert self._run(tmp_path, tmp_path / "share" / "trimmomatic" / "trimmomatic.jar").startswith(f"ILLUMINACLIP:{adaptors}:")
+
+    def test_adaptors_under_prefix_share(self, tmp_path):
+        adaptors = self._adaptor(tmp_path / "prefix" / "share" / "trimmomatic" / "adapters" / "TruSeq3-PE.fa")
+        assert self._run(tmp_path, tmp_path / "prefix" / "lib" / "java" / "trimmomatic.jar").startswith(f"ILLUMINACLIP:{adaptors}:")
+
+    def test_missing_adaptors_raise(self, tmp_path):
+        with pytest.raises(FileNotFoundError, match="--trimmomatic_adaptors"):
+            self._run(tmp_path, tmp_path / "lib" / "trimmomatic.jar")

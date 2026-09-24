@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
@@ -20,18 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 def run(
-    input,
-    out,
-    workdir=None,
-    cpus=1,
-    percent_id=95,
-    percent_cov=95,
-    minlen=500,
-    exhaustive=False,
-    debug=False,
-    pipe=False,
-    **kwargs,
-):
+    input: str,
+    out: str,
+    workdir: str | None = None,
+    cpus: int = 1,
+    percent_id: float = 95,
+    percent_cov: float = 95,
+    minlen: int = 500,
+    exhaustive: bool = False,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
     """Run routines to identify and remove duplicate contigs.
 
     Contigs are keyed by ID (the first word of the header, as minimap2 reports
@@ -39,6 +40,19 @@ def run(
     is aligned against all longer contigs; it is dropped if a hit exceeds both
     ``percent_id`` identity and ``percent_cov`` coverage. Contigs shorter than
     ``minlen`` are always dropped.
+
+    Args:
+        input: Assembly FASTA.
+        out: Output FASTA of retained contigs.
+        workdir: Working directory; a temporary one is created when None.
+        cpus: Number of minimap2 threads.
+        percent_id: Identity threshold (percent) a hit must exceed.
+        percent_cov: Query coverage threshold (percent) a hit must exceed.
+        minlen: Contigs shorter than this are dropped.
+        exhaustive: Check every contig, not only those shorter than N75.
+        debug: Log per-contig progress and keep the work directory.
+        pipe: Suppress the "next command" hint (set when run from ``pipeline``).
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
     """
     workdir, custom_workdir = make_workdir(workdir, "rmdup")
 
@@ -48,7 +62,7 @@ def run(
 
     # read the assembly once; later lookups and the per-contig query/reference files use it
     lengths = []
-    seqs = {}
+    seqs: dict[str, str] = {}
     with open(input) as infile:
         for header, seq in SimpleFastaParser(infile):
             lengths.append(len(seq))
@@ -94,8 +108,19 @@ def run(
     cleanup_workdir(workdir, debug, custom_workdir)
 
 
-def _write_query_and_reference(seqs, query_id, reference_ids, workdir, prefix):
-    """Write ``query_id`` and ``reference_ids`` (from ``seqs``) to separate FASTA files; return their paths."""
+def _write_query_and_reference(seqs: dict[str, str], query_id: str, reference_ids: list[str], workdir: str, prefix: str) -> tuple[str, str]:
+    """Write ``query_id`` and ``reference_ids`` (from ``seqs``) to separate FASTA files; return their paths.
+
+    Args:
+        seqs: Sequences keyed by contig ID.
+        query_id: ID of the query contig.
+        reference_ids: IDs of the reference contigs.
+        workdir: Directory for the files.
+        prefix: Filename prefix (``{prefix}query.fasta``, ``{prefix}reference.fasta``).
+
+    Returns:
+        ``(query_path, reference_path)``.
+    """
     query = str(Path(workdir, f"{prefix}query.fasta"))
     reference = str(Path(workdir, f"{prefix}reference.fasta"))
     with open(query, "w") as qout:
@@ -106,8 +131,21 @@ def _write_query_and_reference(seqs, query_id, reference_ids, workdir, prefix):
     return query, reference
 
 
-def _is_duplicate(query, reference, name, cpus, percent_id, percent_cov, debug):
-    """Return True if minimap2 aligns ``query`` to ``reference`` above both identity and coverage thresholds."""
+def _is_duplicate(query: str, reference: str, name: str, cpus: int, percent_id: float, percent_cov: float, debug: bool) -> bool:
+    """Return True if minimap2 aligns ``query`` to ``reference`` above both identity and coverage thresholds.
+
+    Args:
+        query: Query FASTA path.
+        reference: Reference FASTA path.
+        name: Query contig ID (for logging).
+        cpus: Number of minimap2 threads.
+        percent_id: Identity threshold (percent) a hit must exceed.
+        percent_cov: Query coverage threshold (percent) a hit must exceed.
+        debug: Passed to ``paf_hits``.
+
+    Returns:
+        Whether any hit exceeds both thresholds.
+    """
     cmd = ["minimap2", "-t", str(cpus), "-x", "asm5", "-N5", reference, query]
     for hit in paf_hits(cmd, debug=debug, quiet=True):
         pident = hit.matches / hit.aln_len * 100

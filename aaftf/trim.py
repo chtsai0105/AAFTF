@@ -1,13 +1,14 @@
-"""Trims FASTQ files for reads.
+"""Adapter- and quality-trim FASTQ reads.
 
-This is usually for Illumina reads to quality trim reads.
-This uses either fastp, includes merging step for paired reads, OR
-trimmomatic. Expects adaptor sequence files to be in trimmomatic installed folder.
+This is usually for Illumina reads. Trimming uses BBDuk (default), fastp
+(optionally merging paired reads) or Trimmomatic; Trimmomatic expects the
+adaptor sequence files to be in its installed folder.
 """
 
 import logging
 import shutil
 from pathlib import Path
+from typing import Any
 
 from aaftf.utility import basename_from_reads, count_fastq, run_cmd, safe_remove
 
@@ -33,30 +34,55 @@ logger = logging.getLogger(__name__)
 
 # flake8: noqa: C901
 def run(
-    left,
-    right=None,
-    basename=None,
-    method="bbduk",
-    cpus=1,
-    memory=8,
-    minlen=75,
-    avgqual=10,
-    trimmomatic_adaptors="TruSeq3-PE.fa",
-    trimmomatic_clip="2:30:10",
-    trimmomatic_leadingwindow=3,
-    trimmomatic_trailingwindow=3,
-    trimmomatic_slidingwindow="4:15",
-    trimmomatic_quality="phred33",
-    merge=False,
-    dedup=False,
-    cutfront=False,
-    cuttail=False,
-    cutright=False,
-    debug=False,
-    pipe=False,
-    **kwargs,
-):
-    """Run command for the module subtool of AAFTF."""
+    left: str,
+    right: str | None = None,
+    basename: str | None = None,
+    method: str = "bbduk",
+    cpus: int = 1,
+    memory: int = 8,
+    minlen: int = 75,
+    avgqual: int = 10,
+    trimmomatic_adaptors: str = "TruSeq3-PE.fa",
+    trimmomatic_clip: str = "2:30:10",
+    trimmomatic_leadingwindow: int = 3,
+    trimmomatic_trailingwindow: int = 3,
+    trimmomatic_slidingwindow: str = "4:15",
+    trimmomatic_quality: str = "phred33",
+    merge: bool = False,
+    dedup: bool = False,
+    cutfront: bool = False,
+    cuttail: bool = False,
+    cutright: bool = False,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the ``trim`` subcommand: count input reads and dispatch to the chosen trimmer.
+
+    Args:
+        left: Left/forward (or single-end) FASTQ.
+        right: Right/reverse FASTQ for paired-end data, or None.
+        basename: Output file prefix; derived from ``left`` if not given.
+        method: Trimmer to use: ``"bbduk"``, ``"trimmomatic"`` or ``"fastp"``.
+        cpus: Number of threads.
+        memory: Java heap size in GB (BBDuk only).
+        minlen: Minimum read length after trimming.
+        avgqual: Minimum average read quality (BBDuk and fastp).
+        trimmomatic_adaptors: Trimmomatic adaptor FASTA.
+        trimmomatic_clip: Trimmomatic ILLUMINACLIP settings.
+        trimmomatic_leadingwindow: Trimmomatic LEADING quality.
+        trimmomatic_trailingwindow: Trimmomatic TRAILING quality.
+        trimmomatic_slidingwindow: Trimmomatic SLIDINGWINDOW settings.
+        trimmomatic_quality: Quality encoding, ``"phred33"`` or ``"phred64"``.
+        merge: Merge overlapping pairs (fastp only).
+        dedup: Remove duplicate reads (fastp only).
+        cutfront: Enable fastp ``--cut_front``.
+        cuttail: Enable fastp ``--cut_tail``.
+        cutright: Enable fastp ``--cut_right``.
+        debug: Show external command output when True.
+        pipe: Suppress the "next command" hint when True.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
+    """
     if not basename:
         basename = basename_from_reads(left)
 
@@ -89,8 +115,23 @@ def run(
         logger.info(f"Unknown trimming method: {method}")
 
 
-def run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe):
-    """Trim reads with BBDuk."""
+def run_bbduk(left: str, right: str | None, basename: str, cpus: int, memory: int, minlen: int, avgqual: int, debug: bool, pipe: bool) -> None:
+    """Trim reads with BBDuk.
+
+    Paired reads are interleaved with ``shuffle.sh`` before trimming and split back into
+    ``<basename>_1P``/``_2P`` files with ``reformat.sh``; single-end output is ``<basename>_1U``.
+
+    Args:
+        left: Left/forward (or single-end) FASTQ.
+        right: Right/reverse FASTQ, or None for single-end.
+        basename: Output file prefix.
+        cpus: Number of threads.
+        memory: Java heap size in GB.
+        minlen: Minimum read length after trimming.
+        avgqual: Minimum average read quality (``maq``).
+        debug: Show external command output when True.
+        pipe: Suppress the "next command" hint when True.
+    """
     java_mem = f"-Xmx{memory}g"
 
     logger.info("Adapter trimming using BBDuk")
@@ -142,21 +183,44 @@ def run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe)
 
 
 def run_trimmomatic(
-    left,
-    right,
-    basename,
-    cpus,
-    minlen,
-    trimmomatic_adaptors,
-    trimmomatic_clip,
-    trimmomatic_leadingwindow,
-    trimmomatic_trailingwindow,
-    trimmomatic_slidingwindow,
-    trimmomatic_quality,
-    debug,
-    pipe,
-):
-    """Trim reads with Trimmomatic."""
+    left: str,
+    right: str | None,
+    basename: str,
+    cpus: int,
+    minlen: int,
+    trimmomatic_adaptors: str,
+    trimmomatic_clip: str,
+    trimmomatic_leadingwindow: int,
+    trimmomatic_trailingwindow: int,
+    trimmomatic_slidingwindow: str,
+    trimmomatic_quality: str,
+    debug: bool,
+    pipe: bool,
+) -> None:
+    """Trim reads with Trimmomatic.
+
+    If ``trimmomatic_adaptors`` does not exist, the TruSeq3 adaptor file is searched for
+    next to the jar and under parent ``share/trimmomatic`` directories; the function logs
+    and returns without trimming if none is found.
+
+    Args:
+        left: Left/forward (or single-end) FASTQ.
+        right: Right/reverse FASTQ, or None for single-end.
+        basename: Output file prefix.
+        cpus: Number of threads.
+        minlen: Minimum read length after trimming.
+        trimmomatic_adaptors: Adaptor FASTA for ILLUMINACLIP.
+        trimmomatic_clip: ILLUMINACLIP settings.
+        trimmomatic_leadingwindow: LEADING quality.
+        trimmomatic_trailingwindow: TRAILING quality.
+        trimmomatic_slidingwindow: SLIDINGWINDOW settings.
+        trimmomatic_quality: Quality encoding, ``"phred33"`` or ``"phred64"``.
+        debug: Show external command output when True.
+        pipe: Suppress the "next command" hint when True.
+
+    Raises:
+        FileNotFoundError: If the Trimmomatic jar or the adaptors file cannot be located.
+    """
     trimmomatic_path = _find_trimmomatic()
     if trimmomatic_path:
         jarfile = trimmomatic_path
@@ -164,7 +228,6 @@ def run_trimmomatic(
         raise FileNotFoundError("Trimmomatic cannot be found - please provide location of trimmomatic.jar file.")
 
     path_to_adaptors = trimmomatic_adaptors
-    clipstr = f"ILLUMINACLIP:{path_to_adaptors}:{trimmomatic_clip}"
     leadingwindow = f"LEADING:{trimmomatic_leadingwindow}"
     trailingwindow = f"TRAILING:{trimmomatic_trailingwindow}"
     slidingwindow = f"SLIDINGWINDOW:{trimmomatic_slidingwindow}"
@@ -173,29 +236,20 @@ def run_trimmomatic(
     quality = f"-{quality}"  # add leading dash
 
     if not Path(path_to_adaptors).exists():
-        if right:
-            path_to_adaptors = str(Path(jarfile).parent / TRIMMOMATIC_TRUSEQPE)
-        else:
-            path_to_adaptors = str(Path(jarfile).parent / TRIMMOMATIC_TRUSEQSE)
+        adaptor_name = TRIMMOMATIC_TRUSEQPE if right else TRIMMOMATIC_TRUSEQSE
+        path_to_adaptors = str(Path(jarfile).parent / adaptor_name)
+
+        # otherwise look for <prefix>/share/trimmomatic/<adaptors> in each folder above the jar
+        findpath = Path(jarfile).parent
+        while not Path(path_to_adaptors).exists():
+            path_to_adaptors = str(findpath / "share" / "trimmomatic" / adaptor_name)
+            if findpath.parent == findpath:  # reached filesystem root
+                break
+            findpath = findpath.parent
 
         if not Path(path_to_adaptors).exists():
-            findpath = Path(jarfile).parent
-            path_to_adaptors = ""
-            while True:
-                if Path(str(findpath) + "/share").exists():
-                    if right:
-                        path_to_adaptors = str(Path(findpath, "/share/trimmomatic", TRIMMOMATIC_TRUSEQPE))
-                    else:
-                        path_to_adaptors = str(Path(findpath, "/share/trimmomatic", TRIMMOMATIC_TRUSEQSE))
-                    break
-                new_path = findpath.parent
-                if new_path == findpath:  # reached filesystem root
-                    break
-                findpath = new_path
-
-        if not Path(path_to_adaptors).exists():
-            logger.info("Cannot find adaptors file please specify manually")
-            return
+            raise FileNotFoundError(f"Cannot find the Trimmomatic adaptors file {trimmomatic_adaptors}; pass its path with --trimmomatic_adaptors")
+    clipstr = f"ILLUMINACLIP:{path_to_adaptors}:{trimmomatic_clip}"
 
     if left and right:
         cmd = [
@@ -253,8 +307,24 @@ def run_trimmomatic(
             logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -o {:} -c {:}".format(basename + "_1U.fastq.gz", basename, cpus))
 
 
-def run_fastp(left, right, basename, cpus, minlen, avgqual, merge, dedup, cutfront, cuttail, cutright, debug, pipe):
-    """Trim reads with fastp."""
+def run_fastp(left: str, right: str | None, basename: str, cpus: int, minlen: int, avgqual: int, merge: bool, dedup: bool, cutfront: bool, cuttail: bool, cutright: bool, debug: bool, pipe: bool) -> None:
+    """Trim reads with fastp, writing HTML and JSON reports alongside the trimmed FASTQ.
+
+    Args:
+        left: Left/forward (or single-end) FASTQ.
+        right: Right/reverse FASTQ, or None for single-end.
+        basename: Output file prefix.
+        cpus: Number of threads.
+        minlen: Minimum read length after trimming.
+        avgqual: Minimum average read quality.
+        merge: Merge overlapping pairs into ``<basename>_MG.fastq.gz`` (paired only).
+        dedup: Remove duplicate reads.
+        cutfront: Enable ``--cut_front``.
+        cuttail: Enable ``--cut_tail``.
+        cutright: Enable ``--cut_right``.
+        debug: Show external command output when True.
+        pipe: Suppress the "next command" hint when True.
+    """
     logger.info("Adapter trimming using fastp")
     cmd = [
         "fastp",
@@ -295,7 +365,15 @@ def run_fastp(left, right, basename, cpus, minlen, avgqual, merge, dedup, cutfro
     _report_trimmed(basename, right, pipe, cpus)
 
 
-def _report_trimmed(basename, right, pipe, cpus):
+def _report_trimmed(basename: str, right: str | None, pipe: bool, cpus: int) -> None:
+    """Log the number of reads left after trimming and the suggested next command.
+
+    Args:
+        basename: Output file prefix of the trimmed reads.
+        right: Right/reverse FASTQ; truthy means paired-end output is counted.
+        pipe: Suppress the "next command" hint when True.
+        cpus: Thread count shown in the suggested command.
+    """
     if right:
         clean = count_fastq(f"{basename}_1P.fastq.gz")
         clean = clean * 2
@@ -311,8 +389,16 @@ def _report_trimmed(basename, right, pipe, cpus):
             logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -o {:} -c {:}".format(basename + "_1U.fastq.gz", basename, cpus))
 
 
-def _find_trimmomatic():
-    """Finds the trimmomatic jar file."""
+def _find_trimmomatic() -> str | None:
+    """Locate the Trimmomatic jar file from the ``trimmomatic`` launcher on PATH.
+
+    Handles the Homebrew bash wrapper (reads the jar from its ``exec java`` line) and the
+    bioconda Python wrapper (``trimmomatic.jar`` next to the script).
+
+    Returns:
+        The jar path, or None if the launcher is missing, of an unknown type, or a bash wrapper
+        without a ``.jar`` on an ``exec java`` line.
+    """
     trim_path = shutil.which("trimmomatic")
     if trim_path:
         with open(str(Path(trim_path).resolve())) as trim_shell:
@@ -327,7 +413,4 @@ def _find_trimmomatic():
             elif "#!/usr/bin/env python" in first_line:
                 trimjardir = Path(trim_path).resolve().parent
                 return str(trimjardir / "trimmomatic.jar")
-            else:
-                return False
-    else:
-        return False
+    return None

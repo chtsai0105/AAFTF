@@ -1,6 +1,7 @@
-"""This module sorts FASTA sequences by size and renames headers."""
+"""Sort FASTA sequences by length and rename their headers."""
 
 import logging
+from typing import Any
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
@@ -12,8 +13,18 @@ __all__ = ["run"]
 logger = logging.getLogger(__name__)
 
 
-def run(input, out, minlen=0, name="scaffold", **kwargs):
-    """Sort contig/scaffold file longest to shortest and rename."""
+def run(input: str, out: str, minlen: int = 0, name: str = "scaffold", **kwargs: Any) -> None:
+    """Sort contigs longest to shortest, drop short ones, and rename them ``{name}_N``.
+
+    Only the first record for each duplicated header is kept.
+
+    Args:
+        input: Input FASTA.
+        out: Output FASTA.
+        minlen: Minimum sequence length to keep.
+        name: Prefix for the new sequence names.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
+    """
     logger.info("Sorting sequences by length longest --> shortest")
     all_seqs = {}
     with open(input) as fasta_in:

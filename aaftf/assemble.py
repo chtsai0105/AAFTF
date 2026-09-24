@@ -1,4 +1,4 @@
-"""Module to run a genome assembly using defaults for Fungi.
+"""Run a genome assembly using defaults suited to fungi.
 
 This uses SPAdes by default but additional tools like megahit are
 supported and can be added. There is some access to updating
@@ -12,39 +12,60 @@ import re
 import shutil
 import uuid
 from pathlib import Path
+from typing import Any
 
 from aaftf.utility import fasta_stats, run_cmd
 
-__all__ = ["run", "run_spades", "run_dipspades", "run_megahit", "run_unicycler"]
+__all__ = ["run", "run_spades", "run_megahit", "run_unicycler"]
 
 
 logger = logging.getLogger(__name__)
 
 
 def run(
-    left,
-    out,
-    method="spades",
-    workdir=None,
-    cpus=1,
-    memory="32",
-    isolate=True,
-    careful=True,
-    assembler_args=None,
-    tmpdir=None,
-    right=None,
-    longreads=None,
-    merged=None,
-    haplocontigs=False,
-    debug=False,
-    pipe=False,
-    **kwargs,
-):
-    """General run command for this subcommand module where parameters are consumed."""
+    left: str,
+    out: str | None,
+    method: str = "spades",
+    workdir: str | None = None,
+    cpus: int = 1,
+    memory: str = "32",
+    isolate: bool = True,
+    careful: bool = True,
+    assembler_args: list[str] | None = None,
+    tmpdir: str | None = None,
+    right: str | None = None,
+    longreads: str | None = None,
+    merged: str | None = None,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the ``assemble`` subcommand by dispatching to the chosen assembler.
+
+    Args:
+        left: Left/forward (or single-end) FASTQ.
+        out: Output assembly FASTA; derived from ``left`` if None.
+        method: Assembler: ``"spades"``, ``"megahit"`` or ``"unicycler"``
+            (``"masurca"``/``"nextdenovo"`` only log that they are not implemented).
+        workdir: Assembler output directory; a unique name is generated if None.
+        cpus: Number of threads.
+        memory: Memory in GB, as a string (SPAdes ``--mem``, megahit ``--memory``).
+        isolate: Pass ``--isolate`` to SPAdes.
+        careful: Pass ``--careful`` to SPAdes (only when ``isolate`` is False).
+        assembler_args: Extra arguments appended to the assembler command.
+        tmpdir: Assembler temporary directory.
+        right: Right/reverse FASTQ, or None for single-end.
+        longreads: Long-read FASTQ (Unicycler only).
+        merged: Merged-pair FASTQ, or None.
+        debug: Show external command output when True.
+        pipe: Suppress the "next command" hint when True.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
+
+    Raises:
+        ValueError: If ``method`` is not a known assembler.
+    """
     if method == "spades":
         run_spades(workdir=workdir, cpus=cpus, memory=memory, isolate=isolate, careful=careful, assembler_args=assembler_args, tmpdir=tmpdir, left=left, right=right, merged=merged, out=out, debug=debug, pipe=pipe)
-    elif method == "dipspades":
-        run_dipspades(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, haplocontigs=haplocontigs, tmpdir=tmpdir, left=left, right=right, merged=merged, out=out, debug=debug, pipe=pipe)
     elif method == "megahit":
         run_megahit(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, tmpdir=tmpdir, left=left, right=right, out=out, debug=debug, pipe=pipe)
     elif method == "masurca":
@@ -54,11 +75,45 @@ def run(
     elif method == "unicycler":
         run_unicycler(workdir=workdir, cpus=cpus, left=left, right=right, longreads=longreads, merged=merged, out=out, debug=debug, pipe=pipe)
     else:
-        logger.info(f"Unknown assembler method {method}")
+        raise ValueError(f"Unknown assembler method {method}")
 
 
-def run_spades(workdir=None, cpus=1, memory="32", isolate=True, careful=True, assembler_args=None, tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
-    """Run SPAdes assembhler."""
+def run_spades(
+    workdir: str | None = None,
+    cpus: int = 1,
+    memory: str = "32",
+    isolate: bool = True,
+    careful: bool = True,
+    assembler_args: list[str] | None = None,
+    tmpdir: str | None = None,
+    left: str | None = None,
+    right: str | None = None,
+    merged: str | None = None,
+    out: str | None = None,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the SPAdes assembler and copy ``scaffolds.fasta`` to the output file.
+
+    If ``workdir`` already exists, SPAdes is restarted from its last checkpoint instead.
+
+    Args:
+        workdir: SPAdes output directory; a unique ``spades_*`` name is generated if None.
+        cpus: Number of threads.
+        memory: Memory limit in GB, as a string.
+        isolate: Pass ``--isolate``.
+        careful: Pass ``--careful`` (only when ``isolate`` is False).
+        assembler_args: Extra SPAdes arguments.
+        tmpdir: SPAdes temporary directory.
+        left: Left/forward (or single-end) FASTQ.
+        right: Right/reverse FASTQ, or None.
+        merged: Merged-pair FASTQ, or None.
+        out: Output assembly FASTA; derived from ``left`` if None.
+        debug: Show external command output when True.
+        pipe: Suppress the "next command" hint when True.
+        **kwargs: Extra keyword arguments; ignored.
+    """
     if not workdir:
         workdir = "spades_" + str(uuid.uuid4())[:8]
 
@@ -91,7 +146,7 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=True, careful=True, as
 
     # this basically overrides everything above and only runs --restart-from option
     if Path(workdir).is_dir():
-        runcmd = ["spades.py", "-o", workdir, "--threads", str(cpus), "--mem", memory, "--restart-from last"]
+        runcmd = ["spades.py", "-o", workdir, "--threads", str(cpus), "--mem", memory, "--restart-from", "last"]
 
     logger.info("Assembling FASTQ data using Spades")
     run_cmd(runcmd, debug, quiet_stdout=True)
@@ -100,52 +155,34 @@ def run_spades(workdir=None, cpus=1, memory="32", isolate=True, careful=True, as
     _finish_assembly(Path(workdir, "scaffolds.fasta"), final_out, "Spades", cpus, pipe)
 
 
-def run_dipspades(workdir=None, cpus=1, memory="32", assembler_args=None, haplocontigs=False, tmpdir=None, left=None, right=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
-    """Run dipSPAdes for diploid assembly support, only on older version of SPAdes."""
-    if not workdir:
-        workdir = "dipspades_" + str(os.getpid())
+def run_megahit(
+    workdir: str | None = None,
+    cpus: int = 1,
+    memory: str | None = None,
+    assembler_args: list[str] | None = None,
+    tmpdir: str | None = None,
+    left: str | None = None,
+    right: str | None = None,
+    out: str | None = None,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the MEGAHIT assembler, which is faster but may be less accurate than SPAdes.
 
-    runcmd = ["dipspades.py", "--threads", str(cpus), "--cov-cutoff", "auto", "--mem", memory, "-o", workdir]
-
-    if assembler_args:
-        runcmd.extend(assembler_args)
-
-    if haplocontigs:
-        runcmd.extend(["--hap", haplocontigs])
-
-    if tmpdir:
-        runcmd.extend(["--tmp-dir", tmpdir])
-
-    forward_reads, reverse_reads = _resolve_reads(left, right)
-
-    if not reverse_reads:
-        runcmd.extend(["-s", forward_reads])
-    else:
-        runcmd.extend(["--pe1-1", forward_reads, "--pe1-2", reverse_reads])
-        if merged:
-            runcmd.extend(["-s", merged])
-
-    # this basically overrides everything above and only runs --restart-from option
-    if Path(workdir).is_dir():
-        runcmd = ["dipspades.py", "-o", workdir, "--continue"]
-
-    logger.info("Assembling FASTQ data using Spades")
-    run_cmd(runcmd, debug, quiet_stdout=True)
-
-    final_out = _derive_final_out(out, forward_reads, ".dipspades.fasta")
-    prefix = Path(final_out).name.removesuffix(".dipspades.fasta")
-
-    if Path(workdir, "consensus_contigs.fasta").is_file():
-        shutil.copyfile(str(Path(workdir, "dipspades", "paired_consensus_contigs.fasta")), prefix + ".dipspades_consensus_paired.fasta")
-        shutil.copyfile(str(Path(workdir, "dipspades", "paired_consensus_contigs.fasta")), prefix + ".dipspades_consensus_unpaired.fasta")
-        logger.info("Dipspades assembly copied over: {:}".format(prefix + ".dipspades_consensus_unpaired.fasta"), prefix + ".dipspades_consensus_paired.fasta")
-
-    missing_msg = "Spades assembly output missing -- check Dipspades logfile in {:}.".format(str(Path(workdir, "dipspades", "dipspades.log")))
-    _finish_assembly(Path(workdir, "consensus_contigs.fasta"), final_out, "Dipspades", cpus, pipe, missing_msg=missing_msg)
-
-
-def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=None, left=None, right=None, out=None, debug=False, pipe=False, **kwargs):
-    """Run megahit assembler. This is faster but maybe less accurate."""
+    Args:
+        workdir: MEGAHIT output directory; ``megahit_<pid>`` if None.
+        cpus: Number of threads.
+        memory: Value for ``--memory``, as a string, or None to use the MEGAHIT default.
+        assembler_args: Extra MEGAHIT arguments.
+        tmpdir: Temporary directory.
+        left: Left/forward (or single-end) FASTQ.
+        right: Right/reverse FASTQ, or None.
+        out: Output assembly FASTA; derived from ``left`` if None.
+        debug: Show external command output when True.
+        pipe: Suppress the "next command" hint when True.
+        **kwargs: Extra keyword arguments; ignored.
+    """
     if not workdir:
         workdir = "megahit_" + str(os.getpid())
 
@@ -177,8 +214,33 @@ def run_megahit(workdir=None, cpus=1, memory=None, assembler_args=None, tmpdir=N
     _finish_assembly(Path(workdir, "final.contigs.fa"), final_out, "Megahit", cpus, pipe)
 
 
-def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, merged=None, out=None, debug=False, pipe=False, **kwargs):
-    """Run Unicycler assembhler."""
+def run_unicycler(
+    workdir: str | None = None,
+    cpus: int = 1,
+    left: str | None = None,
+    right: str | None = None,
+    longreads: str | None = None,
+    merged: str | None = None,
+    out: str | None = None,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the Unicycler assembler.
+
+    Args:
+        workdir: Unicycler output directory; a unique ``unicycler_*`` name is generated if None.
+        cpus: Number of threads.
+        left: Left/forward (or single-end) FASTQ.
+        right: Right/reverse FASTQ, or None.
+        longreads: Long-read FASTQ passed as ``--long``, or None.
+        merged: Merged-pair FASTQ, passed as ``--unpaired`` alongside paired reads (Unicycler takes a
+            single ``--unpaired`` file, so it is ignored for single-end input).
+        out: Output assembly FASTA; derived from ``left`` if None.
+        debug: Show external command output when True.
+        pipe: Suppress the "next command" hint when True.
+        **kwargs: Extra keyword arguments; ignored.
+    """
     if not workdir:
         workdir = "unicycler_" + str(uuid.uuid4())[:8]
 
@@ -194,8 +256,6 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
 
     if not reverse_reads:
         runcmd.extend(["--unpaired", forward_reads])
-    elif merged:
-        runcmd.extend(["--unpaired", merged])
     else:
         runcmd.extend(["--short1", forward_reads, "--short2", reverse_reads])
         if merged:
@@ -216,8 +276,19 @@ def run_unicycler(workdir=None, cpus=1, left=None, right=None, longreads=None, m
     _finish_assembly(Path(workdir, "assembly.fasta"), final_out, "Unicycler", cpus, pipe)
 
 
-def _resolve_reads(left, right):
-    """Resolve absolute paths for forward/reverse reads; exit if forward reads are missing."""
+def _resolve_reads(left: str | None, right: str | None) -> tuple[str, str | None]:
+    """Resolve absolute paths for the forward and reverse reads.
+
+    Args:
+        left: Forward reads path.
+        right: Reverse reads path, or None.
+
+    Returns:
+        Tuple of (absolute forward path, absolute reverse path or None).
+
+    Raises:
+        ValueError: If ``left`` is not given.
+    """
     forward_reads = str(Path(left).resolve()) if left else None
     reverse_reads = str(Path(right).resolve()) if right else None
     if not forward_reads:
@@ -225,8 +296,17 @@ def _resolve_reads(left, right):
     return forward_reads, reverse_reads
 
 
-def _derive_final_out(out, forward_reads, suffix):
-    """Derive the assembly output FASTA filename from --out, or from the input read filename."""
+def _derive_final_out(out: str | None, forward_reads: str, suffix: str) -> str:
+    """Derive the assembly output FASTA filename from ``out``, or from the input read filename.
+
+    Args:
+        out: User-supplied output path; returned unchanged if set.
+        forward_reads: Forward reads path, whose name minus ``.fastq``/``.fq`` extension is the prefix.
+        suffix: Suffix appended to the prefix (e.g. ``".spades.fasta"``).
+
+    Returns:
+        The output FASTA filename.
+    """
     if out:
         return out
     prefix = Path(forward_reads).name
@@ -236,15 +316,25 @@ def _derive_final_out(out, forward_reads, suffix):
     return prefix + suffix
 
 
-def _finish_assembly(src, final_out, tool_name, cpus, pipe, missing_msg=None):
-    """Copy the assembler's raw output to finalOut, report stats, and print the next-step hint."""
-    if Path(src).is_file():
-        shutil.copyfile(str(src), final_out)
-        logger.info(f"{tool_name} assembly finished: {final_out}")
-        num_seqs, assembly_size = fasta_stats(final_out)
-        logger.info(f"Assembly is {num_seqs:,} scaffolds and {assembly_size:,} bp")
-    else:
-        logger.info(missing_msg or f"{tool_name} assembly output missing -- check {tool_name} logfile.")
+def _finish_assembly(src: str | Path, final_out: str, tool_name: str, cpus: int, pipe: bool) -> None:
+    """Copy the assembler's raw output to ``final_out``, report stats, and log the next-step hint.
+
+    Args:
+        src: Assembler output FASTA.
+        final_out: Destination FASTA path.
+        tool_name: Assembler name used in log messages.
+        cpus: Thread count shown in the suggested command.
+        pipe: Suppress the "next command" hint when True.
+
+    Raises:
+        RuntimeError: If the assembler did not produce ``src``.
+    """
+    if not Path(src).is_file():
+        raise RuntimeError(f"{tool_name} assembly output {src} is missing -- check the {tool_name} log in {Path(src).parent}")
+    shutil.copyfile(str(src), final_out)
+    logger.info(f"{tool_name} assembly finished: {final_out}")
+    num_seqs, assembly_size = fasta_stats(final_out)
+    logger.info(f"Assembly is {num_seqs:,} scaffolds and {assembly_size:,} bp")
 
     if not pipe:
         logger.info(f"Your next command might be:\nAAFTF vecscreen -i {final_out} -c {cpus}")

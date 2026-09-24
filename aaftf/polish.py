@@ -1,16 +1,18 @@
-"""Runs short/long-read polishing of an assembly.
+"""Polish an assembly with short and/or long reads.
 
-Three polishing engines are supported via --method:
+Four polishing engines are supported via --method:
   - pypolca:    single-pass POLCA-style polishing (Illumina short reads)
   - polypolish: alignment-filtering short-read polisher (Illumina short reads)
   - nextpolish2: repeat-aware polishing of HiFi assemblies using a short-read
                  k-mer (yak) database (requires --longreads HiFi + short reads)
+  - racon:      long-read consensus polishing from minimap2 overlaps (requires --longreads)
 """
 
 import logging
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from aaftf.utility import align_to_sorted_bam, cleanup_workdir, make_workdir, next_step_name, print_cmd, require_tools, run_cmd
 
@@ -21,20 +23,42 @@ logger = logging.getLogger(__name__)
 
 
 def run(
-    infile,
-    outfile=None,
-    method="polypolish",
-    memory=16,
-    cpus=1,
-    left=None,
-    right=None,
-    longreads=None,
-    workdir=None,
-    debug=False,
-    pipe=False,
-    **kwargs,
-):
-    """Execute polishing step provided with reads and a contig assembly FASTA file."""
+    infile: str,
+    outfile: str | None = None,
+    method: str = "polypolish",
+    memory: int = 16,
+    cpus: int = 1,
+    left: str | None = None,
+    right: str | None = None,
+    longreads: str | None = None,
+    workdir: str | None = None,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the ``polish`` subcommand: polish an assembly FASTA with the chosen method.
+
+    Checks the required reads and tools, runs the method's ``run_<method>()`` helper, validates
+    its output and copies it to ``outfile``.
+
+    Args:
+        infile: Input assembly FASTA.
+        outfile: Output polished FASTA; ``<input prefix>.polished.fasta`` if None.
+        method: ``"polypolish"``, ``"pypolca"``, ``"nextpolish2"`` or ``"racon"`` (case-insensitive).
+        memory: Total memory in GB (pypolca only).
+        cpus: Number of threads.
+        left: Left/forward short reads, or None.
+        right: Right/reverse short reads, or None.
+        longreads: Long-read FASTQ, or None.
+        workdir: Working directory; a temporary one is created if None.
+        debug: Keep the working directory and show command output when True.
+        pipe: Suppress the "next command" hint when True.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
+
+    Raises:
+        ValueError: If reads required by ``method`` are missing or ``method`` is unknown.
+        RuntimeError: If the polisher fails or produces an empty output.
+    """
     method = method.lower()
     logger.info(f"calling {method} with input memory {memory}GB and num cpus {cpus}")
 
@@ -72,13 +96,18 @@ def run(
     }.get(method, [])
     require_tools(required_exes, hint=f"--method {method} needs: {', '.join(required_exes)}. Install the missing tool(s) (e.g. `pixi add <tool>` / `conda install -c bioconda <tool>`) and make sure the correct environment is activated.")
 
+    # the reads each method needs were checked above
     if method == "polypolish":
+        assert forward_reads
         ret, out_path = run_polypolish(infile, forward_reads, reverse_reads, cpus, workdir, polish_log, debug)
     elif method == "pypolca":
+        assert forward_reads
         ret, out_path = run_pypolca(infile, forward_reads, reverse_reads, cpus, memory, workdir, polish_log, polished_fasta)
     elif method == "nextpolish2":
+        assert forward_reads and longreads
         ret, out_path = run_nextpolish2(infile, forward_reads, reverse_reads, longreads, cpus, workdir, polish_log, debug)
     elif method == "racon":
+        assert longreads
         ret, out_path = run_racon(infile, longreads, cpus, workdir, polish_log, debug)
     else:
         raise ValueError(f"Unknown polishing method: {method}")
@@ -99,15 +128,28 @@ def run(
         logger.info(f"Your next command might be:\nAAFTF sort -i {polished_fasta} -o {next_out}")
 
 
-def run_polypolish(infile, forward_reads, reverse_reads, cpus, workdir, polish_log, debug):
+def run_polypolish(infile: str, forward_reads: str, reverse_reads: str | None, cpus: int, workdir: str, polish_log: str, debug: bool) -> tuple[int, str]:
     """Polish with Polypolish.
 
     Workflow: index the assembly, align each read file separately with
     ``bwa mem -a`` (reporting all alignments, required by Polypolish), filter
     the resulting SAM pairs by insert size, then polish.
 
-    Returns (returncode, out_path). Validation, copying to the final
-    destination, and status reporting are all handled centrally by run().
+    Args:
+        infile: Input assembly FASTA (copied into ``workdir``).
+        forward_reads: Forward reads FASTQ.
+        reverse_reads: Reverse reads FASTQ.
+        cpus: Number of threads.
+        workdir: Working directory.
+        polish_log: Log file name (inside ``workdir``) for Polypolish stderr.
+        debug: Show command output when True.
+
+    Returns:
+        Tuple of (return code, polished FASTA path). Validation, copying to the final
+        destination, and status reporting are handled centrally by ``run()``.
+
+    Raises:
+        ValueError: If ``reverse_reads`` is not given.
     """
     if not reverse_reads:
         raise ValueError("--method polypolish requires paired reads (-l/--left and -r/--right)")
@@ -137,20 +179,29 @@ def run_polypolish(infile, forward_reads, reverse_reads, cpus, workdir, polish_l
     return ret.returncode, out_path
 
 
-def run_pypolca(infile, forward_reads, reverse_reads, cpus, memory, workdir, polish_log, polished_fasta):
+def run_pypolca(infile: str, forward_reads: str, reverse_reads: str | None, cpus: int, memory: int, workdir: str, polish_log: str, polished_fasta: str) -> tuple[int, str]:
     """Polish with pypolca (POLCA algorithm reimplemented in Python; runs bwa+samtools+freebayes internally).
 
     Copies pypolca's ``.vcf``/``.report`` sidecar outputs alongside
-    ``polishedFasta`` itself (as ``{polishedFasta}.vcf`` /
-    ``{polishedFasta}.pypolca_report.txt``), since those are specific to this
-    method. Returns (returncode, out_path) for the polished FASTA; validating
-    and copying that primary output is handled centrally by run().
+    ``polished_fasta`` itself (as ``{polished_fasta}.vcf`` /
+    ``{polished_fasta}.pypolca_report.txt``), since those are specific to this
+    method.
+
+    Args:
+        infile: Input assembly FASTA.
+        forward_reads: Forward reads FASTQ.
+        reverse_reads: Reverse reads FASTQ, or None.
+        cpus: Number of threads.
+        memory: Total memory in GB; divided by ``cpus`` for pypolca's per-thread ``-m`` (min 1G).
+        workdir: Working directory.
+        polish_log: Log file name (inside ``workdir``) for pypolca output.
+        polished_fasta: Final output FASTA path, used to name the sidecar files.
+
+    Returns:
+        Tuple of (return code, polished FASTA path); validating and copying that primary
+        output is handled centrally by ``run()``.
     """
-    memperthread = int(memory / cpus)
-    if memperthread == 0:
-        # minimum should be 1Gb
-        memperthread = "1"
-    memperthread = f"{memperthread}G"
+    memperthread = f"{max(int(memory / cpus), 1)}G"  # at least 1G per thread
 
     pypolca_prefix = "pypolca"
     pypolca_outdir = str(Path(workdir, "pypolca_out"))
@@ -172,15 +223,26 @@ def run_pypolca(infile, forward_reads, reverse_reads, cpus, memory, workdir, pol
     return ret.returncode, out_path
 
 
-def run_nextpolish2(infile, forward_reads, reverse_reads, longreads, cpus, workdir, polish_log, debug):
+def run_nextpolish2(infile: str, forward_reads: str, reverse_reads: str | None, longreads: str, cpus: int, workdir: str, polish_log: str, debug: bool) -> tuple[int, str]:
     """Polish with NextPolish2.
 
     Workflow: build a short-read k-mer (yak) database, map HiFi long reads to
     the assembly with minimap2, then run nextPolish2's repeat-aware
     correction using the HiFi alignments plus the yak k-mer database.
 
-    Returns (returncode, out_path). Validation, copying to the final
-    destination, and status reporting are all handled centrally by run().
+    Args:
+        infile: Input assembly FASTA (copied into ``workdir``).
+        forward_reads: Forward short reads FASTQ.
+        reverse_reads: Reverse short reads FASTQ, or None.
+        longreads: HiFi long-read FASTQ.
+        cpus: Number of threads.
+        workdir: Working directory.
+        polish_log: Log file name (inside ``workdir``) for nextPolish2 output.
+        debug: Show command output when True.
+
+    Returns:
+        Tuple of (return code, polished FASTA path). Validation, copying to the final
+        destination, and status reporting are handled centrally by ``run()``.
     """
     assembly = str(Path(workdir, Path(infile).name))
     shutil.copyfile(infile, assembly)
@@ -205,14 +267,23 @@ def run_nextpolish2(infile, forward_reads, reverse_reads, longreads, cpus, workd
     return ret.returncode, out_path
 
 
-def run_racon(infile, longreads, cpus, workdir, polish_log, debug):
+def run_racon(infile: str, longreads: str, cpus: int, workdir: str, polish_log: str, debug: bool) -> tuple[int, str]:
     """Polish with Racon.
 
     Workflow: map long reads to the assembly with minimap2 (producing PAF
     overlaps), then run racon using those overlaps to correct the assembly.
 
-    Returns (returncode, out_path). Validation, copying to the final
-    destination, and status reporting are all handled centrally by run().
+    Args:
+        infile: Input assembly FASTA (copied into ``workdir``).
+        longreads: Long-read FASTQ.
+        cpus: Number of threads.
+        workdir: Working directory.
+        polish_log: Log file name (inside ``workdir``) for racon stderr.
+        debug: Show command output when True.
+
+    Returns:
+        Tuple of (return code, polished FASTA path). Validation, copying to the final
+        destination, and status reporting are handled centrally by ``run()``.
     """
     assembly = str(Path(workdir, Path(infile).name))
     shutil.copyfile(infile, assembly)

@@ -68,7 +68,6 @@ def _make_asm_args(tmp_path, method="spades", left=_UNSET, right=None, **overrid
         isolate=True,
         assembler_args=None,
         tmpdir=None,
-        haplocontigs=False,
         out=str(tmp_path / f"sample.{method}.fasta"),
         debug=False,
         pipe=True,
@@ -273,11 +272,18 @@ class TestAssembleRunSpades:
         _run_spades(tmp_path, left, right, out=out, create_output=True)
         assert Path(out).exists()
 
-    def test_missing_scaffolds_no_crash(self, tmp_path):
+    def test_missing_scaffolds_raises(self, tmp_path):
         left = str(tmp_path / "filtered_1.fastq.gz")
         right = str(tmp_path / "filtered_2.fastq.gz")
-        # Should not raise even when spades produces no output
-        _run_spades(tmp_path, left, right, create_output=False)
+        with pytest.raises(RuntimeError, match="Spades assembly output"):
+            _run_spades(tmp_path, left, right, create_output=False)
+
+    def test_existing_workdir_restarts_from_last(self, tmp_path):
+        left = str(tmp_path / "filtered_1.fastq.gz")
+        args = _make_asm_args(tmp_path, method="spades", left=left)
+        Path(args.workdir).mkdir(parents=True, exist_ok=True)
+        cmds, _ = _run_spades(tmp_path, left)
+        assert cmds[0][-2:] == ["--restart-from", "last"]
 
     def test_cov_cutoff_auto_in_command(self, tmp_path):
         left = str(tmp_path / "filtered_1.fastq.gz")
@@ -337,10 +343,11 @@ class TestAssembleRunMegahit:
         _run_megahit(tmp_path, left, right, out=out, create_output=True)
         assert Path(out).exists()
 
-    def test_missing_final_contigs_no_crash(self, tmp_path):
+    def test_missing_final_contigs_raises(self, tmp_path):
         left = str(tmp_path / "filtered_1.fastq.gz")
         right = str(tmp_path / "filtered_2.fastq.gz")
-        _run_megahit(tmp_path, left, right, create_output=False)
+        with pytest.raises(RuntimeError, match="Megahit assembly output"):
+            _run_megahit(tmp_path, left, right, create_output=False)
 
     def test_command_starts_with_megahit(self, tmp_path):
         left = str(tmp_path / "filtered_1.fastq.gz")
@@ -353,44 +360,40 @@ class TestAssembleRunMegahit:
 # ---------------------------------------------------------------------------
 
 
+def _run_unicycler(tmp_path, left, right=None, **extra):
+    """Invoke run_unicycler() with subprocess mocked (writing assembly.fasta); return the command."""
+    args = _make_asm_args(tmp_path, method="unicycler", left=left, right=right, **extra)
+    cmds = []
+
+    def _fake_run(cmd, **kw):
+        cmds.append(cmd)
+        workdir = Path(cmd[cmd.index("-o") + 1])
+        workdir.mkdir(parents=True, exist_ok=True)
+        (workdir / "assembly.fasta").write_text(">contig1\nATCGATCG\n")
+
+    from aaftf.assemble import run_unicycler
+
+    with patch("aaftf.utility.subprocess.run", side_effect=_fake_run):
+        run_unicycler(**vars(args))
+    return cmds[0]
+
+
 class TestAssembleRunUnicycler:
     def test_pe_command_uses_short1_short2(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        args = _make_asm_args(tmp_path, method="unicycler", left=left, right=right)
-        cmds = []
+        cmd = _run_unicycler(tmp_path, str(tmp_path / "filtered_1.fastq.gz"), str(tmp_path / "filtered_2.fastq.gz"))
+        assert "--short1" in cmd and "--short2" in cmd
 
-        from aaftf.assemble import run_unicycler
-
-        with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-            run_unicycler(**vars(args))
-
-        assert "--short1" in cmds[0]
-        assert "--short2" in cmds[0]
+    def test_pe_with_merged_keeps_pairs(self, tmp_path):
+        merged = str(tmp_path / "merged.fastq.gz")
+        cmd = _run_unicycler(tmp_path, str(tmp_path / "filtered_1.fastq.gz"), str(tmp_path / "filtered_2.fastq.gz"), merged=merged)
+        assert "--short1" in cmd and "--short2" in cmd
+        assert cmd[cmd.index("--unpaired") + 1] == merged
 
     def test_se_command_uses_unpaired(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        args = _make_asm_args(tmp_path, method="unicycler", left=left, right=None)
-        cmds = []
-
-        from aaftf.assemble import run_unicycler
-
-        with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-            run_unicycler(**vars(args))
-
-        assert "--unpaired" in cmds[0]
+        assert "--unpaired" in _run_unicycler(tmp_path, str(tmp_path / "filtered_1.fastq.gz"))
 
     def test_command_starts_with_unicycler(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        args = _make_asm_args(tmp_path, method="unicycler", left=left)
-        cmds = []
-
-        from aaftf.assemble import run_unicycler
-
-        with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
-            run_unicycler(**vars(args))
-
-        assert cmds[0][0] == "unicycler"
+        assert _run_unicycler(tmp_path, str(tmp_path / "filtered_1.fastq.gz"))[0] == "unicycler"
 
 
 # ---------------------------------------------------------------------------
@@ -413,9 +416,9 @@ class TestAssembleUnimplementedMethods:
         with patch("aaftf.utility.subprocess.run"):
             run(**vars(args))
 
-    def test_unknown_method_no_crash(self, tmp_path):
+    def test_unknown_method_raises(self, tmp_path):
         args = _make_asm_args(tmp_path, method="unknownasm")
         from aaftf.assemble import run
 
-        with patch("aaftf.utility.subprocess.run"):
+        with pytest.raises(ValueError, match="Unknown assembler method"):
             run(**vars(args))

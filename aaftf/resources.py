@@ -1,13 +1,23 @@
-"""URLS and hardcoded resource links."""
+"""Hard-coded URLs, accessions and database definitions used across AAFTF.
+
+Holds the NCBI/EBI download locations for contaminant and vector databases, sourmash LCA
+databases, NCBI FCS-adaptor release details, seed mitochondrial sequences, and the
+``DATABASES`` table that ``AAFTF database`` downloads from.
+"""
+
+from typing import Any
 
 __all__ = ["NCBI", "CONTAMINANT_ACCESSIONS", "DB_LINKS", "EUTILS", "SEQ_DBS", "MITO_SEQS", "FCSADAPTOR", "DATABASES"]
 
 
+# base URL of the NCBI FTP site
 NCBI = "https://ftp.ncbi.nlm.nih.gov"
 
+# genomes screened out of reads by ``filter`` (phiX spike-in)
 CONTAMINANT_ACCESSIONS = {"phiX": [f"{NCBI}/genomes/all/GCF/000/819/615/" + "GCF_000819615.1_ViralProj14015/" + "GCF_000819615.1_ViralProj14015_genomic.fna.gz"]}
 
-DB_LINKS = {
+# vector/contaminant/organelle FASTA URLs, and sourmash databases as {version, filename, url} dicts
+DB_LINKS: dict[str, list[Any]] = {
     "UniVec": [f"{NCBI}/pub/UniVec/UniVec"],
     "CONTAM_EUKS": [f"{NCBI}/pub/kitts/contam_in_euks.fa.gz"],
     "CONTAM_PROKS": [f"{NCBI}/pub/kitts/contam_in_prok.fa"],
@@ -32,6 +42,7 @@ SEQ_DBS = {
     "nucleotide_ncbi": f"{EUTILS}/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta",
 }
 
+# seed mitochondrial gene sequences (e.g. for NOVOPlasty in ``mito``)
 MITO_SEQS = {
     "COB1": (
         "atgagaattttaaaaagtcatcctttattaaaattagttaatagttatattattg"
@@ -44,7 +55,7 @@ MITO_SEQS = {
     ),
 }
 
-"""NCBI Foreign Contaminant Screen tool links"""
+# NCBI Foreign Contaminant Screen (FCS-adaptor) release, container image and script links
 
 FCSADAPTOR = {
     "VERSION": "0.5.5",
