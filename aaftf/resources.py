@@ -55,7 +55,7 @@ FCSADAPTOR = {
     "DOCKERIMAGE": "ncbi/fcs-adaptor:%s",
 }
 
-# Databases `AAFTF download` can fetch, keyed by abbreviation. `used_by` lists the subcommands that
+# Databases `AAFTF database` can fetch, keyed by abbreviation. `used_by` lists the subcommands that
 # read each one; `executable` marks files that must be runnable after download.
 DATABASES = {
     "phix": {"filename": CONTAMINANT_ACCESSIONS["phiX"][0].rsplit("/", 1)[-1], "url": CONTAMINANT_ACCESSIONS["phiX"][0], "used_by": "filter"},

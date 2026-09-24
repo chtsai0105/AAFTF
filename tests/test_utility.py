@@ -621,7 +621,7 @@ class TestRequireDatabases:
         with pytest.raises(FileNotFoundError) as exc:
             require_databases(["univec", "euks", "proks"], hint="or pass --x")
         assert "missing database(s): euks, proks" in str(exc.value)
-        assert "AAFTF download euks proks (or pass --x)" in str(exc.value)
+        assert "AAFTF database euks proks (or pass --x)" in str(exc.value)
 
     def test_never_downloads(self, monkeypatch, tmp_path):
         monkeypatch.setenv("AAFTF_DB", str(tmp_path))

@@ -5,7 +5,7 @@ Command Reference
 .. toctree::
    :maxdepth: 1
 
-   download
+   database
    trim
    mito
    filter
@@ -29,7 +29,7 @@ Command Reference
    * - Canonical name
      - Key tools
      - Purpose
-   * - :doc:`download`
+   * - :doc:`database`
      - (urllib only)
      - Fetch/cache reference databases into ``$AAFTF_DB``
    * - :doc:`trim`

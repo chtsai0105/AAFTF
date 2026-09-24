@@ -25,7 +25,7 @@ _PACKAGE_DATA = files("aaftf") / "data"
 def run(
     left,
     right,
-    out,
+    out="mito.fasta",
     workdir=None,
     minlen=10000,
     maxlen=100000,

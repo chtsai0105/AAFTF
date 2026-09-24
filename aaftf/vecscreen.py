@@ -49,7 +49,7 @@ Any segment of fewer than 50 bases between two vector matches
 
 logger = logging.getLogger(__name__)
 
-# BLAST database name used by the screens -> `AAFTF download` database it is built from
+# BLAST database name used by the screens -> `AAFTF database` database it is built from
 _CONTAM_BLAST_DBS = {"UniVec": "univec", "CONTAM_EUKS": "euks", "CONTAM_PROKS": "proks", "MITO": "mitodb"}
 
 

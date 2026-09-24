@@ -99,7 +99,7 @@ def _mock_download(url, dest, force=False):
 
 @pytest.fixture(autouse=True)
 def _stub_databases():
-    """Put stub PhiX/UniVec in the (test-isolated) database folder, as `AAFTF download` would."""
+    """Put stub PhiX/UniVec in the (test-isolated) database folder, as `AAFTF database` would."""
     for name in ("phix", "univec"):
         path = Path(db_write_dir(), DATABASES[name]["filename"])
         _write_stub_gz(path) if path.name.endswith(".gz") else _write_stub_plain(path)
@@ -419,7 +419,7 @@ class TestFilterDatabases:
         Path(db_write_dir(), DATABASES["phix"]["filename"]).unlink()
         with pytest.raises(FileNotFoundError) as exc:
             self._run(tmp_path)
-        assert "AAFTF download phix" in str(exc.value)
+        assert "AAFTF database phix" in str(exc.value)
 
     def test_databases_are_not_downloaded_by_filter(self, tmp_path):
         assert self._run(tmp_path) == []

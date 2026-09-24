@@ -1,4 +1,4 @@
-"""Unit tests for AAFTF/download.py (no network access)."""
+"""Unit tests for AAFTF/database.py (no network access)."""
 
 import os
 import stat
@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from aaftf.download import _resolve, run
+from aaftf.database import _resolve, run
 from aaftf.main import main
 from aaftf.resources import DATABASES
 
@@ -37,7 +37,7 @@ def _fake_download(calls):
 class TestListDb:
     def _list(self, monkeypatch, capsys, folders):
         monkeypatch.setenv("AAFTF_DB", os.pathsep.join(str(f) for f in folders))
-        with patch("aaftf.download._remote_size", return_value=1024):
+        with patch("aaftf.database._remote_size", return_value=1024):
             run()
         return capsys.readouterr().out
 
@@ -100,7 +100,7 @@ class TestDownload:
     def test_downloads_named_databases_to_write_folder(self, monkeypatch, tmp_path):
         monkeypatch.setenv("AAFTF_DB", str(tmp_path))
         calls = []
-        with patch("aaftf.download.download_file", side_effect=_fake_download(calls)):
+        with patch("aaftf.database.download_file", side_effect=_fake_download(calls)):
             run(databases=["univec", "contam_in_prok.fa"])
         assert calls == [
             (DATABASES["univec"]["url"], str(tmp_path.resolve() / "UniVec")),
@@ -113,13 +113,13 @@ class TestDownload:
         (shared / "UniVec").write_text("shared")
         monkeypatch.setenv("AAFTF_DB", f"{shared}{os.pathsep}{mine}")
         calls = []
-        with patch("aaftf.download.download_file", side_effect=_fake_download(calls)):
+        with patch("aaftf.database.download_file", side_effect=_fake_download(calls)):
             run(databases=["univec"])
         assert calls[0][1] == str(shared.resolve() / "UniVec")
 
     def test_fcs_script_made_executable(self, monkeypatch, tmp_path):
         monkeypatch.setenv("AAFTF_DB", str(tmp_path))
-        with patch("aaftf.download.download_file", side_effect=_fake_download([])):
+        with patch("aaftf.database.download_file", side_effect=_fake_download([])):
             run(databases=["fcs_script"])
         assert (tmp_path / "run_fcsadaptor.sh").stat().st_mode & stat.S_IXUSR
 
@@ -133,7 +133,7 @@ class TestDownload:
                 raise OSError("network down")
             return ok(url, dest, force)
 
-        with patch("aaftf.download.download_file", side_effect=_flaky):
+        with patch("aaftf.database.download_file", side_effect=_flaky):
             with pytest.raises(RuntimeError):
                 run(databases=["univec", "proks"])
         assert [url for url, _ in calls] == [DATABASES["proks"]["url"]]
@@ -143,19 +143,19 @@ class TestDownloadCli:
     def _parse(self, argv):
         captured = {}
         with patch.object(sys, "argv", argv):
-            with patch("aaftf.download.run", side_effect=lambda **kw: captured.update(args=Namespace(**kw))):
+            with patch("aaftf.database.run", side_effect=lambda **kw: captured.update(args=Namespace(**kw))):
                 main()
         return captured["args"]
 
     def test_no_arguments_means_list(self):
-        assert self._parse(["AAFTF", "download"]).databases == []
+        assert self._parse(["AAFTF", "database"]).databases == []
 
     def test_names_and_force(self):
-        args = self._parse(["AAFTF", "download", "univec", "contam_in_prok.fa", "--force"])
+        args = self._parse(["AAFTF", "database", "univec", "contam_in_prok.fa", "--force"])
         assert args.databases == ["univec", "contam_in_prok.fa"] and args.force is True
 
     def test_old_flags_removed(self):
-        with patch.object(sys, "argv", ["AAFTF", "download", "--skip-core"]):
+        with patch.object(sys, "argv", ["AAFTF", "database", "--skip-core"]):
             with pytest.raises(SystemExit) as exc:
                 main()
         assert exc.value.code != 0

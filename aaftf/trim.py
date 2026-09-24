@@ -38,7 +38,7 @@ def run(
     basename=None,
     method="bbduk",
     cpus=1,
-    memory=4,
+    memory=8,
     minlen=75,
     avgqual=10,
     trimmomatic_adaptors="TruSeq3-PE.fa",

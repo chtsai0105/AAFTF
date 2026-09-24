@@ -29,15 +29,13 @@ def main():
     #########################################
     # create the top-level parser
     #########################################
-    parser = ap.ArgumentParser(prog="AAFTF", formatter_class=CustomHelpFormatter)
+    parser = ap.ArgumentParser(prog="AAFTF", usage="%(prog)s [-h] [-V] <command> [options]", formatter_class=CustomHelpFormatter)
     parser.add_argument("-V", "--version", help="Installed AAFTF version", action="version", version=f"%(prog)s {__version__}")
-
-    subparsers = parser.add_subparsers(title="[sub-commands]", dest="command")
 
     #########################################
     # create the individual tool parsers
     #########################################
-    register_subcommands(subparsers)
+    register_subcommands(parser)
 
     # process the arguments now
     # if no args then print help and exit

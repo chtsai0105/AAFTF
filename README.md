@@ -74,8 +74,8 @@ so point `AAFTF_DB` at a folder with plenty of space (it can list several folder
 `$PATH`; databases are read from the first folder that has them and downloaded into the first writable one):
 ```
 $ export AAFTF_DB=/path/with/space/aaftf_db   # or a shared, system-wide location
-$ AAFTF download                                        # list databases and where they are stored
-$ AAFTF download phix univec euks proks mitodb sm_gbk   # download by short name (or file name, or 'all')
+$ AAFTF database                                        # list databases and where they are stored
+$ AAFTF database phix univec euks proks mitodb sm_gbk   # download by short name (or file name, or 'all')
 ```
 
 To run ncbi-fcs or ncbi-fcs-gx in AAFTF through singularity will need to have that installed in system or environment.

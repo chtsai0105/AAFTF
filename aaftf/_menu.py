@@ -18,9 +18,9 @@ import argparse as ap
 
 import aaftf.assemble as assemble
 import aaftf.assess as assess
-import aaftf.check_dependencies as check_dependencies
+import aaftf.database as database
+import aaftf.dependency as dependency
 import aaftf.depth as depth
-import aaftf.download as download
 import aaftf.fcs_gx_purge as fcs_gx_purge
 import aaftf.fcs_screen as fcs_screen
 import aaftf.filter as aaftf_filter
@@ -33,11 +33,11 @@ import aaftf.sort as aaftf_sort
 import aaftf.sourpurge as sourpurge
 import aaftf.trim as trim
 import aaftf.vecscreen as vecscreen
-from aaftf.utility import CustomHelpFormatter
+from aaftf.utility import CustomHelpFormatter, SubcommandGroup
 
 __all__ = [
     "register_subcommands",
-    "download_menu",
+    "database_menu",
     "menu_common_args",
     "trim_menu",
     "mito_menu",
@@ -54,54 +54,57 @@ __all__ = [
     "fix_tbl_menu",
     "depth_menu",
     "pipeline_menu",
-    "check_dependencies_menu",
+    "dependency_menu",
 ]
 
 
-def register_subcommands(subparsers):
-    """Register every AAFTF subcommand parser on ``subparsers``, in ``AAFTF --help`` order."""
-    download_menu(subparsers)
-    trim_menu(subparsers)
-    mito_menu(subparsers)
-    filter_menu(subparsers)
-    assemble_menu(subparsers)
-    vecscreen_menu(subparsers)
-    fcs_screen_menu(subparsers)
-    fcs_gx_purge_menu(subparsers)
-    sourpurge_menu(subparsers)
-    rmdup_menu(subparsers)
-    polish_menu(subparsers)
-    sort_menu(subparsers)
-    assess_menu(subparsers)
-    fix_tbl_menu(subparsers)
-    depth_menu(subparsers)
-    pipeline_menu(subparsers)
-    check_dependencies_menu(subparsers)
+def register_subcommands(parser):
+    """Add every AAFTF subcommand to ``parser``, listed in ``AAFTF --help`` under three group titles.
+
+    Returns:
+        The subparsers action holding all the subcommands.
+    """
+    subparsers = parser.add_subparsers(dest="command", metavar="<command>", help=ap.SUPPRESS, prog=parser.prog)
+    groups = [
+        ("Setup (dependencies and databases)", [dependency_menu, database_menu]),
+        (
+            "Assembly pipeline",
+            [trim_menu, mito_menu, filter_menu, assemble_menu, vecscreen_menu, sourpurge_menu, fcs_screen_menu, fcs_gx_purge_menu, rmdup_menu, polish_menu, sort_menu, assess_menu, depth_menu, pipeline_menu],
+        ),
+        ("Annotation", [fix_tbl_menu]),
+    ]
+    for title, menus in groups:
+        first = len(subparsers._choices_actions)
+        for menu in menus:
+            menu(subparsers)
+        # argparse lists every subcommand in one block; show this group's entries under its own title instead
+        parser.add_argument_group(title)._group_actions.append(SubcommandGroup(subparsers._choices_actions[first:]))
+    return subparsers
 
 
-def download_menu(subparsers):
-    """Add the download subcommand parser."""
-    parser_download = subparsers.add_parser(
-        "download",
+def database_menu(subparsers):
+    """Add the database subcommand parser."""
+    parser_database = subparsers.add_parser(
+        "database",
         formatter_class=CustomHelpFormatter,
         description=("List AAFTF reference databases (with no arguments), or download the named ones into the database folder ($AAFTF_DB, else ~/.cache/aaftf). Name databases by abbreviation or file name, or use 'all'."),
         help="List or download AAFTF reference databases",
     )
-    parser_download.add_argument(
+    parser_database.add_argument(
         "databases",
         nargs="*",
         metavar="DATABASE",
         help="Databases to download, by abbreviation (e.g. univec) or file name (e.g. UniVec), or 'all'. Omit to list the databases and where they are stored.",
     )
-    optional = parser_download.add_argument_group("optional arguments")
+    optional = parser_database.add_argument_group("optional arguments")
     optional.add_argument(
         "--force",
         action="store_true",
         help="Re-download files even if they already exist",
     )
     menu_common_args(optional)
-    parser_download.set_defaults(func=download.run)
-    return parser_download
+    parser_database.set_defaults(func=database.run)
+    return parser_database
 
 
 def menu_common_args(target):
@@ -191,9 +194,9 @@ def trim_menu(subparsers):
 
     trimmomatic_group.add_argument("--trimmomatic_clip", type=str, default="2:30:10", help="Trimmomatic ILLUMINACLIP argument")
 
-    trimmomatic_group.add_argument("--trimmomatic_leadingwindow", type=int, default="3", help="Trimmomatic window processing arguments")
+    trimmomatic_group.add_argument("--trimmomatic_leadingwindow", type=int, default=3, help="Trimmomatic window processing arguments")
 
-    trimmomatic_group.add_argument("--trimmomatic_trailingwindow", type=int, default="3", help="Trimmomatic window processing arguments")
+    trimmomatic_group.add_argument("--trimmomatic_trailingwindow", type=int, default=3, help="Trimmomatic window processing arguments")
 
     trimmomatic_group.add_argument(
         "--trimmomatic_slidingwindow",
@@ -223,7 +226,7 @@ def mito_menu(subparsers):
     parser_mito = subparsers.add_parser(
         "mito",
         description="De novo assembly of mitochondrial genome using NOVOplasty, takes PE Illumina adapter trimmed data.",
-        help="De novo assembly of mitochondrial genome",
+        help="(Optional) De novo assembly of mitochondrial genome",
         formatter_class=CustomHelpFormatter,
     )
 
@@ -432,7 +435,7 @@ def fcs_screen_menu(subparsers):
     parser_fcs_screen = subparsers.add_parser(
         "fcs_screen",
         description="Screen with NCBI fcs tool contigs for vector and common contaminantion",
-        help="NCBI Foreign Contaminant Screening for Vector sequences in contigs",
+        help="(Optional) NCBI Foreign Contaminant Screening for Vector sequences in contigs",
         formatter_class=CustomHelpFormatter,
     )
 
@@ -477,7 +480,7 @@ def fcs_gx_purge_menu(subparsers):
     parser_fcsgx = subparsers.add_parser(
         "fcs_gx_purge",
         description="Purge contigs based on fcs_gx results",
-        help="Purge contigs based on contamination search with fcs_gx",
+        help="(Optional) Purge contigs based on contamination search with fcs_gx",
         formatter_class=CustomHelpFormatter,
     )
 
@@ -788,7 +791,7 @@ def depth_menu(subparsers):
     parser_depth = subparsers.add_parser(
         "depth",
         description=("Calculate depth of coverage by mapping Illumina and/or long reads to a genome assembly with minimap2 (or bwa), then running mosdepth to compute per-contig depth statistics.  Contigs with mean depth > assembly_mean + 3*SD are flagged as possible contaminants or organellar sequences."),
-        help="Calculate read depth of coverage for genome assembly",
+        help="(Optional) Calculate read depth of coverage for genome assembly",
         formatter_class=CustomHelpFormatter,
     )
 
@@ -891,7 +894,7 @@ def pipeline_menu(subparsers):
     """Add the pipeline subcommand parser."""
     parser_pipeline = subparsers.add_parser(
         "pipeline",
-        description="Run entire AAFTF pipeline automagically",
+        description="Run the AAFTF pipeline: trim, filter, assemble, vecscreen, sourpurge, rmdup, polish, sort and assess. Each step uses its own defaults (see AAFTF <step> -h); only the options below override them.",
         help="Run AAFTF pipeline",
         formatter_class=CustomHelpFormatter,
     )
@@ -913,7 +916,7 @@ def pipeline_menu(subparsers):
 
     optional.add_argument("-r", "--right", type=str, help="right/reverse reads of paired-end FASTQ.")
 
-    optional.add_argument("-m", "--memory", type=str, dest="memory", help="Memory (in GB) setting for SPAdes. Default is Auto")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", help="Memory (in GB) for every step that takes -m/--memory (trim, filter, assemble, polish); default: each step's own default")
 
     optional.add_argument("-ml", "--minlen", type=int, default=75, help="Minimum read length after trimming")
 
@@ -935,13 +938,13 @@ def pipeline_menu(subparsers):
     return parser_pipeline
 
 
-def check_dependencies_menu(subparsers):
-    """Add the check_dependencies subcommand parser."""
-    parser_check_deps = subparsers.add_parser(
-        "check_dependencies",
+def dependency_menu(subparsers):
+    """Add the dependency subcommand parser."""
+    parser_dependency = subparsers.add_parser(
+        "dependency",
         formatter_class=CustomHelpFormatter,
         description="Check whether all external tool and Python package dependencies required by AAFTF are installed.",
         help="Check that AAFTF dependencies are installed",
     )
-    parser_check_deps.set_defaults(func=check_dependencies.run)
-    return parser_check_deps
+    parser_dependency.set_defaults(func=dependency.run)
+    return parser_dependency

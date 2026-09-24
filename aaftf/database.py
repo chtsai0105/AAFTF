@@ -1,6 +1,6 @@
 """Download and cache AAFTF reference databases.
 
-``AAFTF download`` with no arguments lists every database in
+``AAFTF database`` with no arguments lists every database in
 ``aaftf.resources.DATABASES``: its abbreviation, file, size, which subcommands
 use it, and where it is stored. Naming databases (by abbreviation or file name,
 or ``all``) downloads them into the database folder (see
@@ -22,13 +22,14 @@ logger = logging.getLogger(__name__)
 
 
 def run(databases=None, force=False, **kwargs):
-    """Execute the ``download`` subcommand.
+    """Execute the ``database`` subcommand.
 
     Args:
         databases: Database abbreviations or file names (case-insensitive), or
             ``all``. When empty, list the databases instead of downloading.
         force: Re-download even if a copy already exists (into the first
             writable database folder).
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``debug``, ...); ignored.
     """
     if not databases:
         _list_db()
@@ -55,7 +56,7 @@ def run(databases=None, force=False, **kwargs):
     if errors:
         hint = "Re-run the same command later; files already downloaded are skipped unless you pass --force."
         raise RuntimeError("Some downloads failed:\n" + "\n".join(errors) + f"\n{hint}")
-    logger.info("Download complete. Run 'AAFTF download' to see where each database is stored.")
+    logger.info("Download complete. Run 'AAFTF database' to see where each database is stored.")
 
 
 def _list_db():
@@ -106,7 +107,7 @@ def _list_db():
     print("-" * (name_w + file_w + size_w + used_w + 20))
     print(f"  {'Downloaded':<32} {_human_size(downloaded_total):>10}")
     print(f"  {'Not yet downloaded (estimated)':<32} {pending_label:>10}")
-    print("\nDownload with: AAFTF download NAME [NAME ...]   (abbreviation or file name, or 'all')")
+    print("\nDownload with: AAFTF database NAME [NAME ...]   (abbreviation or file name, or 'all')")
 
 
 def _human_size(num_bytes):
@@ -150,6 +151,6 @@ def _resolve(names):
         selected.extend(abbr for abbr in matches if abbr not in selected)
 
     if unknown:
-        choices = f"Choose from: {', '.join(DATABASES)} (or their file names), or 'all'. Run 'AAFTF download' to list them."
+        choices = f"Choose from: {', '.join(DATABASES)} (or their file names), or 'all'. Run 'AAFTF database' to list them."
         raise ValueError(f"unknown database(s): {', '.join(unknown)}\n{choices}")
     return selected

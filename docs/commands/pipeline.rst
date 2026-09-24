@@ -2,17 +2,17 @@
 pipeline
 ========
 
-Runs the entire raw-reads-to-clean-assembly workflow in a single command: trim -> mito (if paired
-reads) -> filter -> assemble -> vecscreen -> sourpurge -> rmdup -> polish -> sort -> assess. See
+Runs the entire raw-reads-to-clean-assembly workflow in a single command: trim -> filter -> assemble -> vecscreen -> sourpurge -> rmdup -> polish -> sort -> assess. See
 :doc:`../workflow` for the full diagram and per-step input/output description.
 
 Algorithm
 =========
 
-``pipeline`` is an orchestrator, not a separate implementation -- for each step it builds an
-``argparse.Namespace`` from a filtered subset of the pipeline's own arguments (plus step-specific
-required values, always including ``pipe=True`` so intermediate steps don't print "next command"
-hints) and calls that submodule's ``run()`` function directly, in-process.
+``pipeline`` is an orchestrator, not a separate implementation -- it calls each submodule's
+``run()`` function directly, in-process. Every step starts from exactly the defaults it has on its
+own command line (read from the ``AAFTF <step>`` parser, so ``pipeline`` cannot drift from them);
+only the options given to ``pipeline`` and the file names that chain the steps together override
+them, plus ``pipe=True`` so intermediate steps don't print "next command" hints.
 
 Before each step, ``pipeline`` checks whether that step's expected output file already exists; if
 so, the step is **skipped** (with a log message) rather than re-run. This makes an interrupted
@@ -20,21 +20,17 @@ pipeline run resumable: simply re-invoke the same ``AAFTF pipeline`` command and
 after the last completed step. After each step, output existence is re-checked and the pipeline
 aborts with an error if the expected output was not produced.
 
-Mitochondrial assembly (:doc:`mito`) only runs when paired-end reads (``-r/--right``) are
-provided; the resulting ``{basename}.mito.fasta``, if produced, is automatically passed to
-:doc:`filter` as an extra ``--screen_local`` reference so mitochondrial reads are excluded from
-the nuclear-genome read set rather than treated as contamination.
-
-Steps intentionally **not** included in ``pipeline`` -- run these manually if needed:
-:doc:`fcs_screen`, :doc:`fcs_gx_purge` (alternatives/complements to :doc:`vecscreen` /
+Steps intentionally **not** included in ``pipeline`` (marked "(Optional)" in ``AAFTF -h``) -- run
+these manually if needed: :doc:`mito` (to screen mitochondrial reads out, run it before
+:doc:`filter` and pass its output to ``filter --screen_local``), :doc:`fcs_screen`, :doc:`fcs_gx_purge` (alternatives/complements to :doc:`vecscreen` /
 :doc:`sourpurge`), :doc:`depth` (coverage QC of the final assembly), :doc:`fix_tbl` (post-FCS
-annotation coordinate fixups), and :doc:`download` (run once, ahead of time, to populate
+annotation coordinate fixups), and :doc:`database` (run once, ahead of time, to populate
 ``$AAFTF_DB``).
 
 Cutoffs / defaults
 ===================
 
-``pipeline`` reuses each step's own defaults (:doc:`trim`, :doc:`mito`, :doc:`filter`,
+``pipeline`` uses each step's own defaults (:doc:`trim`, :doc:`filter`,
 :doc:`assemble`, :doc:`vecscreen`, :doc:`sourpurge`, :doc:`rmdup`, :doc:`polish`, :doc:`sort`,
 :doc:`assess`) except where noted:
 
@@ -46,11 +42,17 @@ Cutoffs / defaults
      - Default
      - Meaning
    * - ``-m/--memory``
-     - auto (75% of detected system RAM) if not set
-     - Passed through to assemble/polish
+     - each step's own default
+     - Passed to every step that has ``-m/--memory`` (trim, filter, assemble, polish)
+   * - ``-c/--cpus``, ``-w/--workdir``, ``-v/--verbose``
+     - each step's own default
+     - Passed to every step that has the option
    * - ``--method``
      - spades
      - Assembler method (spades / dipspades / megahit)
+   * - ``-ml/--minlen``
+     - 75
+     - Minimum read length kept by trim
    * - ``-mc/--mincontiglen``
      - 500
      - Minimum contig length kept by rmdup and by the final sort step
@@ -64,7 +66,7 @@ Invocation
 .. code-block:: text
 
     AAFTF pipeline -l LEFT [-r RIGHT] -o BASENAME -p PHYLUM [PHYLUM ...]
-                   [-c CPUS] [-m MEMORY] [-ml MINLEN] [-it ITERATIONS]
+                   [-c CPUS] [-m MEMORY] [-ml MINLEN]
                    [-mc MINCONTIGLEN] [--method {spades,dipspades,megahit}]
                    [-a ACCESSIONS ...] [-u URLS ...] [--sourdb PATH]
                    [--mincovpct PCT] [-w WORKDIR]
@@ -81,11 +83,11 @@ Example
 
     AAFTF pipeline \
         -l reads/STRAINX_R1.fq.gz -r reads/STRAINX_R2.fq.gz \
-        -o STRAINX -c 24 -m 96 -it 5 \
+        -o STRAINX -c 24 -m 96 \
         --phylum Ascomycota
 
 This produces, in sequence: ``STRAINX_1P.fastq.gz``/``STRAINX_2P.fastq.gz`` (trim),
-``STRAINX.mito.fasta`` (mito, if paired), ``STRAINX_filtered_1.fastq.gz``/``_2.fastq.gz``
+``STRAINX_filtered_1.fastq.gz``/``_2.fastq.gz``
 (filter), ``STRAINX.spades.fasta`` (assemble), ``STRAINX.vecscreen.fasta`` (vecscreen),
 ``STRAINX.sourpurge.fasta`` (sourpurge), ``STRAINX.rmdup.fasta`` (rmdup),
 ``STRAINX.polish.fasta`` (polish), and finally ``STRAINX.final.fasta`` with printed/``assess``

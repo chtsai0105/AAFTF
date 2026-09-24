@@ -25,6 +25,7 @@ __all__ = [
     "COMPLEMENT",
     "CustomHelpFormatter",
     "PafHit",
+    "SubcommandGroup",
     "concat_files",
     "open_maybe_gz",
     "estimate_read_length",
@@ -98,6 +99,33 @@ class CustomHelpFormatter(ap.HelpFormatter):
                 if action.option_strings or action.nargs in defaulting_nargs:
                     help += " (default: %(default)s)"
         return help
+
+    def _format_action(self, action):
+        """List a SubcommandGroup's subcommands directly under its group title, without a header line."""
+        if isinstance(action, SubcommandGroup):
+            return "".join(self._format_action(sub) for sub in action.subcommands)
+        return super()._format_action(action)
+
+
+class SubcommandGroup(ap.Action):
+    """Help-only entry listing some of a parser's subcommands under their own argument-group title.
+
+    argparse prints every subcommand in one block; add one of these to each argument group
+    (``group._group_actions.append(SubcommandGroup(...))``) and hide the real subparsers action
+    (``help=argparse.SUPPRESS``) to show them in sections. It is never parsed.
+    """
+
+    def __init__(self, subcommands):
+        """Store ``subcommands``, the help entries (from the subparsers action's ``_choices_actions``) to list."""
+        super().__init__(option_strings=[], dest=ap.SUPPRESS, nargs=0, metavar="")
+        self.subcommands = subcommands
+
+    def _get_subactions(self):
+        """Let the help formatter size its columns to fit the listed subcommands."""
+        return self.subcommands
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """Never called: this action is not registered with the parser."""
 
 
 class PafHit(NamedTuple):
@@ -437,7 +465,7 @@ def require_databases(names, hint=None):
     """Return the stored paths of catalog databases ``names`` (keys of ``resources.DATABASES``).
 
     Subcommands never download these themselves: if any is missing from every
-    ``db_dirs()`` folder, log the ``AAFTF download`` command that fetches them
+    ``db_dirs()`` folder, log the ``AAFTF database`` command that fetches them
     and exit.
 
     Args:
@@ -453,7 +481,7 @@ def require_databases(names, hint=None):
             missing.append(name)
     if missing:
         searched = ", ".join(str(folder) for folder in db_dirs())
-        suggestion = f"Download them first: AAFTF download {' '.join(missing)}" + (f" ({hint})" if hint else "")
+        suggestion = f"Download them first: AAFTF database {' '.join(missing)}" + (f" ({hint})" if hint else "")
         raise FileNotFoundError(f"missing database(s): {', '.join(missing)} (searched {searched})\n{suggestion}")
     return paths
 

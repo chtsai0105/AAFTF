@@ -42,7 +42,7 @@ def run(
         tax = "--prok"
     workdir, custom_workdir = make_workdir(workdir, "fcsscreen")
 
-    # the wrapper script and singularity image come from `AAFTF download` unless given/found on PATH
+    # the wrapper script and singularity image come from `AAFTF database` unless given/found on PATH
     fcsexe = fcs_script or shutil.which("run_fcsadaptor.sh")
     needed = ([] if fcsexe else ["fcs_script"]) + (["fcs_image"] if containerengine == "singularity" and image is None else [])
     found = dict(zip(needed, require_databases(needed, hint="or pass --fcs_script PATH / --image PATH")))

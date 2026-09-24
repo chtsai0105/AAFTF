@@ -20,7 +20,7 @@ Quick syntax check of all modules without running anything:
 python -m py_compile AAFTF/filter.py AAFTF/polish.py AAFTF/trim.py \
     AAFTF/vecscreen.py AAFTF/sourpurge.py AAFTF/fcs_screen.py \
     AAFTF/depth.py AAFTF/AAFTF_main.py AAFTF/pipeline.py \
-    AAFTF/assess.py AAFTF/rmdup.py AAFTF/download.py
+    AAFTF/assess.py AAFTF/rmdup.py AAFTF/database.py
 ```
 
 ## Code Style and Architecture

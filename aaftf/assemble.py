@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def run(
+    left,
     out,
     method="spades",
     workdir=None,
@@ -31,7 +32,6 @@ def run(
     careful=True,
     assembler_args=None,
     tmpdir=None,
-    left=None,
     right=None,
     longreads=None,
     merged=None,

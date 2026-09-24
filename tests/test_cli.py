@@ -356,3 +356,54 @@ class TestMainExitCodes:
     def test_no_arguments_returns_1(self):
         with patch.object(sys, "argv", ["AAFTF"]):
             assert main() == 1
+
+
+class TestMainHelpGroups:
+    """AAFTF --help lists the subcommands under three group titles."""
+
+    def _help(self, capsys):
+        with patch.object(sys, "argv", ["AAFTF", "--help"]):
+            with pytest.raises(SystemExit):
+                main()
+        return capsys.readouterr().out
+
+    def _section(self, text, title):
+        body = text.split(f"{title}:\n", 1)[1].split("\n\n", 1)[0]
+        return [line.split()[0] for line in body.splitlines() if line.startswith("  ") and not line.startswith("   ")]
+
+    def test_setup_group(self, capsys):
+        assert self._section(self._help(capsys), "Setup (dependencies and databases)") == ["dependency", "database"]
+
+    def test_pipeline_group_has_every_other_step(self, capsys):
+        names = self._section(self._help(capsys), "Assembly pipeline")
+        assert names[-1] == "pipeline"
+        steps = {"trim", "mito", "filter", "assemble", "vecscreen", "fcs_screen", "fcs_gx_purge", "sourpurge", "rmdup", "polish", "sort", "assess", "depth"}
+        assert set(names) == steps | {"pipeline"}
+
+    def test_annotation_group(self, capsys):
+        assert self._section(self._help(capsys), "Annotation") == ["fix_tbl"]
+
+
+def _subcommand_parsers():
+    """Return {name: parser} for every AAFTF subcommand."""
+    import argparse as ap
+
+    from aaftf._menu import register_subcommands
+
+    return register_subcommands(ap.ArgumentParser()).choices
+
+
+@pytest.mark.parametrize("name", sorted(_subcommand_parsers()))
+def test_run_defaults_match_menu(name):
+    """Each subcommand's run() takes every CLI option, with the same default (none for required options)."""
+    import inspect
+
+    parser = _subcommand_parsers()[name]
+    params = inspect.signature(parser.get_default("func")).parameters
+    for action in parser._actions:
+        if action.dest in ("help", "pipe", "quiet", "debug"):
+            continue
+        assert action.dest in params, f"{name} run() has no {action.dest} parameter"
+        expected = inspect.Parameter.empty if action.required else action.default
+        actual = params[action.dest].default
+        assert (actual, type(actual)) == (expected, type(expected)), f"{name} --{action.dest}: menu {expected!r}, run() {actual!r}"

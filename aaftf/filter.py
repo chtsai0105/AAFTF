@@ -36,7 +36,7 @@ def run(
     workdir, custom_workdir = make_workdir(workdir, "filter")
     bamthreads = min(cpus, 4)
 
-    # PhiX and UniVec come from `AAFTF download`; extra accessions/URLs are fetched here
+    # PhiX and UniVec come from `AAFTF database`; extra accessions/URLs are fetched here
     contam_filenames = require_databases(["phix", "univec"])
 
     for acc in screen_accessions or []:

@@ -1,11 +1,11 @@
 ========
-download
+database
 ========
 
 Lists and fetches the reference databases AAFTF's other subcommands rely on, into the database
 folder (``$AAFTF_DB``, or ``~/.cache/aaftf`` when it is unset). This is the only command that
 downloads them: ``filter``/``vecscreen``/``sourpurge``/``fcs_screen`` read the stored copies and,
-if one is missing, stop with the ``AAFTF download ...`` command that fetches it. (The one
+if one is missing, stop with the ``AAFTF database ...`` command that fetches it. (The one
 exception is ``filter``'s ``-a/--screen_accessions`` and ``-u/--screen_urls``, which fetch those
 extra sequences themselves.)
 
@@ -13,7 +13,7 @@ Where databases are stored
 ==========================
 
 * ``$AAFTF_DB`` unset: databases go to ``~/.cache/aaftf`` (or ``$XDG_CACHE_HOME/aaftf``). Some are
-  large -- each sourmash index and the FCS container image are several GB -- so ``download``
+  large -- each sourmash index and the FCS container image are several GB -- so ``database``
   warns before filling your home directory, which on clusters often has a small quota.
 * ``$AAFTF_DB`` may list several folders separated by ``:``, like ``$PATH``. Each database is read
   from the first folder that has it, and missing ones are downloaded into the first folder you can
@@ -29,7 +29,7 @@ Where databases are stored
 Databases
 =========
 
-Run ``AAFTF download`` with no arguments to list every database: its short name, file, size,
+Run ``AAFTF database`` with no arguments to list every database: its short name, file, size,
 which subcommands use it, and the folder it is stored in (or ``not downloaded``, with the
 remote size):
 
@@ -83,7 +83,7 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF download [DATABASE ...] [--force] [-v] [--pipe]
+    AAFTF database [DATABASE ...] [--force] [-v] [--pipe]
 
 .. list-table::
    :header-rows: 1
@@ -106,22 +106,22 @@ Example
     export AAFTF_DB=/path/with/space/aaftf_db
 
     # See what is available, what is already downloaded, and where
-    AAFTF download
+    AAFTF database
 
     # The databases filter/vecscreen/sourpurge need, with the GenBank sourmash index
-    AAFTF download phix univec euks proks mitodb sm_gbk
+    AAFTF database phix univec euks proks mitodb sm_gbk
 
     # Names and file names can be mixed
-    AAFTF download UniVec contam_in_prok.fa
+    AAFTF database UniVec contam_in_prok.fa
 
     # Everything (all sourmash indices + FCS-adaptor); a lot of disk
-    AAFTF download all
+    AAFTF database all
 
 Container usage
 ================
 
-The Singularity build (``AAFTF.def``) runs ``AAFTF download phix univec euks proks mitodb sm_gbk fcs_script fcs_image`` during ``%post`` (unless built with
+The Singularity build (``AAFTF.def``) runs ``AAFTF database phix univec euks proks mitodb sm_gbk fcs_script fcs_image`` during ``%post`` (unless built with
 ``--build-arg skip_db_download=1``) to bake the GenBank sourmash database into the image at
 ``/opt/aaftf_db``. If you build with ``skip_db_download=1`` (the CI default, to keep the image
-small), run ``AAFTF download NAME ...`` yourself against a bind-mounted directory before using
+small), run ``AAFTF database NAME ...`` yourself against a bind-mounted directory before using
 ``sourpurge``/``vecscreen``/``filter`` from that image.

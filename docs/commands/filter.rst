@@ -11,7 +11,7 @@ Algorithm
 1. Builds (or reuses a cached) combined contamination FASTA (``contamdb.fa``) from:
 
    * the PhiX genome and UniVec (always included; download them first with
-     ``AAFTF download phix univec`` -- see :doc:`download`);
+     ``AAFTF database phix univec`` -- see :doc:`database`);
    * any ``-a/--screen_accessions`` GenBank accessions (fetched via NCBI eutils);
    * any ``-u/--screen_urls`` remote FASTA URLs;
    * any ``-s/--screen_local`` local FASTA files (e.g. a ``mito.fasta`` from :doc:`mito`, so
