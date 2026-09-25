@@ -5,7 +5,7 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 ## Key Architecture Reminders
 
 - Entry point: `aaftf/main.py` — builds the top-level parser, wires up subcommands via `register_subcommands(parser)` (imported from `aaftf/_menu.py`; it creates the subparsers action and lists the subcommands in `AAFTF --help` under three group titles — Setup, Assembly pipeline, Annotation — using the help-only `SubcommandGroup` action from `aaftf/utility.py`), and dispatches by calling `args.func(**vars(args))`; `main()` returns a numeric exit code (0 ok, 1 error, 2 `FileNotFoundError`, 130 Ctrl-C) and subcommands raise exceptions instead of calling `sys.exit` (see AGENTS.md). There is no central dispatcher function: each subcommand parser binds its own subtool's `run` directly via `parser_x.set_defaults(func=<module>.run)` inside its `<name>_menu()` function in `_menu.py`. Subcommand parsers no longer register any `aliases=[...]` — each subcommand has exactly one canonical name.
-- All argparse subcommand-parser definitions ("menus") live in one place: `aaftf/_menu.py`. Each subcommand has a `<name>_menu(subparsers)` function there (e.g. `trim_menu`, `depth_menu`) that builds and registers that subtool's `subparsers.add_parser(...)` block and its arguments, then calls `parser_x.set_defaults(func=<module>.run)`; `aaftf/_menu.py` also defines `menu_common_args()` and `register_subcommands()` (which calls every `<name>_menu()` group by group, in `AAFTF --help` order), and imports every subcommand module (`trim`, `depth`, etc.) to reference their `run` functions. Each subcommand module itself (`trim.py`, `depth.py`, etc.) only contains the `run(**kwargs)` execution logic — no parser-building code
+- All argparse subcommand-parser definitions ("menus") live in one place: `aaftf/_menu.py`. Each subcommand has a `<name>_menu(subparsers)` function there (e.g. `trim_menu`, `depth_menu`) that builds and registers that subtool's `subparsers.add_parser(...)` block and its arguments, then calls `parser_x.set_defaults(func=<module>.run)`; `aaftf/_menu.py` also defines `add_verbosity_args()` and `register_subcommands()` (which calls every `<name>_menu()` group by group, in `AAFTF --help` order), and imports every subcommand module (`trim`, `depth`, etc.) to reference their `run` functions. Each subcommand module itself (`trim.py`, `depth.py`, etc.) only contains the `run(**kwargs)` execution logic — no parser-building code
 - Every subcommand's `run()` function takes its CLI dest names directly as keyword arguments (not an `args`/`parser` pair) and ends its parameter list with `**kwargs` to absorb argparse's own bookkeeping attributes (`command`, `func`, and `quiet`, which only `main()` uses to set the log level) that ride along in `vars(args)`. The function body uses those parameters directly (e.g. `read1`, `workdir`) — there is no internal `args = Namespace(...)` reconstruction; a parameter that needs to change during the run (e.g. `basename` auto-derived from `read1`, `workdir` defaulted when not given) is simply reassigned as a local variable. Only `assemble.py`'s internal helpers (`run_spades`, `run_megahit`, `run_unicycler`) still build/pass `Namespace` objects, because they need a keyed collection to forward a subset of fields — not because they mirror the old `args.xxx` style.
 - Because `run()` no longer mutates a caller-supplied `args` object, tests must not expect derived values (e.g. `trim.run()`'s auto-derived `basename`) to show up on the `Namespace`/kwargs the test constructed — assert on the actual side effects (subprocess commands, files written) instead. See `tests/test_trim.py::_run_bbduk` for the pattern.
 - `aaftf/pipeline.py`'s own `run()` follows the same convention, and internally calls each step's module via `<module>.run(**vars(step_args))` instead of `<module>.run(parser, step_args)`
@@ -13,12 +13,13 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 
 ## CLI Framework Conventions
 
-- Every subcommand parser must have `-v/--verbose` (argparse dest `debug`, so code and `run()` parameters still use `debug`) and `--pipe` flags — enforced by test suite (`TestAssessParser`, `TestSortParser`, `TestFixTblParser`)
-- `menu_common_args(target)` (in `aaftf/_menu.py`) adds exactly three arguments — `--pipe`, `-q/--quiet`, `-v/--verbose` (dest `debug`) — to whatever `target` is passed. Every `<name>_menu()` function calls it **last**, passing its own `optional = parser_x.add_argument_group("optional arguments")` group (not the parser itself), so these three common flags render as the final entries of that subcommand's "optional arguments" section rather than in a separate leading group. Do not pass the raw parser to `menu_common_args()` — always pass the `optional` group, and call it after all of that subcommand's own optional args have been added.
+- Every subcommand parser must have `-v/--verbose` (argparse dest `debug`, so code and `run()` parameters still use `debug`) and `-q/--quiet` flags — enforced by test suite (`TestAssessParser`, `TestSortParser`, `TestFixTblParser`)
+- A step that suggests the next command logs it with `logger.info("Your next command might be: ...")` inside `if not pipe:`. `pipe: bool = False` is a `run()`-only parameter (there is no `--pipe` CLI option — the one exception to "`run()` parameters are the CLI dest names"): the CLI never sets it, so hints show unless `-q/--quiet`; `pipeline._step_kwargs()` sets `pipe=True` so pipeline runs skip them.
+- `add_verbosity_args(target)` (in `aaftf/_menu.py`) adds exactly two arguments — `-q/--quiet` and `-v/--verbose` (dest `debug`) — to whatever `target` is passed. Every `<name>_menu()` function calls it **last**, passing its own `optional = parser_x.add_argument_group("optional arguments")` group (not the parser itself), so these two common flags render as the final entries of that subcommand's "optional arguments" section rather than in a separate leading group. Do not pass the raw parser to `add_verbosity_args()` — always pass the `optional` group, and call it after all of that subcommand's own optional args have been added.
 - All other args a subcommand needs (`-c/--cpus`, `-w/--workdir/--tmpdir`, `-1/--read1`/`-2/--read2`, etc.) are implemented locally within that subcommand's own `<name>_menu()` in `_menu.py` — there is no shared parent-parser mechanism for them (an earlier version used `argparse` `parents=[...]` for these, but that shared the underlying `Action` objects across every subcommand and any per-subcommand override via `conflict_handler="resolve"` silently corrupted other subcommands; it was removed for this reason). When adding a `-c/--cpus`/`-w/--workdir`/`-1/--read1`,`-2/--read2` block to a new menu function, copy it verbatim from a similar existing one (e.g. `vecscreen_menu`, `sourpurge_menu`) to keep help text/defaults consistent.
 - Path-like arguments (inputs, outputs, reads, databases, work dirs, basenames/prefixes) use `type=str`, never `argparse.FileType` or `pathlib.Path`: `run()` receives plain path strings and opens files itself (with `with open(...)`), using `Path` internally only where path operations help. `FileType` opens (and for outputs truncates) files at parse time and never closes them, which is why `fix_tbl` moved off it.
 - Each `<name>_menu()` function that has any required argument also creates two argument groups — `required = parser_x.add_argument_group("required arguments")` and `optional = parser_x.add_argument_group("optional arguments")` — and adds each local argument to the appropriate one (required = `required=True` with no `default=`; everything else = optional).
-- Adding a new subcommand: write its `<name>_menu(subparsers)` function in `aaftf/_menu.py` (create the subparser, add required/optional groups and any subtool-specific args, call `menu_common_args(optional)` last, then `parser_x.set_defaults(func=<module>.run)`), add it to the right group's list in `register_subcommands()` in that same file, and write the subtool's `run(**kwargs)` in its own module (with named params for the dest names it uses, plus a trailing `**kwargs`)
+- Adding a new subcommand: write its `<name>_menu(subparsers)` function in `aaftf/_menu.py` (create the subparser, add required/optional groups and any subtool-specific args, call `add_verbosity_args(optional)` last, then `parser_x.set_defaults(func=<module>.run)`), add it to the right group's list in `register_subcommands()` in that same file, and write the subtool's `run(**kwargs)` in its own module (with named params for the dest names it uses, plus a trailing `**kwargs`)
 - Testing a subcommand's CLI parsing without executing the tool: patch `aaftf.<module>.run` (not a central dispatcher — there isn't one) with a `side_effect` that captures `**kwargs` into a `Namespace`, then call `aaftf.main.main()` with `sys.argv` patched. See `tests/test_cli.py::_parse_with_main` for the pattern. Note that since `run()` rebuilds its own internal `args`/local variables from the passed kwargs, a test's original `Namespace`/kwargs object is **not** mutated by any in-`run()` auto-derivation (e.g. `trim.run()` deriving `basename` from `read1` when not given) — assert on side effects (subprocess commands, files written) instead of re-inspecting the caller's original args object for such derived values.
 
 ## Subcommand Reference
@@ -49,27 +50,27 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 
 Key `args` attributes accessed by each `run()` function:
 
-- **trim**: `read1`, `read2`, `basename`, `method`, `memory`, `cpus`, `minlen`, `avgqual`, `debug`, `pipe`, `trimmomatic`, `trimmomatic_adaptors`, `trimmomatic_leadingwindow`, `trimmomatic_trailingwindow`, `trimmomatic_slidingwindow`, `trimmomatic_quality`, `trimmomatic_clip`, `merge`, `dedup`, `cutfront`, `cuttail`, `cutright`
-- **filter**: `workdir`, `cpus`, `read1`, `read2`, `screen_accessions`, `screen_urls`, `screen_local`, `basename`, `aligner`, `memory`, `debug`, `pipe`
-- **assemble**: `method`, `workdir`, `cpus`, `memory`, `isolate`, `careful`, `assembler_args`, `tmpdir`, `read1`, `read2`, `merged`, `pipe`, `debug`, `out`
-- **vecscreen**: `workdir`, `infile`, `outfile`, `cpus`, `percent_id`, `stringency`, `debug`, `pipe`
-- **fcs_screen**: `container_engine`, `workdir`, `infile`, `image`, `prok`, `fcs_script`, `outfile`, `debug`, `pipe`
-- **fcs_gx_purge**: `workdir`, `db`, `input`, `taxid`, `outfile`, `debug`, `pipe`
-- **sourpurge**: `workdir`, `cpus`, `read1`, `read2`, `sourdb`, `sourdb_type`, `input`, `kmer`, `phylum`, `mincovpct`, `outfile`, `taxonomy`, `debug`, `pipe`
-- **rmdup**: `workdir`, `cpus`, `input`, `percent_id`, `percent_cov`, `minlen`, `exhaustive`, `debug`, `out`, `pipe`
-- **polish**: `method`, `memory`, `cpus`, `read1`, `read2`, `longreads`, `workdir`, `infile`, `outfile`, `debug`, `pipe`. Each `--method` (`pypolca`, `polypolish`, `nextpolish2`, `racon`) is isolated into its own `run_<method>()` function in `aaftf/polish.py`.
+- **trim**: `read1`, `read2`, `basename`, `method`, `memory`, `cpus`, `minlen`, `avgqual`, `debug`, `trimmomatic`, `trimmomatic_adaptors`, `trimmomatic_leadingwindow`, `trimmomatic_trailingwindow`, `trimmomatic_slidingwindow`, `trimmomatic_quality`, `trimmomatic_clip`, `merge`, `dedup`, `cutfront`, `cuttail`, `cutright`
+- **filter**: `workdir`, `cpus`, `read1`, `read2`, `screen_accessions`, `screen_urls`, `screen_local`, `basename`, `aligner`, `memory`, `debug`
+- **assemble**: `method`, `workdir`, `cpus`, `memory`, `isolate`, `careful`, `assembler_args`, `tmpdir`, `read1`, `read2`, `merged`, `debug`, `out`
+- **vecscreen**: `workdir`, `infile`, `outfile`, `cpus`, `percent_id`, `stringency`, `debug`
+- **fcs_screen**: `container_engine`, `workdir`, `infile`, `image`, `prok`, `fcs_script`, `outfile`, `debug`
+- **fcs_gx_purge**: `workdir`, `db`, `input`, `taxid`, `outfile`, `debug`
+- **sourpurge**: `workdir`, `cpus`, `read1`, `read2`, `sourdb`, `sourdb_type`, `input`, `kmer`, `phylum`, `mincovpct`, `outfile`, `taxonomy`, `debug`
+- **rmdup**: `workdir`, `cpus`, `input`, `percent_id`, `percent_cov`, `minlen`, `exhaustive`, `debug`, `out`
+- **polish**: `method`, `memory`, `cpus`, `read1`, `read2`, `longreads`, `workdir`, `infile`, `outfile`, `debug`. Each `--method` (`pypolca`, `polypolish`, `nextpolish2`, `racon`) is isolated into its own `run_<method>()` function in `aaftf/polish.py`.
 - **sort**: `input`, `minlen`, `out`, `name`
 - **assess**: `input`, `report`, `telomere_monomer`, `telomere_n_repeat`, `telomere_window`
-- **depth**: `input`, `out`, `read1`, `read2`, `longreads`, `longread_preset`, `aligner`, `cpus`, `workdir`, `debug`, `pipe`, `min_contig_len`, `no_plot`, `plot_format`
-- **mito**: `workdir`, `read1`, `read2`, `seed`, `minlen`, `maxlen`, `out`, `subsample`, `memory`, `debug`, `pipe`
-- **fix_tbl**: `table`, `report`, `output`, `debug`, `pipe`
+- **depth**: `input`, `out`, `read1`, `read2`, `longreads`, `longread_preset`, `aligner`, `cpus`, `workdir`, `debug`, `min_contig_len`, `no_plot`, `plot_format`
+- **mito**: `workdir`, `read1`, `read2`, `seed`, `minlen`, `maxlen`, `out`, `subsample`, `memory`, `debug`
+- **fix_tbl**: `table`, `report`, `output`, `debug`
 
 ## Pipeline step defaults
 
 `pipeline.py` runs trim → filter → assemble → vecscreen → sourpurge → rmdup → polish → sort → assess (mito, fcs_screen, fcs_gx_purge and depth are optional and not run). Each step is called with `_step_kwargs(name, shared, **step_options)`:
 - it starts from that step's CLI defaults, read from its `_menu.py` parser (`_subcommand_defaults()`), so every `run()` parameter is present and the pipeline never drifts from `AAFTF <step>` defaults — do not hard-code step settings in `pipeline.py`
-- `shared` pipeline options (`cpus`, `memory`, `workdir`, `debug`, `quiet`) go only to steps that have that option; a `None` value (e.g. no `--memory`) keeps the step default; values take the type of the step's default
-- `step_options` are the pipeline options specific to that step plus the file names chaining the steps; `pipe=True` is always set
+- `shared` pipeline options (`cpus`, `memory`, `workdir`, `debug`, `quiet`) go only to steps that have that option; a `None` value (e.g. no `--memory`) keeps the step default
+- `step_options` are the pipeline options specific to that step plus the file names chaining the steps
 - `tests/test_pipeline.py` checks that each step receives exactly its CLI options, with defaults kept unless a pipeline option overrides them
 
 ## Pipeline Workflow
@@ -120,7 +121,7 @@ Expected inputs/outputs per step:
 5. Parses `mosdepth.summary.txt` for per-contig mean depths and `mosdepth.global.dist.txt` for coverage breadth
 6. Flags contigs with mean depth > assembly_mean + 3×SD as possible contaminants/organelles (uses population SD; contigs are the full assembly population, not a sample)
 
-**Key `args` attributes:** `input`, `out`, `read1`, `read2`, `longreads`, `longread_preset`, `aligner`, `cpus`, `workdir`, `debug`, `pipe`, `min_contig_len`, `no_plot`, `plot_format`
+**Key `args` attributes:** `input`, `out`, `read1`, `read2`, `longreads`, `longread_preset`, `aligner`, `cpus`, `workdir`, `debug`, `min_contig_len`, `no_plot`, `plot_format`
 
 ## Audit Fixes (2026-05-02)
 

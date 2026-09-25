@@ -138,10 +138,6 @@ class TestDepthParser:
         args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "-v"])
         assert args.debug is True
 
-    def test_pipe_flag_false_by_default(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq"])
-        assert args.pipe is False
-
     def test_missing_input_exits_nonzero(self):
         with patch.object(sys, "argv", ["AAFTF", "depth", "-1", "l.fq"]):
             with pytest.raises(SystemExit) as exc:
@@ -179,10 +175,6 @@ class TestAssessParser:
         args = _parse_with_main(["AAFTF", "assess", "-i", "g.fa", "-v"])
         assert args.debug is True
 
-    def test_has_pipe_flag(self):
-        args = _parse_with_main(["AAFTF", "assess", "-i", "g.fa", "--pipe"])
-        assert args.pipe is True
-
     def test_default_telomere_monomer(self):
         args = _parse_with_main(["AAFTF", "assess", "-i", "g.fa"])
         assert args.telomere_monomer == "TAAC{3,5}"
@@ -201,10 +193,6 @@ class TestSortParser:
     def test_has_debug_flag(self):
         args = _parse_with_main(["AAFTF", "sort", "-i", "in.fa", "-o", "out.fa", "-v"])
         assert args.debug is True
-
-    def test_has_pipe_flag(self):
-        args = _parse_with_main(["AAFTF", "sort", "-i", "in.fa", "-o", "out.fa", "--pipe"])
-        assert args.pipe is True
 
     def test_default_name_prefix(self):
         args = _parse_with_main(["AAFTF", "sort", "-i", "in.fa", "-o", "out.fa"])
@@ -226,15 +214,6 @@ class TestFixTblParser:
         args = _parse_with_main(["AAFTF", "fix_tbl", "-t", str(tbl), "-r", str(rpt), "-o", str(out), "-v"])
         assert args.debug is True
 
-    def test_has_pipe_flag(self, tmp_path):
-        tbl = tmp_path / "in.tbl"
-        rpt = tmp_path / "rpt.csv"
-        out = tmp_path / "out.tbl"
-        tbl.write_text("")
-        rpt.write_text("")
-        args = _parse_with_main(["AAFTF", "fix_tbl", "-t", str(tbl), "-r", str(rpt), "-o", str(out), "--pipe"])
-        assert args.pipe is True
-
     def test_debug_false_by_default(self, tmp_path):
         tbl = tmp_path / "in.tbl"
         rpt = tmp_path / "rpt.csv"
@@ -243,15 +222,6 @@ class TestFixTblParser:
         rpt.write_text("")
         args = _parse_with_main(["AAFTF", "fix_tbl", "-t", str(tbl), "-r", str(rpt), "-o", str(out)])
         assert args.debug is False
-
-    def test_pipe_false_by_default(self, tmp_path):
-        tbl = tmp_path / "in.tbl"
-        rpt = tmp_path / "rpt.csv"
-        out = tmp_path / "out.tbl"
-        tbl.write_text("")
-        rpt.write_text("")
-        args = _parse_with_main(["AAFTF", "fix_tbl", "-t", str(tbl), "-r", str(rpt), "-o", str(out)])
-        assert args.pipe is False
 
 
 # ---------------------------------------------------------------------------
@@ -295,10 +265,10 @@ class TestMemoryCappedToAvailable:
         assert args.memory == 5
         assert "WARNING: -m/--memory 16 GB is more than the 5.6 GB of RAM available" in capsys.readouterr().err
 
-    def test_string_memory_stays_a_string(self):
+    def test_assemble_default_memory_capped(self):
         with patch("aaftf.main.get_ram", return_value=10.0):
             args = _parse_with_main(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
-        assert args.memory == "10"
+        assert args.memory == 10
 
     def test_within_available_unchanged(self, capsys):
         with patch("aaftf.main.get_ram", return_value=64.0):
@@ -401,9 +371,17 @@ def test_run_defaults_match_menu(name):
     parser = _subcommand_parsers()[name]
     params = inspect.signature(parser.get_default("func")).parameters
     for action in parser._actions:
-        if action.dest in ("help", "pipe", "quiet", "debug"):
+        if action.dest in ("help", "quiet", "debug"):
             continue
         assert action.dest in params, f"{name} run() has no {action.dest} parameter"
         expected = inspect.Parameter.empty if action.required else action.default
         actual = params[action.dest].default
         assert (actual, type(actual)) == (expected, type(expected)), f"{name} --{action.dest}: menu {expected!r}, run() {actual!r}"
+
+
+@pytest.mark.parametrize("name", sorted(_subcommand_parsers()))
+def test_every_subcommand_has_verbosity_flags(name):
+    """add_verbosity_args() gives every subcommand -q/--quiet and -v/--verbose (dest debug)."""
+    options = {opt: action.dest for action in _subcommand_parsers()[name]._actions for opt in action.option_strings}
+    assert options.get("-q") == options.get("--quiet") == "quiet"
+    assert options.get("-v") == options.get("--verbose") == "debug"

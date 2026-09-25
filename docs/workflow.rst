@@ -4,7 +4,7 @@ Overall Workflow: Reads to Clean Genome
 
 AAFTF chains a fixed sequence of subcommands to go from raw Illumina (optionally + long-read)
 sequencing data to a polished, sorted, and QC'd genome assembly. Each step consumes the previous
-step's output and, when not run with ``--pipe``, prints the exact next AAFTF command to run --
+step's output and, unless run with ``-q/--quiet``, prints the exact next AAFTF command to run --
 so the whole pipeline can be worked through interactively one command at a time, or run end-to-end
 with the single ``AAFTF pipeline`` subcommand (see :doc:`commands/pipeline`).
 

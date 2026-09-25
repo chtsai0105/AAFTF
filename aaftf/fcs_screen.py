@@ -51,7 +51,7 @@ def run(
         prok: Screen as prokaryote (``--prok``) instead of eukaryote (``--euk``).
         fcs_script: Path to ``run_fcsadaptor.sh``; found on PATH or in the database when None.
         debug: Show tool output and keep the work directory.
-        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``pipe``, ...); ignored.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ...); ignored.
 
     Raises:
         FileNotFoundError: If the chosen container engine is not on PATH.

@@ -107,11 +107,10 @@ This is partially a python re-write of [JAAWS](https://github.com/nextgenusfs/ja
 
 Trimming options spelled out:
 ```
-usage: AAFTF trim [-h] -1 FASTQ [-2 FASTQ] [-o BASENAME] [-ml INT] [-aq INT]
+usage: AAFTF trim [-h] -1 FASTQ [-2 FASTQ] [-o PREFIX] [-ml BP] [-aq INT]
                   [--cutfront] [--cuttail] [--cutright]
-                  [--method {bbduk,trimmomatic,fastp}] [-c int] [-m MEMORY]
-                  [--pipe] [-q] [-v]
-                  [--trimmomatic_adaptors TRIMMOMATIC_ADAPTORS]
+                  [--method {bbduk,trimmomatic,fastp}] [-c INT] [-m GB] [-q]
+                  [-v] [--trimmomatic_adaptors TRIMMOMATIC_ADAPTORS]
                   [--trimmomatic_clip TRIMMOMATIC_CLIP]
                   [--trimmomatic_leadingwindow TRIMMOMATIC_LEADINGWINDOW]
                   [--trimmomatic_trailingwindow TRIMMOMATIC_TRAILINGWINDOW]
@@ -127,16 +126,16 @@ options:
 
 required arguments:
   -1 FASTQ, --read1 FASTQ
-                        Read 1 (forward) of paired-end FASTQ, or single-end
-                        FASTQ.
+                        Read 1 (forward) FASTQ, or single-end FASTQ
 
 optional arguments:
   -2 FASTQ, --read2 FASTQ
-                        Read 2 (reverse) of paired-end FASTQ.
-  -o BASENAME, --out BASENAME
-                        Output basename, default to base name of --read1 reads
-  -ml INT, --minlen INT
-                        Minimum read length after trimming (default: 75)
+                        Read 2 (reverse) FASTQ for paired-end data
+  -o PREFIX, --out PREFIX
+                        Output file prefix; default: read 1's file name up to
+                        its first '_' (or first '.' if it has none)
+  -ml BP, --minlen BP   Minimum read length to keep after trimming (default:
+                        75)
   -aq INT, --avgqual INT
                         Average Quality of reads must be > than this (default:
                         10)
@@ -149,11 +148,9 @@ optional arguments:
                         WARNING: this operation will interfere deduplication
                         for SE data
   --method {bbduk,trimmomatic,fastp}
-                        Program to use for adapter trimming (default: bbduk)
-  -c int, --cpus int    Number of CPUs/threads to use. (default: 1)
-  -m MEMORY, --memory MEMORY
-                        Max Memory (in GB) (default: 8)
-  --pipe                AAFTF is running in pipeline mode
+                        Trimming method (default: bbduk)
+  -c INT, --cpus INT    Number of CPUs/threads to use (default: 1)
+  -m GB, --memory GB    Max memory in GB (default: 8)
   -q, --quiet           Only show warnings and errors
   -v, --verbose         Show debug messages and tool stderr, and keep
                         temporary working directories
@@ -201,11 +198,10 @@ The specified assembler can be made through the `--method` option.
 The full set of options are below.
 
 ```
-usage: AAFTF assemble [-h] -1 READ1 -o OUT [-2 READ2] [-w WORKDIR]
+usage: AAFTF assemble [-h] -1 FASTQ -o FASTA [-2 FASTQ] [-w DIR]
                       [--method {spades,megahit,unicycler}] [--merged MERGED]
-                      [--tmpdir TMPDIR] [--assembler_args ASSEMBLER_ARGS]
-                      [-c cpus] [-m MEMORY] [--pipe] [-q] [-v] [--no-careful]
-                      [--no-isolate] [-lr LONGREADS]
+                      [--tmpdir DIR] [--assembler_args ARG] [-c INT] [-m GB]
+                      [-q] [-v] [--no-careful] [--no-isolate] [-lr FASTQ]
 
 Run assembler on cleaned reads
 
@@ -213,27 +209,27 @@ options:
   -h, --help            show this help message and exit
 
 required arguments:
-  -1 READ1, --read1 READ1
-                        Read 1 (forward) FASTQ
-  -o OUT, --out OUT     Output assembly FASTA
+  -1 FASTQ, --read1 FASTQ
+                        Read 1 (forward) FASTQ, or single-end FASTQ
+  -o FASTA, --out FASTA
+                        Output assembly FASTA
 
 optional arguments:
-  -2 READ2, --read2 READ2
-                        Read 2 (reverse) FASTQ
-  -w WORKDIR, --workdir WORKDIR
-                        assembly output directory
+  -2 FASTQ, --read2 FASTQ
+                        Read 2 (reverse) FASTQ for paired-end data
+  -w DIR, --workdir DIR
+                        Working directory for intermediate files; a temporary
+                        one is created and removed afterwards (kept with -v)
+                        when not given
   --method {spades,megahit,unicycler}
-                        Assembly method: spades, megahit, unicycler (default:
-                        spades)
+                        Assembly method (default: spades)
   --merged MERGED       Merged reads from flash or fastp or just single end
                         reads
-  --tmpdir TMPDIR       Assembler temporary dir
-  --assembler_args ASSEMBLER_ARGS
-                        Additional SPAdes/Megahit arguments
-  -c cpus, --cpus cpus  Number of CPUs/threads to use. (default: 1)
-  -m MEMORY, --memory MEMORY
-                        Memory (in GB) setting for SPAdes (default: 32)
-  --pipe                AAFTF is running in pipeline mode
+  --tmpdir DIR          Temporary directory for the assembler
+  --assembler_args ARG  Extra argument passed to the assembler (repeat for
+                        several)
+  -c INT, --cpus INT    Number of CPUs/threads to use (default: 1)
+  -m GB, --memory GB    Max memory in GB for the assembler (default: 32)
   -q, --quiet           Only show warnings and errors
   -v, --verbose         Show debug messages and tool stderr, and keep
                         temporary working directories
@@ -245,8 +241,8 @@ SPAdes options:
                         is on) (default: True)
 
 Unicycler options:
-  -lr LONGREADS, --longreads LONGREADS
-                        Long Read fastq (pacbio or ONT)
+  -lr FASTQ, --longreads FASTQ
+                        Long-read FASTQ (PacBio or ONT)
 ```
 
 ```

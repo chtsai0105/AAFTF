@@ -33,7 +33,7 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF fix_tbl -t TABLE -r REPORT -o OUTPUT [-v] [--pipe]
+    AAFTF fix_tbl -t TABLE -r REPORT -o OUTPUT [-q] [-v]
 
 All three of ``-t/--table`` (original ``.tbl``), ``-r/--report`` (NCBI FCS adjustment report),
 and ``-o/--output`` (corrected ``.tbl``) are required.

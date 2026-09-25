@@ -34,7 +34,7 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF sort -i INPUT -o OUT [-ml MINLEN] [-n NAME] [-v] [--pipe]
+    AAFTF sort -i INPUT -o OUT [-ml MINLEN] [-n NAME] [-q] [-v]
 
 ``-i/--input`` and ``-o/--out`` are required.
 

@@ -165,3 +165,34 @@ class TestSubsample:
     def test_negative_subsample_raises(self, tmp_path):
         with pytest.raises(ValueError, match="--subsample"):
             run(read1="R1.fq", read2="R2.fq", workdir=str(tmp_path / "wd"), subsample=-1)
+
+
+class TestNextCommandHint:
+    """mito suggests filtering the same reads with the mitochondrial genome as -s/--screen_local."""
+
+    def _run(self, tmp_path, caplog, **kwargs):
+        import logging
+
+        def _fake_popen(cmd, cwd, **kw):
+            Path(cwd, "Circularized_assembly_1_x.fasta").write_text(">x\nACGT\n")
+            return type("P", (), {"communicate": lambda self: None})()
+
+        out = tmp_path / "strain.mito.fasta"
+        with patch("aaftf.mito.require_tools"), patch("aaftf.mito.estimate_read_length", return_value=150):
+            with patch("aaftf.mito.subprocess.Popen", side_effect=_fake_popen), patch("aaftf.mito._orient_to_start"):
+                with patch("aaftf.mito._subsample_pairs", return_value=("wd/subsample_1.fastq.gz", "wd/subsample_2.fastq.gz")):
+                    with caplog.at_level(logging.INFO, logger="aaftf"):
+                        run(read1="trim/strain_1P.fastq.gz", read2="trim/strain_2P.fastq.gz", out=str(out), workdir=str(tmp_path / "wd"), **kwargs)
+        return caplog.text, out
+
+    def test_suggests_filter_with_mito_as_screen_local(self, tmp_path, caplog):
+        text, out = self._run(tmp_path, caplog)
+        assert f"AAFTF filter -1 trim/strain_1P.fastq.gz -2 trim/strain_2P.fastq.gz -s {out} -o strain" in text
+
+    def test_hint_uses_original_reads_not_the_subsample(self, tmp_path, caplog):
+        text, _ = self._run(tmp_path, caplog, subsample=1000)
+        assert "-1 trim/strain_1P.fastq.gz" in text and "subsample_1" not in text.split("Your next command")[-1]
+
+    def test_pipe_hides_hint(self, tmp_path, caplog):
+        text, _ = self._run(tmp_path, caplog, subsample=0, pipe=True)
+        assert "Your next command might be:" not in text

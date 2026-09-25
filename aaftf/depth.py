@@ -96,10 +96,10 @@ def run(
         cpus: Number of CPU threads.
         workdir: Working directory for intermediate files; a default is created when None.
         debug: If True, show subprocess stderr and keep the working directory.
-        pipe: If True, suppress the "next command" hint (running inside the pipeline).
         min_contig_len: Minimum contig length included in the outlier statistics.
         no_plot: If True, skip quantized mosdepth and plot generation.
         plot_format: Plot file format (``pdf``, ``svg`` or ``png``).
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
 
     Raises:

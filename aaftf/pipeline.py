@@ -70,7 +70,7 @@ def run(
         mincovpct: Minimum percent of N50 coverage below which ``sourpurge`` removes contigs.
         debug: Show debug output and keep temporary files in every step.
         quiet: Only show warnings and errors in every step.
-        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``pipe``, ...); ignored.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ...); ignored.
 
     Raises:
         RuntimeError: If a step finishes without producing its expected output file.
@@ -141,9 +141,9 @@ def _step_kwargs(name: str, shared: dict[str, Any], **step_options: Any) -> dict
     """Return the run() keyword arguments for step ``name``: its CLI defaults, overridden by the pipeline's options.
 
     ``shared`` options are only passed to steps that have them, and a ``None``
-    shared value (e.g. no pipeline ``--memory``) keeps the step's own default.
-    Shared values take the type of the step's default (assemble's ``--memory`` is a string).
-    ``pipe`` is always set to True.
+    shared value (e.g. no pipeline ``--memory``) keeps the step's own default. ``pipe`` is always
+    set to True so the steps don't log their "next command" hints (the pipeline runs the next step
+    itself); it is a ``run()``-only parameter, not a CLI option.
 
     Args:
         name: Subcommand name whose CLI defaults to start from.
@@ -156,8 +156,7 @@ def _step_kwargs(name: str, shared: dict[str, Any], **step_options: Any) -> dict
     kwargs = dict(_subcommand_defaults()[name])
     for key, value in shared.items():
         if key in kwargs and value is not None:
-            default = kwargs[key]
-            kwargs[key] = type(default)(value) if type(default) in (int, str) else value
+            kwargs[key] = value
     kwargs.update(step_options)
     kwargs["pipe"] = True
     return kwargs

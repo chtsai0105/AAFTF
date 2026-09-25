@@ -54,7 +54,7 @@ Invocation
 .. code-block:: text
 
     AAFTF rmdup -i INPUT -o OUT [-c CPUS] [-pid PERCENT_ID] [-pcov PERCENT_COV]
-               [-ml MINLEN] [--exhaustive] [-w WORKDIR] [-v] [--pipe]
+               [-ml MINLEN] [--exhaustive] [-w WORKDIR] [-q] [-v]
 
 ``-i/--input`` and ``-o/--out`` are required.
 

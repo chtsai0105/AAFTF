@@ -54,10 +54,10 @@ class TestSteps:
 
     @pytest.mark.parametrize("step", STEPS)
     def test_step_gets_every_cli_option(self, tmp_path, step):
-        assert set(_run_pipeline(tmp_path)[step]) == set(_cli_defaults(step))
+        assert set(_run_pipeline(tmp_path)[step]) == set(_cli_defaults(step)) | {"pipe"}
 
     @pytest.mark.parametrize("step", STEPS)
-    def test_step_runs_in_pipe_mode(self, tmp_path, step):
+    def test_step_hints_suppressed(self, tmp_path, step):
         assert _run_pipeline(tmp_path)[step]["pipe"] is True
 
     def test_existing_output_skips_step(self, tmp_path):
@@ -106,9 +106,9 @@ class TestDefaults:
 class TestPipelineOptions:
     """Options given to the pipeline override the step defaults."""
 
-    def test_memory_passed_with_each_steps_type(self, tmp_path):
+    def test_memory_passed_to_each_step(self, tmp_path):
         calls = _run_pipeline(tmp_path, memory=12)
-        assert [calls[s]["memory"] for s in ("trim", "filter", "assemble", "polish")] == [12, 12, "12", 12]
+        assert [calls[s]["memory"] for s in ("trim", "filter", "assemble", "polish")] == [12, 12, 12, 12]
 
     @pytest.mark.parametrize("step", ["trim", "filter", "assemble", "vecscreen", "sourpurge", "rmdup", "polish"])
     def test_cpus_passed(self, tmp_path, step):

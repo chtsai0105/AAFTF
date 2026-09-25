@@ -54,7 +54,7 @@ def run(
         aligner: One of ``bbduk``, ``bowtie2``, ``bwa`` or ``minimap2``.
         memory: Java heap size in GB for BBDuk.
         debug: Show external tool output and keep the work directory.
-        pipe: Suppress the "next command" hint (set when run from ``pipeline``).
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
 
     Raises:

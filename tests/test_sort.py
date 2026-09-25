@@ -31,7 +31,6 @@ def _make_args(tmp_path, fasta_file, minlen=0, name="scaffold"):
         minlen=minlen,
         name=name,
         debug=False,
-        pipe=True,
     )
 
 

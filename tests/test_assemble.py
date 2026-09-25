@@ -63,14 +63,13 @@ def _make_asm_args(tmp_path, method="spades", read1=_UNSET, read2=None, **overri
         # tests never leave spades_*/megahit_*/unicycler_* litter in the repo.
         workdir=str(tmp_path / f"{method}_workdir"),
         cpus=1,
-        memory="16",
+        memory=16,
         careful=True,
         isolate=True,
         assembler_args=None,
         tmpdir=None,
         out=str(tmp_path / f"sample.{method}.fasta"),
         debug=False,
-        pipe=True,
     )
     defaults.update(overrides)
     return Namespace(**defaults)
@@ -90,14 +89,6 @@ class TestAssembleParser:
         args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-v"])
         assert args.debug is True
 
-    def test_pipe_false_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
-        assert args.pipe is False
-
-    def test_pipe_flag_sets_true(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "--pipe"])
-        assert args.pipe is True
-
     def test_default_method_is_spades(self):
         args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
         assert args.method == "spades"
@@ -110,13 +101,13 @@ class TestAssembleParser:
         args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "--method", "unicycler"])
         assert args.method == "unicycler"
 
-    def test_default_memory_string(self):
+    def test_default_memory(self):
         args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
-        assert args.memory == "32"
+        assert args.memory == 32
 
     def test_custom_memory(self):
         args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-m", "64"])
-        assert args.memory == "64"
+        assert args.memory == 64
 
     def test_default_cpus(self):
         args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
@@ -249,8 +240,7 @@ class TestAssembleRunSpades:
         read1 = str(tmp_path / "filtered_1.fastq.gz")
         read2 = str(tmp_path / "filtered_2.fastq.gz")
         cmds, args = _run_spades(tmp_path, read1, read2)
-        assert "--mem" in cmds[0]
-        assert args.memory in cmds[0]
+        assert cmds[0][cmds[0].index("--mem") + 1] == str(args.memory)
 
     def test_careful_flag_added(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")
@@ -348,6 +338,10 @@ class TestAssembleRunMegahit:
         read2 = str(tmp_path / "filtered_2.fastq.gz")
         with pytest.raises(RuntimeError, match="Megahit assembly output"):
             _run_megahit(tmp_path, read1, read2, create_output=False)
+
+    def test_memory_passed_in_bytes(self, tmp_path):
+        cmds, _ = _run_megahit(tmp_path, str(tmp_path / "filtered_1.fastq.gz"), memory=16)
+        assert cmds[0][cmds[0].index("--memory") + 1] == "16000000000"
 
     def test_command_starts_with_megahit(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")

@@ -60,10 +60,10 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF filter -1 READ1 [-2 READ2] [-o BASENAME] [-c CPUS]
+    AAFTF filter -1 FASTQ [-2 FASTQ] [-o BASENAME] [-c CPUS]
                  [--aligner {bbduk,bowtie2,bwa,minimap2}] [-m MEMORY]
                  [-a ACCESSIONS ...] [-u URLS ...] [-s LOCAL_FASTA ...]
-                 [-w WORKDIR] [-v] [--pipe]
+                 [-w WORKDIR] [-q] [-v]
 
 **Output:** paired mode writes ``{basename}_filtered_1.fastq.gz`` /
 ``{basename}_filtered_2.fastq.gz``; single-end mode writes ``{basename}_filtered_U.fastq.gz``

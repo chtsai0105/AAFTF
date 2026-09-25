@@ -87,10 +87,10 @@ def _cap_to_available(args: ap.Namespace) -> None:
         args.cpus = avail_cpus
 
     memory = getattr(args, "memory", None)
-    if memory is not None and float(memory) > (avail_ram := get_ram()):
+    if memory is not None and memory > (avail_ram := get_ram()):
         capped = max(int(avail_ram), 1)
         logger.warning(f"-m/--memory {memory} GB is more than the {avail_ram:g} GB of RAM available; using {capped} GB")
-        args.memory = type(memory)(capped)  # keep the option's type (int, or str for assemble)
+        args.memory = capped
 
 
 if __name__ == "__main__":

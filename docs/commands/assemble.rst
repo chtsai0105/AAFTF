@@ -60,10 +60,10 @@ Invocation
 
     AAFTF assemble --method {spades,megahit,unicycler} -o OUT
                    [-w WORKDIR] [-c CPUS] [-m MEMORY]
-                   [-1 READ1] [-2 READ2] [-lr LONGREADS] [--single/--merged FILE]
+                   [-1 FASTQ] [-2 FASTQ] [-lr LONGREADS] [--single/--merged FILE]
                    [--careful/--no-careful] [--isolate/--no-isolate]
                    [--tmpdir DIR] [--assembler_args ARG ...]
-                   [-v] [--pipe]
+                   [-q] [-v]
 
 ``-o/--out`` is required (output assembly FASTA path). ``--assembler_args`` may be repeated to
 pass through additional raw SPAdes/megahit arguments.

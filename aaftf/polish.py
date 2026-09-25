@@ -52,7 +52,7 @@ def run(
         longreads: Long-read FASTQ, or None.
         workdir: Working directory; a temporary one is created if None.
         debug: Keep the working directory and show command output when True.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
 
     Raises:

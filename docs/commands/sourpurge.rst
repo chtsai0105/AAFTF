@@ -60,9 +60,9 @@ Invocation
 .. code-block:: text
 
     AAFTF sourpurge -i INPUT -o OUTFILE -p PHYLUM [PHYLUM ...]
-                    [-1 READ1] [-2 READ2] [-k KMER] [--sourdb PATH] [--sourdb_type {gbk,gtdb,gtdbrep}]
+                    [-1 FASTQ] [-2 FASTQ] [-k KMER] [--sourdb PATH] [--sourdb_type {gbk,gtdb,gtdbrep}]
                     [-mc MINCOVPCT] [-c CPUS] [-w WORKDIR]
-                    [--just-show-taxonomy] [-v] [--pipe]
+                    [--just-show-taxonomy] [-q] [-v]
 
 ``-i/--input``, ``-o/--outfile``, and ``-p/--phylum`` are required. Providing ``-1/--read1`` (and
 ``-2/--read2`` for paired data) enables the low-coverage screen; without reads, only the taxonomy

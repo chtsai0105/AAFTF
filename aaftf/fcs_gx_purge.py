@@ -40,7 +40,7 @@ def run(
         taxid: NCBI taxonomy ID of the expected organism.
         db: FCS-GX database path prefix (``{db}.gxi`` must exist).
         debug: Print dropped contigs and keep the work directory.
-        pipe: Suppress the "next command" hint (set when run from ``pipeline``).
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
 
     Raises:

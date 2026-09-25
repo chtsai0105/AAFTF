@@ -84,12 +84,12 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF depth -i INPUT [-o OUT] [-1 READ1] [-2 READ2] [-lr LONGREADS]
+    AAFTF depth -i INPUT [-o OUT] [-1 FASTQ] [-2 FASTQ] [-lr LONGREADS]
                [--aligner {minimap2,bwa}]
                [--longread_preset {map-ont,map-pb,map-hifi}]
                [--min_contig_len N]
                [--plot-format {pdf,svg,png}] [--no-plot]
-               [-c CPUS] [-w WORKDIR] [-v] [--pipe]
+               [-c CPUS] [-w WORKDIR] [-q] [-v]
 
 ``-i/--input`` is required; provide Illumina reads (``-l``/``-r``), long reads (``-lr``), or both.
 

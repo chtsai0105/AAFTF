@@ -55,7 +55,7 @@ Invocation
 .. code-block:: text
 
     AAFTF assess -i INPUT [-r REPORT] [-t TELOMERE_MONOMER] [-n TELOMERE_N_REPEAT]
-                 [--telomere_window N] [-v] [--pipe]
+                 [--telomere_window N] [-q] [-v]
 
 ``-i/--input`` is required.
 

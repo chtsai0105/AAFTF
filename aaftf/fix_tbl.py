@@ -60,7 +60,7 @@ def run(table: str, report: str, output: str, **kwargs: Any) -> None:
         table: .tbl file to fix.
         report: NCBI FCS action report.
         output: Path the fixed .tbl is written to.
-        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``debug``, ``pipe``, ...); ignored.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``debug``, ...); ignored.
     """
     tmp_output = Path(f"{output}.tmp")
     try:

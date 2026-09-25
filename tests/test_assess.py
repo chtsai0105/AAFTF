@@ -175,7 +175,6 @@ class TestAssessRun:
             telomere_monomer="TAA[C]+",
             telomere_n_repeat=2,
             debug=False,
-            pipe=True,
         )
         run(**vars(args))  # should not raise
         out = capsys.readouterr().out

@@ -53,20 +53,23 @@ REQUIRED_PYTHON_PACKAGES = {
 logger = logging.getLogger(__name__)
 
 
-def run(**kwargs: Any) -> None:
+def run(quiet: bool = False, **kwargs: Any) -> None:
     """Check whether AAFTF's external tool and Python package dependencies are installed.
 
-    Prints an OK/MISSING line for every required and optional tool and required package.
+    Prints an OK/MISSING line for every required and optional tool and required package, with
+    each tool's location (or the subcommands that need a missing one).
 
     Args:
-        **kwargs: Parsed CLI attributes (``command``, ``func``, ``debug``, ...); ignored.
+        quiet: Print only the OK/MISSING status and tool name, without locations or the
+            subcommands that use each tool.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ``debug``, ...); ignored.
 
     Raises:
         FileNotFoundError: If any required tool or Python package is missing.
     """
-    missing_required = _print_tool_table("Checking required external tools...", _check_tools(REQUIRED_TOOLS))
+    missing_required = _print_tool_table("Checking required external tools...", _check_tools(REQUIRED_TOOLS), quiet)
     print()
-    missing_optional = _print_tool_table("Checking optional external tools...", _check_tools(OPTIONAL_TOOLS))
+    missing_optional = _print_tool_table("Checking optional external tools...", _check_tools(OPTIONAL_TOOLS), quiet)
 
     print()
     logger.info("Checking required Python packages...")
@@ -89,12 +92,13 @@ def run(**kwargs: Any) -> None:
             logger.info(f"NOTE: {len(missing_optional)} optional tool(s) missing (only needed for specific subcommands).")
 
 
-def _print_tool_table(title: str, results: list[tuple[str, str | None, str]]) -> list[str]:
+def _print_tool_table(title: str, results: list[tuple[str, str | None, str]], quiet: bool = False) -> list[str]:
     """Log ``title`` and print an OK/MISSING line for each checked tool.
 
     Args:
         title: Heading logged before the table.
         results: ``(tool, path, used_by)`` tuples from ``_check_tools``; ``path`` is None if not found.
+        quiet: Print only the status and tool name, without its location or the subcommands using it.
 
     Returns:
         Names of the tools that were not found.
@@ -103,9 +107,9 @@ def _print_tool_table(title: str, results: list[tuple[str, str | None, str]]) ->
     missing = []
     for tool, path, used_by in results:
         if path:
-            print(f"  [OK]      {tool:<20} {path}")
+            print(f"  [OK]      {tool}" if quiet else f"  [OK]      {tool:<20} {path}")
         else:
-            print(f"  [MISSING] {tool:<20} required by: {used_by}")
+            print(f"  [MISSING] {tool}" if quiet else f"  [MISSING] {tool:<20} required by: {used_by}")
             missing.append(tool)
     return missing
 

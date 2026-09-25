@@ -28,7 +28,7 @@ def run(
     method: str = "spades",
     workdir: str | None = None,
     cpus: int = 1,
-    memory: str = "32",
+    memory: int = 32,
     isolate: bool = True,
     careful: bool = True,
     assembler_args: list[str] | None = None,
@@ -49,7 +49,7 @@ def run(
             (``"masurca"``/``"nextdenovo"`` only log that they are not implemented).
         workdir: Assembler output directory; a unique name is generated if None.
         cpus: Number of threads.
-        memory: Memory in GB, as a string (SPAdes ``--mem``, megahit ``--memory``).
+        memory: Max memory in GB (SPAdes ``--mem``; converted to bytes for MEGAHIT ``--memory``).
         isolate: Pass ``--isolate`` to SPAdes.
         careful: Pass ``--careful`` to SPAdes (only when ``isolate`` is False).
         assembler_args: Extra arguments appended to the assembler command.
@@ -58,7 +58,7 @@ def run(
         longreads: Long-read FASTQ (Unicycler only).
         merged: Merged-pair FASTQ, or None.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
 
     Raises:
@@ -81,7 +81,7 @@ def run(
 def run_spades(
     workdir: str | None = None,
     cpus: int = 1,
-    memory: str = "32",
+    memory: int = 32,
     isolate: bool = True,
     careful: bool = True,
     assembler_args: list[str] | None = None,
@@ -101,7 +101,7 @@ def run_spades(
     Args:
         workdir: SPAdes output directory; a unique ``spades_*`` name is generated if None.
         cpus: Number of threads.
-        memory: Memory limit in GB, as a string.
+        memory: Memory limit in GB.
         isolate: Pass ``--isolate``.
         careful: Pass ``--careful`` (only when ``isolate`` is False).
         assembler_args: Extra SPAdes arguments.
@@ -111,13 +111,13 @@ def run_spades(
         merged: Merged-pair FASTQ, or None.
         out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
     """
     if not workdir:
         workdir = "spades_" + str(uuid.uuid4())[:8]
 
-    runcmd = ["spades.py", "--threads", str(cpus), "--mem", memory, "-o", workdir]
+    runcmd = ["spades.py", "--threads", str(cpus), "--mem", str(memory), "-o", workdir]
 
     if isolate:
         runcmd.extend(["--isolate"])
@@ -146,7 +146,7 @@ def run_spades(
 
     # this basically overrides everything above and only runs --restart-from option
     if Path(workdir).is_dir():
-        runcmd = ["spades.py", "-o", workdir, "--threads", str(cpus), "--mem", memory, "--restart-from", "last"]
+        runcmd = ["spades.py", "-o", workdir, "--threads", str(cpus), "--mem", str(memory), "--restart-from", "last"]
 
     logger.info("Assembling FASTQ data using Spades")
     run_cmd(runcmd, debug, quiet_stdout=True)
@@ -158,7 +158,7 @@ def run_spades(
 def run_megahit(
     workdir: str | None = None,
     cpus: int = 1,
-    memory: str | None = None,
+    memory: int | None = None,
     assembler_args: list[str] | None = None,
     tmpdir: str | None = None,
     read1: str | None = None,
@@ -173,14 +173,14 @@ def run_megahit(
     Args:
         workdir: MEGAHIT output directory; ``megahit_<pid>`` if None.
         cpus: Number of threads.
-        memory: Value for ``--memory``, as a string, or None to use the MEGAHIT default.
+        memory: Max memory in GB, or None to use the MEGAHIT default (90% of RAM).
         assembler_args: Extra MEGAHIT arguments.
         tmpdir: Temporary directory.
         read1: Read 1 (forward, or single-end) FASTQ.
         read2: Read 2 (reverse) FASTQ, or None.
         out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
     """
     if not workdir:
@@ -192,7 +192,7 @@ def run_megahit(
         runcmd.extend(assembler_args)
 
     if memory:
-        runcmd.extend(["--memory", memory])
+        runcmd.extend(["--memory", str(memory * 10**9)])  # MEGAHIT takes bytes
 
     if tmpdir:
         runcmd.extend(["--tmp-dir", tmpdir])
@@ -238,7 +238,7 @@ def run_unicycler(
             single ``--unpaired`` file, so it is ignored for single-end input).
         out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
     """
     if not workdir:
@@ -324,7 +324,7 @@ def _finish_assembly(src: str | Path, final_out: str, tool_name: str, cpus: int,
         final_out: Destination FASTA path.
         tool_name: Assembler name used in log messages.
         cpus: Thread count shown in the suggested command.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint.
 
     Raises:
         RuntimeError: If the assembler did not produce ``src``.

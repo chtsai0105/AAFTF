@@ -153,7 +153,6 @@ def _depth_args(synthetic_data, tmp_path, **overrides):
         quantize=depth._DEFAULT_QUANTIZE,
         quantize_labels=None,
         debug=False,
-        pipe=True,
     )
     defaults.update(overrides)
     return Namespace(**defaults)

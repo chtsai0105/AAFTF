@@ -12,7 +12,7 @@ Algorithm
 ``run()`` function directly, in-process. Every step starts from exactly the defaults it has on its
 own command line (read from the ``AAFTF <step>`` parser, so ``pipeline`` cannot drift from them);
 only the options given to ``pipeline`` and the file names that chain the steps together override
-them, plus ``pipe=True`` so intermediate steps don't print "next command" hints.
+them. The steps' "next command" hints are not shown, since the pipeline runs the next step itself.
 
 Before each step, ``pipeline`` checks whether that step's expected output file already exists; if
 so, the step is **skipped** (with a log message) rather than re-run. This makes an interrupted
@@ -65,12 +65,12 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF pipeline -1 READ1 [-2 READ2] -o BASENAME -p PHYLUM [PHYLUM ...]
+    AAFTF pipeline -1 FASTQ [-2 FASTQ] -o BASENAME -p PHYLUM [PHYLUM ...]
                    [-c CPUS] [-m MEMORY] [-ml MINLEN]
                    [-mc MINCONTIGLEN] [--method {spades,megahit,unicycler}]
                    [-a ACCESSIONS ...] [-u URLS ...] [--sourdb PATH]
                    [--mincovpct PCT] [-w WORKDIR]
-                   [--assembler_args ARG ...] [--tmpdir DIR] [-v] [--pipe]
+                   [--assembler_args ARG ...] [--tmpdir DIR] [-q] [-v]
 
 ``-1/--read1``, ``-o/--out`` (basename), and ``-p/--phylum`` are required.
 

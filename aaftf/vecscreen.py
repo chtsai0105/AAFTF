@@ -83,7 +83,7 @@ def run(
         stringency: ``"high"`` keeps moderate and strong vector hits; anything else keeps
             only strong hits.
         debug: Keep the working directory when True.
-        pipe: Suppress the "next command" hint when True (running inside ``pipeline``).
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
     """
     workdir, custom_workdir = make_workdir(workdir, "vecscreen")

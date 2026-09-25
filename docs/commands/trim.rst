@@ -65,13 +65,13 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF trim -1 READ1 [-2 READ2] [-o BASENAME] [-c CPUS] [-ml MINLEN] [-aq AVGQUAL]
+    AAFTF trim -1 FASTQ [-2 FASTQ] [-o BASENAME] [-c CPUS] [-ml MINLEN] [-aq AVGQUAL]
                [--method {bbduk,trimmomatic,fastp}] [-m MEMORY]
                [--dedup] [--cutfront] [--cuttail] [--cutright] [--merge]
                [--trimmomatic JAR] [--trimmomatic_adaptors FILE] [--trimmomatic_clip STR]
                [--trimmomatic_leadingwindow N] [--trimmomatic_trailingwindow N]
                [--trimmomatic_slidingwindow W:Q] [--trimmomatic_quality {phred33,phred64}]
-               [-v] [--pipe]
+               [-q] [-v]
 
 ``-1/--read1`` is required; ``-2/--read2`` is optional (omit for single-end reads). If
 ``-o/--out`` (``basename``) is not given, it is derived from ``--read1``'s filename (text before

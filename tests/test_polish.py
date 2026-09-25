@@ -52,7 +52,6 @@ def _make_args(tmp_path, method="pypolca", **overrides):
         infile=str(tmp_path / "asm.fa"),
         outfile=None,
         debug=False,
-        pipe=True,
     )
     defaults.update(overrides)
     return Namespace(**defaults)
@@ -72,14 +71,6 @@ class TestPolishParser:
     def test_debug_flag_sets_true(self):
         args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq", "-v"])
         assert args.debug is True
-
-    def test_pipe_false_by_default(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])
-        assert args.pipe is False
-
-    def test_pipe_flag_sets_true(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq", "--pipe"])
-        assert args.pipe is True
 
     def test_default_method_is_polypolish(self):
         args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])

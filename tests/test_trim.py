@@ -64,7 +64,6 @@ def _make_trim_args(tmp_path, method="bbduk", read1=None, read2=_UNSET, **overri
         cuttail=False,
         cutright=False,
         debug=False,
-        pipe=True,
         trimmomatic_adaptors="TruSeq3-PE.fa",
         trimmomatic_clip="2:30:10",
         trimmomatic_leadingwindow=3,
@@ -89,14 +88,6 @@ class TestTrimParser:
     def test_debug_flag_sets_true(self):
         args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "-v"])
         assert args.debug is True
-
-    def test_pipe_false_by_default(self):
-        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
-        assert args.pipe is False
-
-    def test_pipe_flag_sets_true(self):
-        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "--pipe"])
-        assert args.pipe is True
 
     def test_default_method_is_bbduk(self):
         args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])

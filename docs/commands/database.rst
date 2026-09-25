@@ -83,7 +83,7 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF database [DATABASE ...] [--force] [-v] [--pipe]
+    AAFTF database [DATABASE ...] [--force] [-q] [-v]
 
 .. list-table::
    :header-rows: 1

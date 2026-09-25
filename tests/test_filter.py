@@ -66,7 +66,6 @@ def _make_filter_args(tmp_path, read1=_UNSET, read2=None, aligner="bbduk", **ove
         screen_urls=None,
         screen_local=None,
         debug=False,
-        pipe=True,
     )
     defaults.update(overrides)
     return Namespace(**defaults)
@@ -118,14 +117,6 @@ class TestFilterParser:
     def test_debug_flag_sets_true(self):
         args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq", "-v"])
         assert args.debug is True
-
-    def test_pipe_false_by_default(self):
-        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
-        assert args.pipe is False
-
-    def test_pipe_flag_sets_true(self):
-        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq", "--pipe"])
-        assert args.pipe is True
 
     def test_default_aligner_is_bbduk(self):
         args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])

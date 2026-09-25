@@ -11,7 +11,7 @@ from typing import Any
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from aaftf.utility import COMPLEMENT, cleanup_workdir, estimate_read_length, make_workdir, paf_hits, print_cmd, require_tools, run_cmd, write_fasta
+from aaftf.utility import COMPLEMENT, basename_from_reads, cleanup_workdir, estimate_read_length, make_workdir, paf_hits, print_cmd, require_tools, run_cmd, write_fasta
 
 __all__ = ["run"]
 
@@ -53,7 +53,9 @@ def run(
     save time and memory. NOVOPlasty may also subsample on its own to stay within ``memory``.
 
     A circularized assembly is written as a single rotated ``mt`` record; otherwise the contigs
-    are written as ``contig_N``.
+    are written as ``contig_N``. The suggested next command is ``filter`` on the same reads with the
+    mitochondrial genome added via ``-s/--screen_local``, so mitochondrial reads are screened out
+    before the nuclear assembly.
 
     Args:
         read1: Forward reads FASTQ.
@@ -67,7 +69,7 @@ def run(
             0 uses all reads.
         memory: Max memory in GB for NOVOPlasty (and ``reformat.sh``).
         debug: Keep the work directory.
-        pipe: Unused; accepted for pipeline consistency.
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
 
     Raises:
@@ -81,6 +83,7 @@ def run(
     unique_id = str(uuid.uuid4())[:8]
     workdir, custom_workdir = make_workdir(workdir, "mito")
 
+    input_reads = (read1, read2)  # the hint suggests filtering these, not the subsample
     if subsample:
         read1, read2 = _subsample_pairs(read1, read2, subsample, workdir, memory, debug)
 
@@ -148,6 +151,9 @@ def run(
 
     logger.info(f"AAFTF mito complete: {out}")
     cleanup_workdir(workdir, debug, custom_workdir)
+    if not pipe:
+        read1, read2 = input_reads
+        logger.info(f"Your next command might be:\nAAFTF filter -1 {read1} -2 {read2} -s {out} -o {basename_from_reads(read1)}")
 
 
 def _subsample_pairs(read1: str, read2: str, pairs: int, workdir: str, memory: int, debug: bool) -> tuple[str, str]:

@@ -57,7 +57,7 @@ def run(
         mincovpct: Coverage cutoff as a percent of the average N50-contig coverage.
         taxonomy: Only report the taxonomic classifications and return without filtering.
         debug: Print per-contig details and keep the work directory.
-        pipe: Suppress the "next command" hint (set when run from ``pipeline``).
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
     """
     workdir, custom_workdir = make_workdir(workdir, "sourpurge")

@@ -57,7 +57,7 @@ Invocation
 .. code-block:: text
 
     AAFTF fcs_gx_purge -i INPUT -o OUTFILE -d GXDB_PATH [-t TAXID] [-c CPUS]
-                       [-w WORKDIR] [-v] [--pipe]
+                       [-w WORKDIR] [-q] [-v]
 
 ``-i/--input`` and ``-o/--outfile`` are required; ``-d/--db`` is required in practice (the run
 aborts without a valid ``{db}.gxi``).

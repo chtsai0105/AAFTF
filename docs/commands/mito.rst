@@ -66,9 +66,9 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF mito -1 READ1 -2 READ2 [-o OUT] [--minlen N] [--maxlen N]
+    AAFTF mito -1 FASTQ -2 FASTQ [-o OUT] [--minlen N] [--maxlen N]
                [-s/--seed FASTA] [--subsample PAIRS] [-m MEMORY]
-               [-w WORKDIR] [-q] [-v] [--pipe]
+               [-w WORKDIR] [-q] [-v]
 
 ``-1/--read1`` and ``-2/--read2`` are required (``mito`` only supports paired-end data); ``-o/--out``
 defaults to ``mito.fasta``.

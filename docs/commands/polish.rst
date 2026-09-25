@@ -64,9 +64,9 @@ Invocation
 .. code-block:: text
 
     AAFTF polish -i INFILE [-o OUTFILE] --method {polypolish,pypolca,nextpolish2,racon}
-                [-1 READ1] [-2 READ2] [-lr LONGREADS]
+                [-1 FASTQ] [-2 FASTQ] [-lr LONGREADS]
                 [-c CPUS] [-m MEMORY]
-                [-w WORKDIR] [-v] [--pipe]
+                [-w WORKDIR] [-q] [-v]
 
 ``-i/--infile`` is required. ``polypolish``/``pypolca`` need ``-1/--read1`` (and typically
 ``-2/--read2``); ``nextpolish2`` needs both short reads and ``-lr/--longreads`` (HiFi);

@@ -191,7 +191,6 @@ def sort_args(tmp_path, fasta_file):
         minlen=0,
         name="scaffold",
         debug=False,
-        pipe=True,
     )
 
 
@@ -204,5 +203,4 @@ def assess_args(tmp_path, fasta_file):
         telomere_monomer="TAA[C]+",
         telomere_n_repeat=2,
         debug=False,
-        pipe=True,
     )

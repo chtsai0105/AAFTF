@@ -79,5 +79,5 @@ Command Reference
      - Run the full trim -> ... -> assess pipeline in one command
 
 Every subcommand accepts ``-v/--verbose`` (verbose logging; also usually retains temp working
-directories) and ``--pipe`` (suppress the "your next command might be" hint printed at the end --
-set automatically when a step is invoked from inside ``AAFTF pipeline``).
+directories) and ``-q/--quiet`` (only warnings and errors, which also hides the "your next
+command might be" hint printed at the end of a step).

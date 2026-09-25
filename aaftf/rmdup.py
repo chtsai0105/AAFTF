@@ -51,13 +51,13 @@ def run(
         minlen: Contigs shorter than this are dropped.
         exhaustive: Check every contig, not only those shorter than N75.
         debug: Log per-contig progress and keep the work directory.
-        pipe: Suppress the "next command" hint (set when run from ``pipeline``).
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
     """
     workdir, custom_workdir = make_workdir(workdir, "rmdup")
 
     if debug:
-        logger.info(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive} pipe={pipe}")
+        logger.info(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive}")
     logger.info("Looping through assembly shortest --> longest searching for duplicated contigs using minimap2")
 
     # read the assembly once; later lookups and the per-contig query/reference files use it

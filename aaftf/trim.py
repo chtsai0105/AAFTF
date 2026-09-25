@@ -80,7 +80,7 @@ def run(
         cuttail: Enable fastp ``--cut_tail``.
         cutright: Enable fastp ``--cut_right``.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
     """
     if not basename:
@@ -130,7 +130,7 @@ def run_bbduk(read1: str, read2: str | None, basename: str, cpus: int, memory: i
         minlen: Minimum read length after trimming.
         avgqual: Minimum average read quality (``maq``).
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint.
     """
     java_mem = f"-Xmx{memory}g"
 
@@ -179,7 +179,7 @@ def run_bbduk(read1: str, read2: str | None, basename: str, cpus: int, memory: i
         cmd = bbduk_base + [f"in={read1}", f"out={basename}_1U.fastq.gz"]
         run_cmd(cmd, debug)
 
-    _report_trimmed(basename, read2, pipe, cpus)
+    _report_trimmed(basename, read2, cpus, pipe)
 
 
 def run_trimmomatic(
@@ -216,7 +216,7 @@ def run_trimmomatic(
         trimmomatic_slidingwindow: SLIDINGWINDOW settings.
         trimmomatic_quality: Quality encoding, ``"phred33"`` or ``"phred64"``.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint.
 
     Raises:
         FileNotFoundError: If the Trimmomatic jar or the adaptors file cannot be located.
@@ -323,7 +323,7 @@ def run_fastp(read1: str, read2: str | None, basename: str, cpus: int, minlen: i
         cuttail: Enable ``--cut_tail``.
         cutright: Enable ``--cut_right``.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint when True.
+        pipe: Suppress the "next command" hint.
     """
     logger.info("Adapter trimming using fastp")
     cmd = [
@@ -362,17 +362,17 @@ def run_fastp(read1: str, read2: str | None, basename: str, cpus: int, minlen: i
     cmd += [f"--html={basename}.fastp.html", f"--json={basename}.fastp.json"]
     run_cmd(cmd, debug)
 
-    _report_trimmed(basename, read2, pipe, cpus)
+    _report_trimmed(basename, read2, cpus, pipe)
 
 
-def _report_trimmed(basename: str, read2: str | None, pipe: bool, cpus: int) -> None:
+def _report_trimmed(basename: str, read2: str | None, cpus: int, pipe: bool) -> None:
     """Log the number of reads left after trimming and the suggested next command.
 
     Args:
         basename: Output file prefix of the trimmed reads.
         read2: Read 2 (reverse) FASTQ; truthy means paired-end output is counted.
-        pipe: Suppress the "next command" hint when True.
         cpus: Thread count shown in the suggested command.
+        pipe: Suppress the "next command" hint.
     """
     if read2:
         clean = count_fastq(f"{basename}_1P.fastq.gz")

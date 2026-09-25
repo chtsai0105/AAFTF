@@ -54,7 +54,7 @@ class TestRun:
             return name == "ctg10"
 
         with patch("aaftf.rmdup._is_duplicate", side_effect=_fake_is_duplicate):
-            run(input=str(fasta), out=str(out), workdir=str(tmp_path / "wd"), minlen=100, pipe=True)
+            run(input=str(fasta), out=str(out), workdir=str(tmp_path / "wd"), minlen=100)
 
         headers = [line for line in out.read_text().splitlines() if line.startswith(">")]
         assert headers == [">big1", ">big2"]

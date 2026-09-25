@@ -7,8 +7,8 @@ func=<module>.run)``. This keeps all CLI surface/wiring in one place,
 separate from each subcommand module's own ``run(**kwargs)`` execution logic.
 ``aaftf.main`` invokes the selected subtool via ``args.func(**vars(args))``.
 
-``menu_common_args()`` adds the three arguments common to every subcommand
-(``--pipe``, ``-q/--quiet``, ``-v/--verbose``). Call it last, passing the
+``add_verbosity_args()`` adds the two arguments common to every subcommand
+(``-q/--quiet``, ``-v/--verbose``). Call it last, passing the
 subcommand's own "optional arguments" group (not the parser itself), so these
 common flags render as the final entries in that group instead of appearing
 in a separate leading section.
@@ -38,7 +38,7 @@ from aaftf.utility import CustomHelpFormatter, SubcommandGroup
 __all__ = [
     "register_subcommands",
     "database_menu",
-    "menu_common_args",
+    "add_verbosity_args",
     "trim_menu",
     "mito_menu",
     "filter_menu",
@@ -85,6 +85,26 @@ def register_subcommands(parser: ap.ArgumentParser) -> ap._SubParsersAction:
     return subparsers
 
 
+def add_verbosity_args(target: ap._ActionsContainer) -> ap._ActionsContainer:
+    """Add the -q/--quiet and -v/--verbose arguments that every AAFTF subcommand has.
+
+    ``target`` is normally a subcommand's "optional arguments" group (from
+    ``parser.add_argument_group("optional arguments")``). Call this only
+    after all of that subcommand's own optional arguments have been added,
+    so ``-q/--quiet`` and ``-v/--verbose`` render as the final
+    entries of that group.
+
+    Args:
+        target: The argument group (or parser) to add the arguments to.
+
+    Returns:
+        ``target``, for chaining.
+    """
+    target.add_argument("-q", "--quiet", action="store_true", dest="quiet", help="Only show warnings and errors")
+    target.add_argument("-v", "--verbose", action="store_true", dest="debug", help="Show debug messages and tool stderr, and keep temporary working directories")
+    return target
+
+
 def database_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     """Add the database subcommand parser.
 
@@ -112,30 +132,9 @@ def database_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         action="store_true",
         help="Re-download files even if they already exist",
     )
-    menu_common_args(optional)
+    add_verbosity_args(optional)
     parser_database.set_defaults(func=database.run)
     return parser_database
-
-
-def menu_common_args(target: ap._ActionsContainer) -> ap._ActionsContainer:
-    """Add the arguments common to every AAFTF subcommand parser.
-
-    ``target`` is normally a subcommand's "optional arguments" group (from
-    ``parser.add_argument_group("optional arguments")``). Call this only
-    after all of that subcommand's own optional arguments have been added,
-    so ``--pipe``, ``-q/--quiet`` and ``-v/--verbose`` render as the final
-    entries of that group.
-
-    Args:
-        target: The argument group (or parser) to add the arguments to.
-
-    Returns:
-        ``target``, for chaining.
-    """
-    target.add_argument("--pipe", action="store_true", help="AAFTF is running in pipeline mode")
-    target.add_argument("-q", "--quiet", action="store_true", dest="quiet", help="Only show warnings and errors")
-    target.add_argument("-v", "--verbose", action="store_true", dest="debug", help="Show debug messages and tool stderr, and keep temporary working directories")
-    return target
 
 
 def trim_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
@@ -163,20 +162,14 @@ def trim_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         type=str,
         metavar="FASTQ",
         required=True,
-        help="Read 1 (forward) of paired-end FASTQ, or single-end FASTQ.",
+        help="Read 1 (forward) FASTQ, or single-end FASTQ",
     )
 
-    optional.add_argument("-2", "--read2", type=str, metavar="FASTQ", help="Read 2 (reverse) of paired-end FASTQ.")
+    optional.add_argument("-2", "--read2", type=str, metavar="FASTQ", help="Read 2 (reverse) FASTQ for paired-end data")
 
-    optional.add_argument(
-        "-o",
-        "--out",
-        type=str,
-        dest="basename",
-        help="Output basename, default to base name of --read1 reads",
-    )
+    optional.add_argument("-o", "--out", type=str, dest="basename", help="Output file prefix; default: read 1's file name up to its first '_' (or first '.' if it has none)", metavar="PREFIX")
 
-    optional.add_argument("-ml", "--minlen", type=int, metavar="INT", default=75, help="Minimum read length after trimming")
+    optional.add_argument("-ml", "--minlen", type=int, metavar="BP", default=75, help="Minimum read length to keep after trimming")
 
     optional.add_argument(
         "-aq",
@@ -205,11 +198,11 @@ def trim_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="Run fastp move a sliding window from front to tail, if meet one window with mean quality < threshold. \nWARNING: this operation will interfere deduplication for SE data",
     )
 
-    optional.add_argument("--method", default="bbduk", choices=["bbduk", "trimmomatic", "fastp"], help="Program to use for adapter trimming")
+    optional.add_argument("--method", default="bbduk", choices=["bbduk", "trimmomatic", "fastp"], help="Trimming method", type=str)
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="int", default=1, help="Number of CPUs/threads to use.")
-    optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max Memory (in GB)")
-    menu_common_args(optional)
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max memory in GB", metavar="GB")
+    add_verbosity_args(optional)
 
     trimmomatic_group = parser_trim.add_argument_group(title="Trimmomatic options")
 
@@ -263,24 +256,17 @@ def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_mito.add_argument_group("required arguments")
     optional = parser_mito.add_argument_group("optional arguments")
 
-    required.add_argument("-1", "--read1", type=str, required=True, help="Read 1 (forward) FASTQ")
+    required.add_argument("-1", "--read1", metavar="FASTQ", type=str, required=True, help="Read 1 (forward) FASTQ; mito needs paired-end reads")
 
-    required.add_argument("-2", "--read2", type=str, required=True, help="Read 2 (reverse) FASTQ")
+    required.add_argument("-2", "--read2", metavar="FASTQ", type=str, required=True, help="Read 2 (reverse) FASTQ for paired-end data")
 
-    optional.add_argument("-o", "--out", type=str, default="mito.fasta", help="Output FASTA file for mitochondrial genome")
+    optional.add_argument("-o", "--out", type=str, default="mito.fasta", help="Output mitochondrial genome FASTA", metavar="FASTA")
 
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument("--minlen", default=10000, type=int, help="Minimum expected genome size")
+    optional.add_argument("--minlen", default=10000, type=int, help="Minimum expected genome size", metavar="BP")
 
-    optional.add_argument("--maxlen", default=100000, type=int, help="Maximum expected genome size")
+    optional.add_argument("--maxlen", default=100000, type=int, help="Maximum expected genome size", metavar="BP")
 
     optional.add_argument(
         "-s",
@@ -298,9 +284,9 @@ def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="Randomly keep only this many read pairs (same pairs on every run) before assembling, since mitochondrial coverage is usually far higher than needed; 0 uses all reads",
     )
 
-    optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max Memory (in GB)")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max memory in GB", metavar="GB")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_mito.set_defaults(func=mito.run)
     return parser_mito
@@ -325,39 +311,27 @@ def filter_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_filter.add_argument_group("required arguments")
     optional = parser_filter.add_argument_group("optional arguments")
 
-    required.add_argument("-1", "--read1", type=str, required=True, help="Read 1 (forward) FASTQ")
+    required.add_argument("-1", "--read1", metavar="FASTQ", type=str, required=True, help="Read 1 (forward) FASTQ, or single-end FASTQ")
 
-    optional.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) FASTQ")
+    optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
 
-    optional.add_argument("-o", "--out", dest="basename", type=str, help="Output basename")
+    optional.add_argument("-o", "--out", dest="basename", type=str, help="Output file prefix; default: read 1's file name up to its first '_' (or first '.' if it has none)", metavar="PREFIX")
 
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument(
-        "--aligner",
-        default="bbduk",
-        choices=["bbduk", "bowtie2", "bwa", "minimap2"],
-        help="Aligner to use to map reads to contamination database",
-    )
+    optional.add_argument("--aligner", default="bbduk", choices=["bbduk", "bowtie2", "bwa", "minimap2"], help="Aligner for mapping reads to the contaminant sequences", type=str)
 
-    optional.add_argument("-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads.")
+    optional.add_argument("-a", "--screen_accessions", type=str, nargs="*", help="GenBank accession(s) whose sequences are screened out of the reads", metavar="ACCESSION")
 
-    optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URLs to download and screen out initial reads.")
+    optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URL(s) of FASTA files whose sequences are screened out of the reads", metavar="URL")
 
     optional.add_argument("-s", "--screen_local", type=str, nargs="+", help="Local FASTA file(s) to use contamination screen")
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
-    optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max Memory (in GB)")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max memory in GB", metavar="GB")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_filter.set_defaults(func=aaftf_filter.run)
     return parser_filter
@@ -385,38 +359,27 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required.add_argument(
         "-1",
         "--read1",
+        metavar="FASTQ",
         type=str,
         required=True,  # every implemented --method (spades/megahit/unicycler) requires this
-        help="Read 1 (forward) FASTQ",
+        help="Read 1 (forward) FASTQ, or single-end FASTQ",
     )
 
-    required.add_argument(
-        "-o",
-        "--out",
-        type=str,
-        required=True,  # think about sensible replacement in future
-        help="Output assembly FASTA",
-    )
+    required.add_argument("-o", "--out", type=str, required=True, help="Output assembly FASTA", metavar="FASTA")  # think about sensible replacement in future
 
-    optional.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) FASTQ")
+    optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
 
-    optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="assembly output directory")
+    optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument(
-        "--method",
-        type=str,
-        choices=["spades", "megahit", "unicycler"],
-        default="spades",
-        help="Assembly method: spades, megahit, unicycler",
-    )
+    optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler"], default="spades", help="Assembly method")
 
     optional.add_argument("--merged", type=str, dest="merged", help="Merged reads from flash or fastp or just single end reads")
-    optional.add_argument("--tmpdir", type=str, help="Assembler temporary dir")
-    optional.add_argument("--assembler_args", action="append", help="Additional SPAdes/Megahit arguments")
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
-    optional.add_argument("-m", "--memory", type=str, dest="memory", default="32", help="Memory (in GB) setting for SPAdes")
+    optional.add_argument("--tmpdir", type=str, help="Temporary directory for the assembler", metavar="DIR")
+    optional.add_argument("--assembler_args", action="append", help="Extra argument passed to the assembler (repeat for several)", metavar="ARG", type=str)
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", default=32, help="Max memory in GB for the assembler", metavar="GB")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     spades_group = parser_asm.add_argument_group(title="SPAdes options")
 
@@ -438,7 +401,7 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     unicycler_group = parser_asm.add_argument_group(title="Unicycler options")
 
-    unicycler_group.add_argument("-lr", "--longreads", type=str, help="Long Read fastq (pacbio or ONT)")
+    unicycler_group.add_argument("-lr", "--longreads", type=str, help="Long-read FASTQ (PacBio or ONT)", metavar="FASTQ")
 
     parser_asm.set_defaults(func=assemble.run)
     return parser_asm
@@ -463,26 +426,19 @@ def vecscreen_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_vecscreen.add_argument_group("required arguments")
     optional = parser_vecscreen.add_argument_group("optional arguments")
 
-    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input contigs or scaffold assembly")
+    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input genome assembly FASTA", metavar="FASTA")
 
-    required.add_argument("-o", "--outfile", type=str, required=True, help="Output vector screened and cleaned assembly")
+    required.add_argument("-o", "--outfile", type=str, required=True, help="Output vector-screened assembly FASTA", metavar="FASTA")
 
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument("-pid", "--percent_id", type=int, help="Percent Identity cutoff for vecscreen adaptor matches")
+    optional.add_argument("-pid", "--percent_id", type=int, help="Minimum percent identity for vector/contaminant BLAST hits", metavar="PCT")
 
     optional.add_argument("-s", "--stringency", default="high", choices=["high", "low"], help="Stringency to filter VecScreen hits")
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_vecscreen.set_defaults(func=vecscreen.run)
     return parser_vecscreen
@@ -507,18 +463,11 @@ def fcs_screen_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_fcs_screen.add_argument_group("required arguments")
     optional = parser_fcs_screen.add_argument_group("optional arguments")
 
-    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input contigs or scaffold assembly")
+    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="infile", help="Input genome assembly FASTA", metavar="FASTA")
 
-    required.add_argument("-o", "--outfile", type=str, required=True, help="Output vector screened and cleaned assembly")
+    required.add_argument("-o", "--outfile", type=str, required=True, help="Output adaptor-screened assembly FASTA", metavar="FASTA")
 
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
     optional.add_argument("--image", type=str, help="Container file (or will download and look in the database folder)")
 
@@ -534,7 +483,7 @@ def fcs_screen_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("--fcs_script", type=str, help="location of the run_fcsadaptor.sh script (or will download automatically)")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_fcs_screen.set_defaults(func=fcs_screen.run)
     return parser_fcs_screen
@@ -559,24 +508,11 @@ def fcs_gx_purge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_fcsgx.add_argument_group("required arguments")
     optional = parser_fcsgx.add_argument_group("optional arguments")
 
-    required.add_argument("-i", "--input", type=str, required=True, help="Input contigs or scaffold assembly")
+    required.add_argument("-i", "--input", type=str, required=True, help="Input genome assembly FASTA", metavar="FASTA")
 
-    required.add_argument(
-        "-o",
-        "--outfile",
-        type=str,
-        required=True,  # think about sensible replacement in future
-        help="Output fcs_gx cleaned assembly",
-    )
+    required.add_argument("-o", "--outfile", type=str, required=True, help="Output FCS-GX-purged assembly FASTA", metavar="FASTA")  # think about sensible replacement in future
 
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
     optional.add_argument(
         "-t",
@@ -588,7 +524,7 @@ def fcs_gx_purge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("-d", "--db", type=str, default="/my_tmpfs/gxdb/all", help="gxdb database path")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_fcsgx.set_defaults(func=fcs_gx_purge.run)
     return parser_fcsgx
@@ -613,36 +549,23 @@ def sourpurge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_sour.add_argument_group("required arguments")
     optional = parser_sour.add_argument_group("optional arguments")
 
-    required.add_argument("-i", "--input", type=str, required=True, help="Input contigs or scaffold assembly")
+    required.add_argument("-i", "--input", type=str, required=True, help="Input genome assembly FASTA", metavar="FASTA")
 
-    required.add_argument(
-        "-o",
-        "--outfile",
-        type=str,
-        required=True,  # think about sensible replacement in future
-        help="Output sourmash cleaned assembly",
-    )
+    required.add_argument("-o", "--outfile", type=str, required=True, help="Output sourmash-purged assembly FASTA", metavar="FASTA")  # think about sensible replacement in future
 
-    required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or Phyla to keep matches, i.e. Ascomycota")
+    required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or phyla whose contigs are kept, e.g. Ascomycota", metavar="PHYLUM", type=str)
 
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument("-1", "--read1", type=str, help="Read 1 (forward) FASTQ")
+    optional.add_argument("-1", "--read1", metavar="FASTQ", type=str, help="Read 1 (forward) FASTQ, or single-end FASTQ")
 
-    optional.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) FASTQ")
+    optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
 
-    optional.add_argument("--sourdb", type=str, help="SourMash LCA taxonomy database (defaults to k-31)")
+    optional.add_argument("--sourdb", type=str, help="sourmash LCA (k-31) taxonomy database; default: the one from 'AAFTF database'", metavar="FILE")
 
     optional.add_argument("-k", "--kmer", default="31", help="SourMash LCA kmersize when taxonomy database was built")
 
-    optional.add_argument("-mc", "--mincovpct", default=5, type=int, help="Minimum percent of N50 coverage to remove")
+    optional.add_argument("-mc", "--mincovpct", default=5, type=int, help="Remove contigs whose coverage is below this percent of the N50 contigs' average coverage", metavar="PCT")
 
     optional.add_argument(
         "--sourdb_type",
@@ -652,9 +575,9 @@ def sourpurge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     )
 
     optional.add_argument("--just-show-taxonomy", dest="taxonomy", action="store_true", help="Show taxonomy information and exit")
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_sour.set_defaults(func=sourpurge.run)
     return parser_sour
@@ -679,46 +602,19 @@ def rmdup_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_rmdup.add_argument_group("required arguments")
     optional = parser_rmdup.add_argument_group("optional arguments")
 
-    required.add_argument("-i", "--input", type=str, required=True, help="Input Assembly fasta file(contigs or scaffolds)")
+    required.add_argument("-i", "--input", type=str, required=True, help="Input genome assembly FASTA", metavar="FASTA")
 
-    required.add_argument(
-        "-o",
-        "--out",
-        type=str,
-        required=True,
-        help="Output new version of assembly with duplicated contigs/scaffolds removed",
-    )
+    required.add_argument("-o", "--out", type=str, required=True, help="Output assembly FASTA with duplicate contigs removed", metavar="FASTA")
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument(
-        "-pid",
-        "--percent_id",
-        type=int,
-        dest="percent_id",
-        default=95,
-        help="Percent Identity used in matching contigs for redundancy",
-    )
+    optional.add_argument("-pid", "--percent_id", type=int, dest="percent_id", default=95, help="Minimum percent identity for a contig to count as a duplicate", metavar="PCT")
 
-    optional.add_argument(
-        "-pcov",
-        "--percent_cov",
-        type=int,
-        dest="percent_cov",
-        default=95,
-        help="Coverage of contig used to decide if it is redundant",
-    )
+    optional.add_argument("-pcov", "--percent_cov", type=int, dest="percent_cov", default=95, help="Coverage of contig used to decide if it is redundant", metavar="PCT")
 
-    optional.add_argument("-ml", "--minlen", type=int, default=500, help="Minimum contig length to keep, shorter ones are dropped")
+    optional.add_argument("-ml", "--minlen", type=int, default=500, help="Minimum contig length to keep", metavar="BP")
 
     optional.add_argument(
         "--exhaustive",
@@ -726,7 +622,7 @@ def rmdup_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="Compute overlaps for every contig, otherwise only process contigs for L75 and below",
     )
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_rmdup.set_defaults(func=rmdup.run)
     return parser_rmdup
@@ -750,46 +646,33 @@ def polish_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     required = parser_polish.add_argument_group("required arguments")
 
-    required.add_argument("-i", "--infile", "--input", type=str, dest="infile", required=True, help="Input contigs or scaffold assembly")
+    required.add_argument("-i", "--infile", "--input", type=str, dest="infile", required=True, help="Input genome assembly FASTA", metavar="FASTA")
 
     shortread_group = parser_polish.add_argument_group(title="polypolish / pypolca / NextPolish2 required arguments")
 
-    shortread_group.add_argument("-1", "--read1", type=str, help="Read 1 (forward) FASTQ; required for short read polishing methods")
+    shortread_group.add_argument("-1", "--read1", metavar="FASTQ", type=str, help="Read 1 (forward) FASTQ, or single-end FASTQ; required for short-read polishing methods")
 
-    shortread_group.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) FASTQ; required for short read polishing methods")
+    shortread_group.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data; required for polypolish")
 
     longread_group = parser_polish.add_argument_group(title="NextPolish2 / Racon required arguments")
 
-    longread_group.add_argument("-lr", "--longreads", type=str, help="Long Read FASTQ (PacBio or ONT/HiFi); required for NextPolish2 and Racon")
+    longread_group.add_argument("-lr", "--longreads", type=str, help="Long-read FASTQ (PacBio or ONT); required for NextPolish2 (HiFi) and Racon", metavar="FASTQ")
 
     optional = parser_polish.add_argument_group("optional arguments")
 
-    optional.add_argument("-o", "--out", "--outfile", type=str, dest="outfile", help="Output a Polished assembly")
+    optional.add_argument("-o", "--out", "--outfile", type=str, dest="outfile", help="Output polished assembly FASTA", metavar="FASTA")
 
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument(
-        "--method",
-        type=str,
-        choices=["polypolish", "pypolca", "nextpolish2", "racon"],
-        default="polypolish",
-        help="Polishing method: polypolish, pypolca, nextpolish2, racon",
-    )
+    optional.add_argument("--method", type=str, choices=["polypolish", "pypolca", "nextpolish2", "racon"], default="polypolish", help="Polishing method")
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     pypolca_group = parser_polish.add_argument_group(title="pypolca options")
 
-    pypolca_group.add_argument("-m", "--memory", type=int, default=16, dest="memory", help="Max Memory (in GB)")
+    pypolca_group.add_argument("-m", "--memory", type=int, default=16, dest="memory", help="Max memory in GB", metavar="GB")
 
     parser_polish.set_defaults(func=polish.run)
     return parser_polish
@@ -814,15 +697,15 @@ def sort_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_sort.add_argument_group("required arguments")
     optional = parser_sort.add_argument_group("optional arguments")
 
-    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="input", help="Input genome assembly FASTA")
+    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="input", help="Input genome assembly FASTA", metavar="FASTA")
 
-    required.add_argument("-o", "--out", "--output", type=str, required=True, dest="out", help="Output genome assembly FASTA")
+    required.add_argument("-o", "--out", "--output", type=str, required=True, dest="out", help="Output sorted and renamed assembly FASTA", metavar="FASTA")
 
-    optional.add_argument("-ml", "--minlen", type=int, default=0, help="Minimum contig length to keep, shorter ones are dropped")
+    optional.add_argument("-ml", "--minlen", type=int, default=0, help="Minimum contig length to keep", metavar="BP")
 
     optional.add_argument("-n", "--name", "--basename", type=str, default="scaffold", dest="name", help="Basename to rename FASTA headers")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_sort.set_defaults(func=aaftf_sort.run)
     return parser_sort
@@ -847,16 +730,9 @@ def assess_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_assess.add_argument_group("required arguments")
     optional = parser_assess.add_argument_group("optional arguments")
 
-    required.add_argument(
-        "-i",
-        "--input",
-        "--infile",
-        type=str,
-        required=True,
-        help="Input genome assembly to test completeness and provide summary statistics",
-    )
+    required.add_argument("-i", "--input", "--infile", type=str, required=True, help="Input genome assembly FASTA", metavar="FASTA")
 
-    optional.add_argument("-r", "--report", type=str, help="Filename to save report information otherwise will print to stdout")
+    optional.add_argument("-r", "--report", type=str, help="Write the report to this file (default: print to stdout)", metavar="FILE")
 
     optional.add_argument("-t", "--telomere_monomer", type=str, help="Telomere monomer pattern to search for.", default="TAAC{3,5}")
 
@@ -864,7 +740,7 @@ def assess_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("--telomere_window", type=int, default=200, help="Number of bp to scan at each end for telomere repeats.")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_assess.set_defaults(func=assess.run)
     return parser_assess
@@ -891,11 +767,11 @@ def fix_tbl_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     required.add_argument("-t", "--table", "--infile", type=str, required=True, help="Annotation table in NCBI .tbl format")
 
-    required.add_argument("-r", "--report", type=str, required=True, help="NCBI FCS action report (tab-separated: accession, length, action, range(s), ...)")
+    required.add_argument("-r", "--report", type=str, required=True, help="NCBI FCS action report (tab-separated: accession, length, action, range(s), ...)", metavar="FILE")
 
     required.add_argument("-o", "--output", type=str, required=True, help="Write fixed TBL file")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_fix.set_defaults(func=fix_tbl.run)
     return parser_fix
@@ -920,62 +796,31 @@ def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_depth.add_argument_group("required arguments")
     optional = parser_depth.add_argument_group("optional arguments")
 
-    required.add_argument(
-        "-i",
-        "--input",
-        "--infile",
-        type=str,
-        required=True,
-        dest="input",
-        help="Input genome assembly FASTA (e.g. *.sorted.fasta)",
-    )
+    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="input", help="Input genome assembly FASTA", metavar="FASTA")
 
     required.add_argument(
         "-1",
         "--read1",
+        metavar="FASTQ",
         type=str,
-        help="Read 1 (forward) Illumina FASTQ",
+        help="Read 1 (forward) FASTQ, or single-end FASTQ (Illumina)",
     )
 
     optional.add_argument(
         "-2",
         "--read2",
+        metavar="FASTQ",
         type=str,
-        help="Read 2 (reverse) Illumina FASTQ",
+        help="Read 2 (reverse) FASTQ for paired-end data (Illumina)",
     )
 
-    optional.add_argument(
-        "-lr",
-        "--longreads",
-        type=str,
-        help="Long reads FASTQ (PacBio or ONT)",
-    )
+    optional.add_argument("-lr", "--longreads", type=str, help="Long-read FASTQ (PacBio or ONT)", metavar="FASTQ")
 
-    optional.add_argument(
-        "-o",
-        "--out",
-        "--report",
-        type=str,
-        default="coverage_stats.txt",
-        dest="out",
-        help="Output coverage report file",
-    )
+    optional.add_argument("-o", "--out", "--report", type=str, default="coverage_stats.txt", dest="out", help="Output coverage report", metavar="FILE")
 
-    optional.add_argument(
-        "-w",
-        "--workdir",
-        "--tmpdir",
-        type=str,
-        dest="workdir",
-        help="Temporary directory to store datafiles and processes in",
-    )
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument(
-        "--aligner",
-        default="minimap2",
-        choices=["minimap2", "bwa"],
-        help="Aligner to use for Illumina reads",
-    )
+    optional.add_argument("--aligner", default="minimap2", choices=["minimap2", "bwa"], help="Aligner for mapping Illumina reads", type=str)
 
     optional.add_argument(
         "--min_contig_len",
@@ -999,9 +844,9 @@ def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="Disable coverage plot generation",
     )
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     longread_group = parser_depth.add_argument_group(title="minimap2 long-read required arguments")
 
@@ -1035,37 +880,37 @@ def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_pipeline.add_argument_group("required arguments")
     optional = parser_pipeline.add_argument_group("optional arguments")
 
-    required.add_argument("-1", "--read1", type=str, required=True, help="Read 1 (forward) of paired-end FASTQ, or single-end FASTQ.")
+    required.add_argument("-1", "--read1", metavar="FASTQ", type=str, required=True, help="Read 1 (forward) FASTQ, or single-end FASTQ")
 
-    required.add_argument("-o", "--out", type=str, required=True, dest="basename", help="Output basename (prefix for every step's output files)")
+    required.add_argument("-o", "--out", type=str, required=True, dest="basename", help="Output file prefix for every step's output files", metavar="PREFIX")
 
-    required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or Phyla to keep matches, i.e. Ascomycota")
+    required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or phyla whose contigs are kept, e.g. Ascomycota", metavar="PHYLUM", type=str)
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
-    optional.add_argument("--tmpdir", type=str, help="Assembler temporary dir")
-    optional.add_argument("--assembler_args", action="append", help="Additional SPAdes/Megahit arguments")
-    optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler"], default="spades", help="Assembly method: spades, megahit, unicycler")
+    optional.add_argument("--tmpdir", type=str, help="Temporary directory for the assembler", metavar="DIR")
+    optional.add_argument("--assembler_args", action="append", help="Extra argument passed to the assembler (repeat for several)", metavar="ARG", type=str)
+    optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler"], default="spades", help="Assembly method")
 
-    optional.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) of paired-end FASTQ.")
+    optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
 
-    optional.add_argument("-m", "--memory", type=int, dest="memory", help="Memory (in GB) for every step that takes -m/--memory (trim, filter, assemble, polish); default: each step's own default")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", help="Max memory in GB, passed to every step that has -m/--memory (trim, filter, assemble, polish); default: each step's own default", metavar="GB")
 
-    optional.add_argument("-ml", "--minlen", type=int, default=75, help="Minimum read length after trimming")
+    optional.add_argument("-ml", "--minlen", type=int, default=75, help="Minimum read length to keep after trimming", metavar="BP")
 
-    optional.add_argument("-a", "--screen_accessions", type=str, nargs="*", help="Genbank accession number(s) to screen out from initial reads.")
+    optional.add_argument("-a", "--screen_accessions", type=str, nargs="*", help="GenBank accession(s) whose sequences are screened out of the reads", metavar="ACCESSION")
 
-    optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URLs to download and screen out initial reads.")
+    optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URL(s) of FASTA files whose sequences are screened out of the reads", metavar="URL")
 
     optional.add_argument("-mc", "--mincontiglen", type=int, default=500, help="Minimum length of contigs to keep")
 
-    optional.add_argument("-w", "--workdir", type=str, help="temp directory")
+    optional.add_argument("-w", "--workdir", type=str, help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument("--sourdb", type=str, help="SourMash LCA k-31 taxonomy database")
+    optional.add_argument("--sourdb", type=str, help="sourmash LCA (k-31) taxonomy database; default: the one from 'AAFTF database'", metavar="FILE")
 
-    optional.add_argument("--mincovpct", default=5, type=int, help="Minimum percent of N50 coverage to remove")
+    optional.add_argument("--mincovpct", default=5, type=int, help="Remove contigs whose coverage is below this percent of the N50 contigs' average coverage", metavar="PCT")
 
-    menu_common_args(optional)
+    add_verbosity_args(optional)
 
     parser_pipeline.set_defaults(func=pipeline.run)
     return parser_pipeline
@@ -1086,5 +931,9 @@ def dependency_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         description="Check whether all external tool and Python package dependencies required by AAFTF are installed.",
         help="Check that AAFTF dependencies are installed",
     )
+
+    optional = parser_dependency.add_argument_group("optional arguments")
+    add_verbosity_args(optional)
+
     parser_dependency.set_defaults(func=dependency.run)
     return parser_dependency

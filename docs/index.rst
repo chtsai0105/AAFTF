@@ -13,8 +13,7 @@ Every subcommand is invoked the same way::
     AAFTF <subcommand> [options]
 
 and every subcommand accepts at minimum ``-v/--verbose`` (verbose logging, keep temp files) and
-``--pipe`` (suppress "next command" hints; used internally when ``AAFTF pipeline`` chains steps
-together).
+``-q/--quiet`` (only warnings and errors, which also hides the "next command" hints).
 
 .. toctree::
    :maxdepth: 2
