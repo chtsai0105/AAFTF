@@ -9,8 +9,9 @@ through the read-level :doc:`filter` step, using BLASTN.
 Algorithm
 =========
 
-Runs three successive BLASTN screens, in this order, against BLAST databases built from
-``resources.DB_LINKS`` (downloaded/cached under ``$AAFTF_DB`` or the working directory):
+Runs three successive BLASTN screens, in this order, against BLAST databases built in the work
+directory from the ``univec``, ``euks``, ``proks`` and ``mitodb`` databases installed by
+``AAFTF database`` (the run stops with exit code 2 if any of them is missing):
 
 1. **CONTAM_EUKS / CONTAM_PROKS screen.** BLASTN of the assembly against NCBI's
    ``contam_in_euks``/``contam_in_prok`` reference sets (``-dust yes -soft_masking true``). A hit
@@ -48,14 +49,18 @@ Runs three successive BLASTN screens, in this order, against BLAST databases bui
         - 23-24
         - 1 in 40
 
-   ``-s/--stringency high`` (default) keeps/acts on moderate+strong matches; ``low`` acts on
-   strong matches only. Terminal hits are trimmed off the nearest end; internal hits split the
+   Weak matches are always ignored. ``-s/--stringency high`` (default) acts on moderate+strong
+   matches; ``low`` acts on strong matches only. Terminal hits are trimmed off the nearest end; internal hits split the
    contig into pieces around the hit. This repeats in rounds against the progressively-cleaned
    assembly until no further vector hits are found. Fragments shorter than 200 bp after trimming
    are dropped.
 
 Contigs removed entirely by the mito screen are written to ``{prefix}.mitochondria.fasta``
-alongside the main cleaned output.
+(``{prefix}`` = the output name up to its last ``.f...`` extension), in the same directory as
+``-o/--outfile``; the cleaned assembly is written to ``-o/--outfile`` itself. BLAST
+reports and intermediate FASTA files go to the work directory, together with
+``vecscreen.log`` (the work directory is kept when given with ``-w``, with ``-v``, or when the
+run fails).
 
 Cutoffs / defaults
 ===================
@@ -88,16 +93,18 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF vecscreen -i INFILE -o OUTFILE [-c CPUS] [-pid PERCENT_ID]
-                    [-s {high,low}] [-w WORKDIR] [-q] [-v]
+    AAFTF vecscreen -i FASTA -o FASTA [-w DIR] [-pid PCT] [-s {high,low}]
+                    [-c INT] [-q] [-v]
 
-``-i/--input`` (assembly FASTA) and ``-o/--outfile`` are required.
+``-i/--input`` (alias ``--infile``; assembly FASTA) and ``-o/--outfile`` are required. Unless
+``-q`` is given, the suggested next command (:doc:`sourpurge`) is printed at the end.
 
 Example
 =======
 
 .. code-block:: bash
 
+    # writes genomes/STRAINX.vecscreen.fasta and genomes/STRAINX.vecscreen.mitochondria.fasta
     AAFTF vecscreen -c 16 -i genomes/STRAINX.spades.fasta -o genomes/STRAINX.vecscreen.fasta
 
 Next step: :doc:`sourpurge` (sourmash-based) or :doc:`fcs_gx_purge` (NCBI FCS-GX-based) --

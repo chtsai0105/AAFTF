@@ -4,7 +4,8 @@
 ![AAFTF logo](docs/AAFTF.png)
 
 # Requirements
-Most of these can be installed via conda packages. Noting that some tools have different samtools version expectations, which can lead to problems. In particular the bioconda install of samtools is v0.2 while the version expected for most other tools is v1.17. This can lead to some issues.
+Python >=3.10 and the external tools below; all can be installed from conda (bioconda) or with pixi (see Install).
+AAFTF needs samtools >=1.13. Run `AAFTF dependency` to see which tools are found.
 
 ## read aligners for polishing and depth of coverage calculation
 - bwa - https://github.com/lh3/bwa
@@ -24,7 +25,7 @@ Most of these can be installed via conda packages. Noting that some tools have d
 - unicycler - https://github.com/rrwick/Unicycler (which runs spades)
 
 ## Assembly Contamination screening support
-- [sourmash](https://pubmed.ncbi.nlm.nih.gov/31508216/) (>=v3.5)- https://sourmash.readthedocs.io/ (install via conda/pip)
+- [sourmash](https://pubmed.ncbi.nlm.nih.gov/31508216/) (>=v4)- https://sourmash.readthedocs.io/ (install via conda/pip)
 - NCBI BLAST+ - https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/
 - [ncbi-fcs](https://pubmed.ncbi.nlm.nih.gov/38409096/) (for vector screening) - https://github.com/ncbi/fcs/
 - [ncbi-fcs-gx](https://pubmed.ncbi.nlm.nih.gov/38409096/) (for contaminant filtering, alternative to sourmash, requires large memory or SSD drive) https://github.com/ncbi/fcs-gx
@@ -35,6 +36,10 @@ Most of these can be installed via conda packages. Noting that some tools have d
   a Python reimplementation of MaSuRCA's POLCA algorithm that works with any modern samtools
 - [Polypolish](https://github.com/rrwick/Polypolish) - alignment-filtering short-read polisher
 - [NextPolish2](https://github.com/Nextomics/NextPolish2) - repeat-aware polishing of HiFi assemblies using a short-read k-mer (yak) database
+- [Racon](https://github.com/lbcb-sci/racon) - long-read polishing
+
+## Depth of coverage
+- [mosdepth](https://github.com/brentp/mosdepth) and samtools
 
 
 # Authors
@@ -83,19 +88,24 @@ More instructions coming for simplicity of install/testing.
 This is partially a python re-write of [JAAWS](https://github.com/nextgenusfs/jaaws) which was a unix shell based cleanup and assembly tool written by Jon.
 
 ## Steps / Procedures
-1. trim                Trim FASTQ input reads - with BBMap
-2. mito                De novo assemble mitochondrial genome
-3. filter              Filter contaminanting reads - with BBMap
-4. assemble            Assemble reads - with SPAdes
+Setup: `dependency` (check installed tools) and `database` (list/download reference databases).
+
+1. trim                Trim FASTQ input reads - with bbduk (default), Trimmomatic or fastp
+2. mito                (Optional) De novo assemble mitochondrial genome - with NOVOPlasty
+3. filter              Filter contaminanting reads - with bbduk (default), bowtie2, bwa or minimap2
+4. assemble            Assemble reads - with SPAdes (default), MEGAHIT or Unicycler
 5. vecscreen           Vector and Contaminant Screening of assembled contigs - with BlastN based method to replicate NCBI screening
 6a. sourpurge          Purge contigs based on sourmash results - with sourmash
-6b. fcs_gx_purge       Purge contigs based on NCBI fcs-gx tool. Note this runs MUCH faster with large memory.
+6b. fcs_screen         (Optional) NCBI FCS-adaptor vector screening
+6c. fcs_gx_purge       (Optional) Purge contigs based on NCBI fcs-gx tool. Note this runs MUCH faster with large memory.
 7. rmdup               Remove duplicate contigs - using minimap2 to find duplicates
-8. polish              (Optional) Polish contig sequences - uses pypolca, Polypolish, NextPolish2, or Racon; recommended only with long reads
+8. polish              (Optional) Polish contig sequences - uses Polypolish (default), pypolca, NextPolish2, or Racon; recommended only with long reads
 9. sort                Sort contigs by length and rename FASTA headers
 10. assess             Assess completeness of genome assembly
-11. depth              Calculate read depth of coverage across assembled contigs
-12. pipeline           Run AAFTF pipeline all in one go.
+11. depth              (Optional) Calculate read depth of coverage across assembled contigs
+12. pipeline           Run trim, filter, assemble, vecscreen, sourpurge, rmdup, sort and assess in one go
+
+Annotation: `fix_tbl` fixes .tbl feature-table offsets after contigs were trimmed.
 
 
 # Typical runs
@@ -252,7 +262,7 @@ WORKDIR=working_AAFTF
 OUTDIR=genomes
 ASMFILE=$OUTDIR/${BASE}.spades.fasta
 mkdir -p $WORKDIR $OUTDIR
-AAFTF assemble -c $CPU --mem $MEM \
+AAFTF assemble -c $CPU --memory $MEM \
 	  --read1 $READ1 --read2 $READ2  \
 	   -o $ASMFILE -w $WORKDIR/spades_$BASE
 ```

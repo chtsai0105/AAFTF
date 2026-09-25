@@ -104,7 +104,7 @@ def genome_asm_stats(fasta_file: str, output_handle: TextIO | None, telomere_rep
     report += f"{'GC%':>15}  =  {gc:.2f}\n"
     report += f"{'N GAP COUNT':>15}  =  {n_gap_count}\n"
     report += f"{'TOTAL N BASES':>15}  =  {total_ns}\n"
-    if total_masked < total_len:
+    if total_masked > 0:
         report += f"{'BASES MASKED':>15}  =  {total_masked}\n"
         report += f"{'PERCENT MASKED':>15}  =  {100.0 * total_masked / total_len:.2f}\n"
     for f in sorted(telomere_stats):

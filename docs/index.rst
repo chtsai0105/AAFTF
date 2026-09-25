@@ -4,15 +4,16 @@
 
 AAFTF is a menu-driven command line toolkit (``AAFTF <subcommand> [options]``) that takes raw
 paired-end Illumina reads (optionally with PacBio/ONT long reads) through quality trimming,
-contamination filtering, assembly, vector/contaminant screening, duplicate removal, polishing,
-sorting, and quality assessment -- producing a clean, submission-ready fungal genome assembly plus
+contamination filtering, assembly, vector/contaminant screening, duplicate removal, sorting,
+and quality assessment (with optional polishing, mitochondrial assembly, NCBI FCS screening and
+read-depth analysis) -- producing a clean, submission-ready fungal genome assembly plus
 summary statistics describing assembly completeness and sequencing success.
 
 Every subcommand is invoked the same way::
 
     AAFTF <subcommand> [options]
 
-and every subcommand accepts at minimum ``-v/--verbose`` (verbose logging, keep temp files) and
+and every subcommand accepts ``-v/--verbose`` (verbose logging, keep temp files) and
 ``-q/--quiet`` (only warnings and errors, which also hides the "next command" hints).
 
 .. toctree::

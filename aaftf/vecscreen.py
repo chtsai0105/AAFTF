@@ -92,14 +92,13 @@ def run(
     # final_outfile/outdir/prefix are derived from the user's --outfile once,
     # up front, so nothing later in the pipeline can accidentally clobber them
     # (each stage below only sees its own function-local variables).
-    final_outfile = Path(outfile).name
-    outdir = str(Path(final_outfile).parent)
-    if ".f" in final_outfile:
-        prefix = final_outfile.rsplit(".f", 1)[0]
+    final_outfile = outfile
+    outdir = str(Path(outfile).parent)
+    outname = Path(outfile).name
+    if ".f" in outname:
+        prefix = outname.rsplit(".f", 1)[0]
     else:
         prefix = str(os.getpid())
-    if not final_outfile:
-        final_outfile = f"{prefix}.vecscreen.fasta"
     _build_contam_databases(workdir)
 
     contigs_to_remove: dict[str, tuple[str, str, float]] = {}

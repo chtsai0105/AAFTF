@@ -120,8 +120,9 @@ Example
 Container usage
 ================
 
-The Singularity build (``AAFTF.def``) runs ``AAFTF database phix univec euks proks mitodb sm_gbk fcs_script fcs_image`` during ``%post`` (unless built with
-``--build-arg skip_db_download=1``) to bake the GenBank sourmash database into the image at
-``/opt/aaftf_db``. If you build with ``skip_db_download=1`` (the CI default, to keep the image
-small), run ``AAFTF database NAME ...`` yourself against a bind-mounted directory before using
-``sourpurge``/``vecscreen``/``filter`` from that image.
+The Singularity definition (``AAFTF.def``) defaults to ``skip_db_download=1``, so the image
+contains no databases. Build with ``--build-arg skip_db_download=0`` to run ``AAFTF database phix
+univec euks proks mitodb sm_gbk fcs_script fcs_image`` during ``%post`` and bake them into the
+image at ``/opt/aaftf_db``. Otherwise (and for the Docker image, which never includes them),
+bind-mount a database folder at ``/opt/aaftf_db`` (the container's ``$AAFTF_DB``) and run
+``AAFTF database NAME ...`` into it before using ``filter``/``vecscreen``/``sourpurge``.

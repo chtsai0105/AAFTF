@@ -5,13 +5,13 @@ From: debian:bookworm-slim
 # AAFTF - Automatic Assembly For The Fungi
 # Singularity/Apptainer definition file
 #
-# Build (defaults: git_ref=main, skip_db_download=0):
+# Build (defaults: git_ref=main, skip_db_download=1 -- databases are NOT baked in;
+# bind-mount an AAFTF_DB folder at run time instead):
 #   singularity build AAFTF.sif AAFTF.def
 #
-# Build a specific tagged release without baking in the sourmash DB
-# (used by CI for archived release .sif builds):
+# Build a specific tagged release with the databases baked into the image:
 #   singularity build --build-arg git_ref=v0.7.0 \
-#       --build-arg skip_db_download=1 AAFTF.sif AAFTF.def
+#       --build-arg skip_db_download=0 AAFTF.sif AAFTF.def
 #
 # Run:
 #   singularity exec AAFTF.sif AAFTF --help

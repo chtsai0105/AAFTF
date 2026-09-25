@@ -45,9 +45,18 @@ Cutoffs / defaults
    * - ``-m/--memory``
      - each step's own default
      - Passed to every step that has ``-m/--memory`` (trim, filter, assemble)
-   * - ``-c/--cpus``, ``-w/--workdir``, ``-v/--verbose``
+   * - ``-c/--cpus``, ``-w/--workdir``, ``-v/--verbose``, ``-q/--quiet``
      - each step's own default
      - Passed to every step that has the option
+   * - ``-a/--screen_accessions``, ``-u/--screen_urls``
+     - none
+     - Extra sequences screened out of the reads by filter
+   * - ``--tmpdir``, ``--assembler_args``
+     - none
+     - Passed to assemble
+   * - ``-p/--phylum`` (required), ``--sourdb``
+     - ``--sourdb``: the one from ``AAFTF database``
+     - Phyla kept, and the sourmash database, for sourpurge
    * - ``--method``
      - spades
      - Assembler method (spades / megahit / unicycler)

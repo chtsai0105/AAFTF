@@ -33,7 +33,9 @@ Algorithm
 6. If not circularized, all contigs are renumbered and concatenated into the output FASTA as-is,
    with a warning that circularization failed.
 
-Requires ``NOVOPlasty.pl`` and ``minimap2`` on ``$PATH``; exits immediately if either is missing.
+Requires ``NOVOPlasty.pl`` and ``minimap2`` (plus ``reformat.sh`` when subsampling) on ``$PATH``;
+a missing tool raises an error (exit code 2) before any work starts. If NOVOPlasty produces no
+assembly, a ``RuntimeError`` is raised (exit code 1).
 
 Cutoffs / defaults
 ===================
@@ -66,9 +68,9 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF mito -1 FASTQ -2 FASTQ [-o OUT] [--minlen N] [--maxlen N]
-               [-s/--seed FASTA] [--subsample PAIRS] [-m MEMORY]
-               [-w WORKDIR] [-q] [-v]
+    AAFTF mito -1 FASTQ -2 FASTQ [-o FASTA] [--minlen BP] [--maxlen BP]
+               [-s FASTA] [--subsample PAIRS] [-m GB]
+               [-w DIR] [-q] [-v]
 
 ``-1/--read1`` and ``-2/--read2`` are required (``mito`` only supports paired-end data); ``-o/--out``
 defaults to ``mito.fasta``.
@@ -86,4 +88,6 @@ Example
         --seed related_species_mito.fasta
 
 ``mito`` is not part of ``pipeline``. To keep mitochondrial reads out of the nuclear assembly,
-run it before :doc:`filter` and pass its output as ``filter --screen_local STRAINX.mito.fasta``.
+run it before :doc:`filter` and pass its output with ``-s``; unless ``-q`` is given, ``mito``
+prints this next command, e.g.
+``AAFTF filter -1 STRAINX_1P.fastq.gz -2 STRAINX_2P.fastq.gz -s STRAINX.mito.fasta -o STRAINX``.

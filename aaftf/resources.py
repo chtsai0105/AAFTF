@@ -24,6 +24,10 @@ DB_LINKS: dict[str, list[Any]] = {
     "MITO": [f"{NCBI}/refseq/release/mitochondrion/" + "mitochondrion.1.1.genomic.fna.gz"],
     "sourmash_gbk": [{"version": "2017.11.07", "filename": "genbank-k31.lca.json.gz", "url": "https://osf.io/4f8n3/download"}],
     # first in list is default, will fix someday to allow choosing the version
+    # TODO: the GTDB entries below download sourmash .dna.zip signature collections but save them
+    # under .lca.json.gz names, and sourpurge runs `sourmash lca classify --db`, which needs an LCA
+    # database -- so --sourdb_type gtdb / gtdbrep likely fail. Point these at LCA databases (or
+    # switch sourpurge to a classifier that takes zip collections). See TODO.md.
     "sourmash_gtdbrep": [
         {"version": "rs220", "filename": "gtdb-rs220-reps.k31.lca.json.gz", "url": "https://farm.cse.ucdavis.edu/~ctbrown/sourmash-db.new/gtdb-rs220/gtdb-reps-rs220-k31.dna.zip"},  # noqa: E501
     ],

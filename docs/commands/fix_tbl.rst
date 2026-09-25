@@ -26,17 +26,21 @@ Algorithm
    ``>`` on its last coordinate (on either strand, including when a whole interval of a
    multi-interval feature was trimmed away). Features that lie entirely inside a trimmed region
    are dropped with a warning.
-5. Writes the corrected ``.tbl`` file.
+5. Writes the corrected ``.tbl`` file to ``{output}.tmp`` and renames it to ``-o/--output`` only
+   once complete, so a malformed input never leaves a half-written output. Malformed ``.tbl``
+   lines (a header other than ``>Feature``, a feature before the first header) raise
+   ``ValueError`` (exit code 1).
 
 Invocation
 ==========
 
 .. code-block:: text
 
-    AAFTF fix_tbl -t TABLE -r REPORT -o OUTPUT [-q] [-v]
+    AAFTF fix_tbl -t TABLE -r FILE -o OUTPUT [-q] [-v]
 
-All three of ``-t/--table`` (original ``.tbl``), ``-r/--report`` (NCBI FCS adjustment report),
-and ``-o/--output`` (corrected ``.tbl``) are required.
+All three of ``-t/--table`` (alias ``--infile``; original ``.tbl``), ``-r/--report`` (NCBI FCS
+action report) and ``-o/--output`` (corrected ``.tbl``) are required, and all are plain file
+paths (``-`` is not treated as stdin/stdout). ``./fix_tbl.log`` is written only with ``-v``.
 
 Example
 =======

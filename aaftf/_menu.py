@@ -798,12 +798,12 @@ def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="input", help="Input genome assembly FASTA", metavar="FASTA")
 
-    required.add_argument(
+    optional.add_argument(
         "-1",
         "--read1",
         metavar="FASTQ",
         type=str,
-        help="Read 1 (forward) FASTQ, or single-end FASTQ (Illumina)",
+        help="Read 1 (forward) FASTQ, or single-end FASTQ (Illumina); give -1 and/or -lr/--longreads",
     )
 
     optional.add_argument(
@@ -826,6 +826,7 @@ def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         "--min_contig_len",
         type=int,
         default=500,
+        metavar="BP",
         help="Minimum contig length to include in depth outlier analysis",
     )
 
@@ -848,13 +849,13 @@ def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     add_verbosity_args(optional)
 
-    longread_group = parser_depth.add_argument_group(title="minimap2 long-read required arguments")
+    longread_group = parser_depth.add_argument_group(title="long-read options")
 
     longread_group.add_argument(
         "--longread_preset",
         choices=["map-ont", "map-pb", "map-hifi"],
         dest="longread_preset",
-        help="minimap2 preset for long reads",
+        help="minimap2 preset for long reads; required with -lr/--longreads",
     )
 
     parser_depth.set_defaults(func=depth.run)

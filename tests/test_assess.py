@@ -247,3 +247,21 @@ class TestAssessRunReportHandle:
                 run(input=str(fasta_file), report=str(report))
         assert handles[0].closed
         assert report.read_text() == ""
+
+
+class TestSoftMaskReport:
+    """BASES MASKED / PERCENT MASKED are reported only when the assembly has soft-masked bases."""
+
+    def _report(self, tmp_path, seq):
+        fasta = tmp_path / "a.fasta"
+        fasta.write_text(f">c\n{seq}\n")
+        report = tmp_path / "r.txt"
+        run(input=str(fasta), report=str(report))
+        return report.read_text()
+
+    def test_no_lowercase_no_mask_lines(self, tmp_path):
+        assert "MASKED" not in self._report(tmp_path, "ACGT" * 50)
+
+    def test_some_lowercase_reported(self, tmp_path):
+        text = self._report(tmp_path, "ACGT" * 45 + "acgt" * 5)
+        assert "BASES MASKED  =  20" in text and "PERCENT MASKED  =  10.00" in text

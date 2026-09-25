@@ -15,8 +15,10 @@ Algorithm
    instead) and/or long reads with ``minimap2 -ax {map-ont,map-pb,map-hifi}`` (selected via
    ``--longread_preset``), sorting each to an indexed BAM. When both read types are supplied, the
    two BAMs are merged with ``samtools merge`` before depth calculation.
-3. Runs ``samtools flagstat`` per read type for mapping-rate statistics.
-4. Runs ``mosdepth`` on the combined BAM in **quantized mode** (fixed bins ``0:1:4:100:200:``
+3. Runs ``samtools flagstat`` per read type for mapping-rate statistics. Failures of
+   ``bwa index`` or ``samtools merge``/``index``, or a missing BAM or mosdepth summary, raise a
+   ``RuntimeError`` (exit code 1).
+4. Runs ``mosdepth`` on the combined BAM (in **quantized mode** unless ``--no-plot``) (fixed bins ``0:1:4:100:200:``
    -> labeled NO_COVERAGE / LOW_COVERAGE / CALLABLE / HIGH_COVERAGE / VERY_HIGH_COVERAGE),
    producing both a per-contig mean-depth summary and a global coverage distribution.
 5. Parses ``mosdepth.summary.txt`` for per-contig mean depth and ``mosdepth.global.dist.txt``
@@ -73,8 +75,11 @@ Cutoffs / defaults
      - minimap2
      - minimap2 (default) or bwa, for Illumina reads
    * - ``--longread_preset``
-     - map-ont
+     - none (required with ``-lr``)
      - minimap2 preset for long reads: map-ont / map-pb / map-hifi
+   * - ``--plot-format``
+     - pdf
+     - pdf / svg / png
 
 Illumina reads are always mapped with minimap2's ``sr`` preset (or ``bwa mem`` when
 ``--aligner bwa`` is given); there is no separate Illumina preset option.
@@ -84,14 +89,16 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF depth -i INPUT [-o OUT] [-1 FASTQ] [-2 FASTQ] [-lr LONGREADS]
-               [--aligner {minimap2,bwa}]
-               [--longread_preset {map-ont,map-pb,map-hifi}]
-               [--min_contig_len N]
-               [--plot-format {pdf,svg,png}] [--no-plot]
-               [-c CPUS] [-w WORKDIR] [-q] [-v]
+    AAFTF depth -i FASTA [-o FILE] [-1 FASTQ] [-2 FASTQ] [-lr FASTQ]
+                [--aligner {minimap2,bwa}]
+                [--longread_preset {map-ont,map-pb,map-hifi}]
+                [--min_contig_len MIN_CONTIG_LEN]
+                [--plot-format {pdf,svg,png}] [--no-plot]
+                [-c INT] [-w DIR] [-q] [-v]
 
-``-i/--input`` is required; provide Illumina reads (``-l``/``-r``), long reads (``-lr``), or both.
+``-i/--input`` is required; provide Illumina reads (``-1``/``-2``), long reads (``-lr``, with
+``--longread_preset``), or both -- otherwise an error is raised. A missing or empty assembly or
+read file raises an error (exit code 2).
 
 Example
 =======
@@ -102,11 +109,11 @@ Example
         --read1 reads_1P.fastq.gz --read2 reads_2P.fastq.gz \
         -c 16 -o coverage_report.txt
 
-    # Illumina + long reads together, PDF plots
+    # Illumina + long reads together, PNG plots
     AAFTF depth -i genome.final.fasta \
         --read1 reads_1P.fastq.gz --read2 reads_2P.fastq.gz \
         --longreads nanopore.fastq.gz --longread_preset map-ont \
-        -c 16 -o coverage_report.txt
+        --plot-format png -c 16 -o coverage_report.txt
 
 .. note::
    ``depth`` is not part of ``AAFTF pipeline`` -- run it manually against the final

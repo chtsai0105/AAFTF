@@ -10,17 +10,23 @@ AAFTF is a Python-based bioinformatics toolkit for automated genome assembly, cl
 
 ### Installation and Setup
 ```bash
-# Install in development mode
-pip install -e .
+# pixi (recommended; locked versions in pixi.lock). Environments: default (pipeline tools),
+# complete (+ optional tools; feature "optional"), dev (+ pytest, pre-commit, ruff; feature "dev")
+pixi install -e dev
+pixi run -e dev AAFTF -h
+pixi run -e complete install-bowtie2   # optional: build bowtie2 from source (AVX2 issue)
 
-# Install with dependencies from conda
-conda create -n aaftf -c bioconda "python>=3.9" bbmap trimmomatic bowtie2 bwa sourmash \
-    blast minimap2 spades megahit novoplasty biopython fastp pypolca polypolish nextpolish2 unicycler
-pip install AAFTF
+# or conda: environment.yml (pipeline tools, AAFTF from PyPI) /
+# environment.dev.yml (all tools, AAFTF installed editable from this checkout)
+conda env create -f environment.dev.yml && conda activate aaftf-dev
+
+# the package is built with hatchling + hatch-vcs; Python >=3.10,<3.15
+pip install -e .
 ```
 
 ### Code Quality and Linting
 ```bash
+# ruff settings are in ruff.toml (target py310)
 # Run ruff for code style, linting, and import sorting (replaces flake8, isort, pyupgrade)
 ruff check aaftf/
 ruff format aaftf/
@@ -53,7 +59,7 @@ pixi run -e dev pytest tests/ -v
 - Standard library imports first, then third-party, then local AAFTF imports
 - Use explicit imports (avoid `from module import *`)
 - Group related imports together
-- Import AAFTF modules using relative imports within the package
+- Import AAFTF modules with absolute imports (`from aaftf.utility import ...`)
 
 ```python
 # Standard library
@@ -64,10 +70,9 @@ import subprocess
 # Third-party
 from Bio import SeqIO
 from Bio.SeqIO.FastaIO import SimpleFastaParser
-from packaging.version import Version
 
 # Local AAFTF imports
-from aaftf.utility import status, check_file, execute
+from aaftf.utility import check_file, run_cmd
 from aaftf.resources import DB_LINKS
 ```
 
@@ -78,7 +83,7 @@ from aaftf.resources import DB_LINKS
 - Variable names should be clear and concise (`input_file`, `output_dir`, `cpu_count`)
 
 ### Documentation and Docstrings
-- Use Google-style docstrings
+- Use Google-style docstrings and type hints on all function signatures
 - Every module should have a module docstring explaining its purpose
 - Every public function should have a docstring with description, arguments, and returns
 
@@ -101,23 +106,21 @@ def calculate_n50(contig_lengths):
 - Handle file existence checks with `check_file()` utility
 
 ### Code Structure
-- Each AAFTF subcommand has its own module (trim.py, assemble.py, filter.py, etc.)
-- Main entry point is through `main.py`
+- Package layout: `aaftf/` (one module per subcommand: `trim.py`, `assemble.py`, ...; `_menu.py` holds every subcommand's argparse parser; `main.py` is the entry point; `pipeline.py`; `utility.py`; `resources.py`; `data/`), `tests/` (pytest, `test_<module>.py`, shared fixtures in `conftest.py`), `docs/` (Sphinx)
 - Common utilities are in `utility.py`
 - Resource URLs and constants are in `resources.py`
-- Each module should have a `run(parser, args)` function for CLI integration
+- Each subcommand module has a `run(<CLI dest names>..., **kwargs)` function; its parser is a `<name>_menu()` in `aaftf/_menu.py` that binds it with `set_defaults(func=<module>.run)` (see CLAUDE.md)
 
 ### CLI Argument Parsing
 - Use `argparse` for command-line interface
-- Follow existing patterns for common arguments (`-c/--cpus`, `-m/--memory`, `-o/--out`)
+- Follow existing patterns for common arguments (`-c/--cpus`, `-m/--memory`, `-o/--out`, `-1/--read1`, `-2/--read2`, `-w/--workdir`); path arguments use `type=str`
+- Finish every subcommand's "optional arguments" group with `add_verbosity_args(optional)` (`-q/--quiet`, `-v/--verbose` with dest `debug`); `pipe` is a `run()`-only parameter, not a CLI option
 - Provide help text for all arguments
 - Use consistent naming across subcommands
 
 ### External Tool Integration
-- Check tool availability with `which_path()` utility
-- Use `subprocess.run()` for external command execution
-- Handle tool version differences with `packaging.version.Version`
-- Provide fallback options for different installation methods (conda, homebrew, etc.)
+- Check tool availability with `require_tools([...])` (raises `FileNotFoundError` naming the missing tools); `AAFTF dependency` reports every tool
+- Run external commands with `run_cmd()` / `execute()` (or `align_to_sorted_bam()` for aligner → sorted, indexed BAM)
 
 ### File I/O Patterns
 - Support both compressed (.gz) and uncompressed files
@@ -151,8 +154,8 @@ def calculate_n50(contig_lengths):
 ## Testing Guidelines
 
 Since AAFTF primarily integrates external bioinformatics tools, testing focuses on:
-- Integration workflows with real data (shell scripts in tests/)
-- Import and basic functionality testing
+- pytest tests in `tests/`, marked `unit` (no external tools) or `integration` (needs the external tools)
+- Mocked subprocess commands and files written (assert on side effects, not on the caller's kwargs)
 - CLI argument parsing validation
 - File format compatibility (FASTA/FASTQ parsing)
 

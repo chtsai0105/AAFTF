@@ -10,7 +10,8 @@ Algorithm
 
 Reads all sequences, drops any shorter than ``-ml/--minlen``, de-duplicates by header (first
 occurrence wins), sorts the remainder by sequence length descending, and writes them out renamed
-``{name}_1``, ``{name}_2``, ... in that order.
+``{name}_1``, ``{name}_2``, ... in that order (original header text is discarded). No work
+directory is used; ``./sort.log`` is written only with ``-v``.
 
 Cutoffs / defaults
 ===================
@@ -34,9 +35,10 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF sort -i INPUT -o OUT [-ml MINLEN] [-n NAME] [-q] [-v]
+    AAFTF sort -i FASTA -o FASTA [-ml BP] [-n NAME] [-q] [-v]
 
-``-i/--input`` and ``-o/--out`` are required.
+``-i/--input`` (alias ``--infile``) and ``-o/--out`` (alias ``--output``) are required;
+``-n/--name`` also accepts ``--basename``.
 
 Example
 =======

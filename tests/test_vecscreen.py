@@ -227,9 +227,12 @@ def test_run_end_to_end(tmp_path, monkeypatch, caplog, pipe):
         return 0
 
     caplog.set_level(logging.INFO)
+    (tmp_path / "sub").mkdir()
     with patch("aaftf.vecscreen.require_databases", return_value=srcs), patch("aaftf.vecscreen.call", side_effect=fake_call):
         vecscreen.run(infile=str(infile), outfile="sub/asm.vecscreen.fasta", workdir=str(wd), pipe=pipe)
     assert blast_calls == ["CONTAM_EUKS.asm.vecscreen.blastn", "CONTAM_PROKS.asm.vecscreen.blastn", "MITO.asm.vecscreen.blastn", "asm.vecscreen.r0.vecscreen.tab"]
-    assert _read_fasta(tmp_path / "asm.vecscreen.fasta") == {"keep": "A" * 300}
-    assert _read_fasta(tmp_path / "asm.vecscreen.mitochondria.fasta") == {"mito": "C" * 300}
+    # both outputs go next to -o/--outfile, not into the current directory
+    assert _read_fasta(tmp_path / "sub" / "asm.vecscreen.fasta") == {"keep": "A" * 300}
+    assert _read_fasta(tmp_path / "sub" / "asm.vecscreen.mitochondria.fasta") == {"mito": "C" * 300}
+    assert not (tmp_path / "asm.vecscreen.fasta").exists()
     assert ("AAFTF sourpurge" in caplog.text) is (not pipe)

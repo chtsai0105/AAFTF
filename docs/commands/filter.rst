@@ -10,10 +10,11 @@ Algorithm
 
 1. Builds (or reuses a cached) combined contamination FASTA (``contamdb.fa``) from:
 
-   * the PhiX genome and UniVec (always included; download them first with
-     ``AAFTF database phix univec`` -- see :doc:`database`);
-   * any ``-a/--screen_accessions`` GenBank accessions (fetched via NCBI eutils);
-   * any ``-u/--screen_urls`` remote FASTA URLs;
+   * the PhiX genome and UniVec (always included; they are never downloaded by ``filter`` -- install
+     them first with ``AAFTF database phix univec``, see :doc:`database`; a missing database
+     raises an error, exit code 2);
+   * any ``-a/--screen_accessions`` GenBank accessions (downloaded via NCBI eutils);
+   * any ``-u/--screen_urls`` remote FASTA URLs (downloaded);
    * any ``-s/--screen_local`` local FASTA files (e.g. a ``mito.fasta`` from :doc:`mito`, so
      mitochondrial reads aren't discarded as nuclear-genome contaminants).
 
@@ -28,6 +29,8 @@ Algorithm
      if missing/stale, output piped through ``samtools sort``.
    * **bwa** -- ``bwa mem`` against a bwa index of the contamination DB.
    * **minimap2** -- ``minimap2 -ax sr`` (short-read preset).
+
+   Any other ``--aligner`` value raises an error.
 
    For bowtie2/bwa/minimap2, reads are kept if flagged unmapped in the resulting sorted BAM
    (``samtools fastq -f 12`` for pairs -- both mates unmapped; ``-f 4`` for single-end).
@@ -52,18 +55,22 @@ Cutoffs / defaults
      - 1
      - Allowed mismatches per kmer match (``hdist=1``)
    * - ``-m/--memory``
-     - auto (60% of detected system RAM)
-     - Max heap for bbduk (``-Xmx``)
+     - 8 (GB)
+     - Max Java heap for bbduk (``-Xmx``)
 
 Invocation
 ==========
 
 .. code-block:: text
 
-    AAFTF filter -1 FASTQ [-2 FASTQ] [-o BASENAME] [-c CPUS]
-                 [--aligner {bbduk,bowtie2,bwa,minimap2}] [-m MEMORY]
-                 [-a ACCESSIONS ...] [-u URLS ...] [-s LOCAL_FASTA ...]
-                 [-w WORKDIR] [-q] [-v]
+    AAFTF filter -1 FASTQ [-2 FASTQ] [-o PREFIX] [-c INT]
+                 [--aligner {bbduk,bowtie2,bwa,minimap2}] [-m GB]
+                 [-a ACCESSION ...] [-u URL ...] [-s FASTA ...]
+                 [-w DIR] [-q] [-v]
+
+If ``-o/--out`` is not given, the prefix is derived from ``--read1``'s file name. Without
+``-w/--workdir`` a temporary directory is used and removed afterwards (kept with ``-v`` or on
+failure); the step log is written to ``<workdir>/filter.log``.
 
 **Output:** paired mode writes ``{basename}_filtered_1.fastq.gz`` /
 ``{basename}_filtered_2.fastq.gz``; single-end mode writes ``{basename}_filtered_U.fastq.gz``

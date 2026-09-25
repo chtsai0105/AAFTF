@@ -75,9 +75,12 @@ def test_phylum_matches_any_rank_exactly(tmp_path):
 
 
 def test_taxonomy_only_returns_early(tmp_path):
-    kept, rc, *_ = _run(tmp_path, ["bact,found," + _BACT], taxonomy=True)
+    """--taxonomy writes no filtered assembly, but saves the classification CSV and cleans up."""
+    with patch("aaftf.sourpurge.cleanup_workdir") as cleanup:
+        kept, rc, *_ = _run(tmp_path, ["bact,found," + _BACT], taxonomy=True)
     assert kept is None
-    assert not (tmp_path / "asm.sourmash-taxonomy.csv").exists()
+    assert (tmp_path / "asm.sourmash-taxonomy.csv").read_text().startswith(_HEADER)
+    cleanup.assert_called_once()  # the work directory (and its step log) is still cleaned up
 
 
 def _bedcov(covs):

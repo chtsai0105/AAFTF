@@ -17,10 +17,13 @@ pixi run -e dev pytest tests/ -v
 Quick syntax check of all modules without running anything:
 
 ```bash
-python -m py_compile AAFTF/filter.py AAFTF/polish.py AAFTF/trim.py \
-    AAFTF/vecscreen.py AAFTF/sourpurge.py AAFTF/fcs_screen.py \
-    AAFTF/depth.py AAFTF/AAFTF_main.py AAFTF/pipeline.py \
-    AAFTF/assess.py AAFTF/rmdup.py AAFTF/database.py
+python -m py_compile aaftf/*.py
+```
+
+## Lint
+
+```bash
+pixi run -e dev pre-commit run --all-files   # ruff, ruff-format, codespell, pydocstyle, ...
 ```
 
 ## Code Style and Architecture

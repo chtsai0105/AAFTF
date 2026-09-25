@@ -24,11 +24,10 @@ Option 1: conda environment
     conda activate aaftf-dev
 
 .. warning::
-   AAFTF requires samtools >= 1.0 (ideally >= 1.24 for best performance -- newer samtools
-   avoids writing unsorted temp BAM files to disk). If you assemble your own environment,
-   watch for bioconda packages that bundle an old, conflicting samtools binary of their own
-   (older MaSuRCA builds were a historical example of this) -- AAFTF's own dependency lists
-   (``pyproject.toml``, ``environment.yml``) no longer pull in any such package.
+   AAFTF requires samtools >= 1.13 (the environment files pin >= 1.24). If you assemble your own
+   environment, watch for bioconda packages that bundle an old, conflicting samtools binary of
+   their own (older MaSuRCA builds were a historical example of this) -- AAFTF's own dependency
+   lists (``pyproject.toml``, ``environment.yml``) no longer pull in any such package.
 
 Option 2: pixi (recommended for reproducible/locked environments)
 ====================================================================
@@ -90,7 +89,9 @@ itself ships as a container image invoked from inside AAFTF -- see :doc:`command
 
 .. code-block:: bash
 
-    # Build (AAFTF_VERSION must be supplied explicitly; .git is excluded from the build context)
+    # Build the pixi "complete" environment (AAFTF_VERSION must be supplied explicitly, as .git is
+    # excluded from the build context; it is converted to a PEP 440 version for the package).
+    # Add --build-arg PIXI_ENV=default for a smaller image with only the default-pipeline tools.
     docker build --build-arg AAFTF_VERSION=$(git describe --tags --always) -t aaftf:latest .
 
     # Run
@@ -109,8 +110,8 @@ the pixi-based build is undesirable; build/run commands are the same.
 
 .. code-block:: bash
 
-    # Build (defaults: git_ref=main, skip_db_download=1 -- skips baking the multi-GB sourmash DB
-    # into the image; bind-mount or download AAFTF_DB separately at run time instead)
+    # Build (defaults: git_ref=main, skip_db_download=1 -- no databases in the image; bind-mount
+    # or download AAFTF_DB separately at run time, or add --build-arg skip_db_download=0 to bake them in)
     singularity build AAFTF.sif AAFTF.def
 
     # Build a specific tagged release

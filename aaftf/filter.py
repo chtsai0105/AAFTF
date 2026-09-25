@@ -151,7 +151,7 @@ def run(
         else:
             logger.info(f"Filtering complete:\nSingle: {clean_reads}_U.fastq.gz")
             if not pipe:
-                logger.info(f"Your next command might be:\nAAFTF assemble --merged {clean_reads}_U.fastq.gz -c {cpus} -o {basename}.spades.fasta")
+                logger.info(f"Your next command might be:\nAAFTF assemble -1 {clean_reads}_U.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
         return
 

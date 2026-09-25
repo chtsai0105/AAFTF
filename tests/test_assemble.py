@@ -447,3 +447,15 @@ class TestAssembleUnimplementedMethods:
 
         with pytest.raises(ValueError, match="Unknown assembler method"):
             run(**vars(args))
+
+
+def test_megahit_existing_workdir_raises(tmp_path):
+    """MEGAHIT cannot resume, so an existing output folder is refused before megahit runs."""
+    from aaftf.assemble import run_megahit
+
+    workdir = tmp_path / "megahit_out"
+    workdir.mkdir()
+    with patch("aaftf.utility.subprocess.run") as run:
+        with pytest.raises(FileExistsError, match="already exists"):
+            run_megahit(workdir=str(workdir), read1=str(tmp_path / "R1.fq"), out=str(tmp_path / "o.fa"))
+    run.assert_not_called()

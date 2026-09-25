@@ -20,7 +20,7 @@ in ``aaftf/polish.py``:
   ``bwa index``, aligns each read file *separately* with ``bwa mem -a`` (reporting all
   alignments, as Polypolish requires), filters the resulting SAM pairs by insert size with
   ``polypolish filter``, then runs ``polypolish polish``. Requires paired reads
-  (``-1/--read1`` and ``-2/--read2``).
+  (``-1/--read1`` and ``-2/--read2``); otherwise an error is raised.
 * **pypolca** -- Single-pass polishing via `pypolca <https://github.com/replikation/pypolca>`_,
   a Python reimplementation of MaSuRCA's POLCA algorithm (``bwa`` + ``samtools`` + ``freebayes``,
   run internally by pypolca itself) that works with any modern samtools. AAFTF invokes
@@ -38,11 +38,11 @@ in ``aaftf/polish.py``:
   ``racon`` using those overlaps to correct the assembly. Requires ``-lr/--longreads``; not
   compatible with short-read-only input.
 
-Every method requires ``bwa`` and/or ``minimap2`` and ``samtools`` on ``$PATH`` in addition to
-the chosen polisher itself (``--method polypolish`` needs ``polypolish``; ``--method pypolca``
-also needs ``freebayes`` and ``pypolca``; ``--method nextpolish2`` needs ``minimap2``, ``yak``,
-and ``nextPolish2``; ``--method racon`` needs ``minimap2`` and ``racon``); missing executables
-are detected up front and reported together before any work starts.
+Required executables per method: ``polypolish`` -- ``bwa``, ``samtools``, ``polypolish``;
+``pypolca`` -- ``bwa``, ``samtools``, ``freebayes``, ``pypolca``; ``nextpolish2`` -- ``minimap2``,
+``samtools``, ``yak``, ``nextPolish2``; ``racon`` -- ``minimap2``, ``racon``. Missing executables
+are detected up front and reported together before any work starts (exit code 2). If the
+polisher fails, a ``RuntimeError`` points at ``<workdir>/<method>.log``.
 
 Cutoffs / defaults
 ===================
@@ -59,21 +59,21 @@ Cutoffs / defaults
      - polypolish / pypolca / nextpolish2 / racon
    * - ``-m/--memory``
      - 16 (GB)
-     - Total memory budget; divided by ``-c/--cpus`` for per-thread work (pypolca's
-       ``samtools sort`` memory; polypolish/nextpolish2/racon don't use per-thread memory directly)
+     - pypolca only: divided by ``-c/--cpus`` for pypolca's per-thread ``-m`` (at least 1G);
+       ignored by the other methods
 
 Invocation
 ==========
 
 .. code-block:: text
 
-    AAFTF polish -i INFILE [-o OUTFILE] --method {polypolish,pypolca,nextpolish2,racon}
-                [-1 FASTQ] [-2 FASTQ] [-lr LONGREADS]
-                [-c CPUS] [-m MEMORY]
-                [-w WORKDIR] [-q] [-v]
+    AAFTF polish -i FASTA [-o FASTA] [--method {polypolish,pypolca,nextpolish2,racon}]
+                 [-1 FASTQ] [-2 FASTQ] [-lr FASTQ]
+                 [-c INT] [-m GB]
+                 [-w DIR] [-q] [-v]
 
-``-i/--infile`` is required. ``polypolish``/``pypolca`` need ``-1/--read1`` (and typically
-``-2/--read2``); ``nextpolish2`` needs both short reads and ``-lr/--longreads`` (HiFi);
+``-i/--infile`` is required. ``polypolish`` needs ``-1/--read1`` and ``-2/--read2``; ``pypolca``
+needs ``-1/--read1`` (and typically ``-2/--read2``); ``nextpolish2`` needs both short reads and ``-lr/--longreads`` (HiFi);
 ``racon`` needs ``-lr/--longreads``.
 
 Example

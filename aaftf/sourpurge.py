@@ -116,6 +116,8 @@ def run(
                 contig_taxonomy[cols[0]] = cols[idx + 1 :]
     logger.info("Found {:} taxonomic classifications for contigs:\n{:}".format(len(unique_tax), "\n".join(unique_tax)))
     if taxonomy:  # --taxonomy only reports the classifications
+        _save_taxonomy_csv(sourmash_tsv, input)
+        cleanup_workdir(workdir, debug, custom_workdir)
         return
     tax_to_drop = []
     for k, v in contig_taxonomy.items():
@@ -214,15 +216,23 @@ def run(
     logger.info(f"Sourpurged assembly is {num_seqs:,} contigs and {assembly_size:,} bp")
     next_out = next_step_name(outfile, ".rmdup.fasta")
 
-    if check_file(sourmash_tsv):
-        baseinput = Path(input).name
-        basedir = str(Path(input).parent)
-        if "." in baseinput:
-            baseinput = baseinput.rsplit(".", 1)[0]
-
-        shutil.copy(sourmash_tsv, str(Path(basedir, baseinput + ".sourmash-taxonomy.csv")))
-
+    _save_taxonomy_csv(sourmash_tsv, input)
     cleanup_workdir(workdir, debug, custom_workdir)
 
     if not pipe:
         logger.info(f"Your next command might be:\nAAFTF rmdup -i {outfile} -o {next_out}")
+
+
+def _save_taxonomy_csv(sourmash_tsv: str, input: str) -> None:
+    """Copy the sourmash classification CSV next to the input as ``<input stem>.sourmash-taxonomy.csv``.
+
+    Args:
+        sourmash_tsv: The ``sourmash lca classify`` CSV in the work directory.
+        input: The input assembly; the copy goes in its directory, named after it.
+    """
+    if not check_file(sourmash_tsv):
+        return
+    baseinput = Path(input).name
+    if "." in baseinput:
+        baseinput = baseinput.rsplit(".", 1)[0]
+    shutil.copy(sourmash_tsv, str(Path(Path(input).parent, baseinput + ".sourmash-taxonomy.csv")))

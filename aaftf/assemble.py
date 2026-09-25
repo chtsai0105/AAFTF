@@ -205,7 +205,7 @@ def run_megahit(
         runcmd.extend(["-1", forward_reads, "-2", reverse_reads])
 
     if Path(workdir).is_dir():
-        logger.info(f"Cannot re-run with existing folder {workdir}")
+        raise FileExistsError(f"MEGAHIT output folder {workdir} already exists (MEGAHIT cannot resume); remove it or pass another -w/--workdir")
 
     logger.info("Assembling FASTQ data using megahit")
     run_cmd(runcmd, debug, quiet_stdout=True)

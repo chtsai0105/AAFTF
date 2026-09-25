@@ -16,7 +16,12 @@ import sys
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath("../"))
 
-version = "0.7.0"
+try:  # the installed package's version (from git tags via hatch-vcs), like aaftf.__version__
+    from importlib.metadata import version as _pkg_version
+
+    version = _pkg_version("AAFTF")
+except Exception:
+    version = "0.0.0+unknown"
 # -- General configuration -----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -102,7 +107,7 @@ html_theme_path = ["themes"]
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
-html_title = None
+# html_title = None  (default: '<project> <release> documentation')
 
 # A shorter title for the navigation bar.  Default is the same as html_title.
 html_short_title = project + " v" + release
