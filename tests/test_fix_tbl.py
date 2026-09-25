@@ -204,3 +204,34 @@ class TestFixTblOther:
         out = io.StringIO()
         fix_tbl(_fh(TBL_FOR_FIX), _report(), out)
         assert out.getvalue() == TBL_FOR_FIX
+
+
+# ---------------------------------------------------------------------------
+# run (file paths in, file path out)
+# ---------------------------------------------------------------------------
+
+
+class TestRun:
+    def _files(self, tmp_path, tbl_text):
+        tbl, report, out = tmp_path / "in.tbl", tmp_path / "fcs_report.txt", tmp_path / "out.tbl"
+        tbl.write_text(tbl_text)
+        report.write_text("#accession\tlength\taction\trange\tname\nscaffold_1\t1000\tACTION_TRIM\t1..50\tadaptor\n")
+        return tbl, report, out
+
+    def test_writes_fixed_table(self, tmp_path):
+        from aaftf.fix_tbl import run
+
+        tbl, report, out = self._files(tmp_path, ">Feature scaffold_1\n200\t300\tgene\n\t\t\tlocus_tag\tA\n")
+        run(table=str(tbl), report=str(report), output=str(out))
+        assert out.read_text() == ">Feature scaffold_1\n150\t250\tgene\n\t\t\tlocus_tag\tA\n"
+        assert not (tmp_path / "out.tbl.tmp").exists()
+
+    def test_malformed_input_leaves_existing_output_untouched(self, tmp_path):
+        from aaftf.fix_tbl import run
+
+        tbl, report, out = self._files(tmp_path, "1\t100\tgene\n")  # feature line before any header
+        out.write_text("previous result\n")
+        with pytest.raises(ValueError):
+            run(table=str(tbl), report=str(report), output=str(out))
+        assert out.read_text() == "previous result\n"
+        assert not (tmp_path / "out.tbl.tmp").exists()

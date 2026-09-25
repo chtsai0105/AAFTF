@@ -10,6 +10,7 @@ import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, TextIO
 
 __all__ = ["TblFeature", "run", "fix_tbl", "parse_tbl", "parse_adjustments"]
@@ -49,16 +50,25 @@ class TblFeature:
         return "\n".join(lines) + "\n"
 
 
-def run(table: TextIO, report: TextIO, output: TextIO, **kwargs: Any) -> None:
+def run(table: str, report: str, output: str, **kwargs: Any) -> None:
     """Run the fix_tbl subcommand.
 
+    The fixed table is written to ``<output>.tmp`` and renamed to ``output`` only once it is
+    complete, so a malformed input never leaves a truncated or half-written output file.
+
     Args:
-        table: Open .tbl file to fix.
-        report: Open NCBI FCS action report.
-        output: Open handle the fixed .tbl is written to.
+        table: .tbl file to fix.
+        report: NCBI FCS action report.
+        output: Path the fixed .tbl is written to.
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``debug``, ``pipe``, ...); ignored.
     """
-    fix_tbl(table, report, output)
+    tmp_output = Path(f"{output}.tmp")
+    try:
+        with open(table) as tbl_fh, open(report) as report_fh, open(tmp_output, "w") as out_fh:
+            fix_tbl(tbl_fh, report_fh, out_fh)
+        tmp_output.replace(output)
+    finally:
+        tmp_output.unlink(missing_ok=True)
 
 
 def fix_tbl(tbl_fh: Iterable[str], adjustment_fh: Iterable[str], output_handle: TextIO) -> None:

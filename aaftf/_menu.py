@@ -213,7 +213,7 @@ def trim_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     trimmomatic_group = parser_trim.add_argument_group(title="Trimmomatic options")
 
-    trimmomatic_group.add_argument("--trimmomatic_adaptors", default="TruSeq3-PE.fa", help="Trimmomatic adaptor file")
+    trimmomatic_group.add_argument("--trimmomatic_adaptors", type=str, default="TruSeq3-PE.fa", help="Trimmomatic adaptor file")
 
     trimmomatic_group.add_argument("--trimmomatic_clip", type=str, default="2:30:10", help="Trimmomatic ILLUMINACLIP argument")
 
@@ -263,9 +263,9 @@ def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_mito.add_argument_group("required arguments")
     optional = parser_mito.add_argument_group("optional arguments")
 
-    required.add_argument("-l", "--left", required=True, help="Left (Forward) reads")
+    required.add_argument("-l", "--left", type=str, required=True, help="Left (Forward) reads")
 
-    required.add_argument("-r", "--right", required=True, help="Right (Reverse) reads")
+    required.add_argument("-r", "--right", type=str, required=True, help="Right (Reverse) reads")
 
     optional.add_argument("-o", "--out", type=str, default="mito.fasta", help="Output FASTA file for mitochondrial genome")
 
@@ -282,11 +282,11 @@ def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("--maxlen", default=100000, type=int, help="Maximum expected genome size")
 
-    optional.add_argument("-s", "--seed", help="Seed sequence, ie related mitochondrial genome. default: A. nidulans")
+    optional.add_argument("-s", "--seed", type=str, help="Seed sequence, ie related mitochondrial genome. default: A. nidulans")
 
-    optional.add_argument("--starting", help="FASTA file of start sequence, rotate genome to, default COB")
+    optional.add_argument("--starting", type=str, help="FASTA file of start sequence, rotate genome to, default COB")
 
-    optional.add_argument("--reference", help="Run NOVOplasty in reference mode")
+    optional.add_argument("--reference", type=str, help="Run NOVOplasty in reference mode")
 
     optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max Memory (in GB)")
 
@@ -315,9 +315,9 @@ def filter_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_filter.add_argument_group("required arguments")
     optional = parser_filter.add_argument_group("optional arguments")
 
-    required.add_argument("-l", "--left", required=True, help="Left (Forward) reads")
+    required.add_argument("-l", "--left", type=str, required=True, help="Left (Forward) reads")
 
-    optional.add_argument("-r", "--right", help="Right (Reverse) reads")
+    optional.add_argument("-r", "--right", type=str, help="Right (Reverse) reads")
 
     optional.add_argument("-o", "--out", dest="basename", type=str, help="Output basename")
 
@@ -375,6 +375,7 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required.add_argument(
         "-l",
         "--left",
+        type=str,
         required=True,  # every implemented --method (spades/megahit/unicycler) requires this
         help="Left (Forward) reads",
     )
@@ -387,7 +388,7 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="Output assembly FASTA",
     )
 
-    optional.add_argument("-r", "--right", help="Right (Reverse) reads")
+    optional.add_argument("-r", "--right", type=str, help="Right (Reverse) reads")
 
     optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="assembly output directory")
 
@@ -399,7 +400,7 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="Assembly method: spades, megahit, unicycler",
     )
 
-    optional.add_argument("--merged", dest="merged", help="Merged reads from flash or fastp or just single end reads")
+    optional.add_argument("--merged", type=str, dest="merged", help="Merged reads from flash or fastp or just single end reads")
     optional.add_argument("--tmpdir", type=str, help="Assembler temporary dir")
     optional.add_argument("--assembler_args", action="append", help="Additional SPAdes/Megahit arguments")
     optional.add_argument("-c", "--cpus", type=int, metavar="cpus", default=1, help="Number of CPUs/threads to use.")
@@ -427,7 +428,7 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     unicycler_group = parser_asm.add_argument_group(title="Unicycler options")
 
-    unicycler_group.add_argument("-lr", "--longreads", help="Long Read fastq (pacbio or ONT)")
+    unicycler_group.add_argument("-lr", "--longreads", type=str, help="Long Read fastq (pacbio or ONT)")
 
     parser_asm.set_defaults(func=assemble.run)
     return parser_asm
@@ -575,7 +576,7 @@ def fcs_gx_purge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="NCBI Taxonomy ID for contamaination matches, i.e. 4890 for Ascomycota",
     )
 
-    optional.add_argument("-d", "--db", default="/my_tmpfs/gxdb/all", help="gxdb database path")
+    optional.add_argument("-d", "--db", type=str, default="/my_tmpfs/gxdb/all", help="gxdb database path")
 
     menu_common_args(optional)
 
@@ -623,11 +624,11 @@ def sourpurge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="Temporary directory to store datafiles and processes in",
     )
 
-    optional.add_argument("-l", "--left", help="Left (Forward) reads")
+    optional.add_argument("-l", "--left", type=str, help="Left (Forward) reads")
 
-    optional.add_argument("-r", "--right", help="Right (Reverse) reads")
+    optional.add_argument("-r", "--right", type=str, help="Right (Reverse) reads")
 
-    optional.add_argument("--sourdb", help="SourMash LCA taxonomy database (defaults to k-31)")
+    optional.add_argument("--sourdb", type=str, help="SourMash LCA taxonomy database (defaults to k-31)")
 
     optional.add_argument("-k", "--kmer", default="31", help="SourMash LCA kmersize when taxonomy database was built")
 
@@ -743,13 +744,13 @@ def polish_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     shortread_group = parser_polish.add_argument_group(title="polypolish / pypolca / NextPolish2 required arguments")
 
-    shortread_group.add_argument("-l", "--left", help="Left (Forward) reads; required for short read polishing methods")
+    shortread_group.add_argument("-l", "--left", type=str, help="Left (Forward) reads; required for short read polishing methods")
 
-    shortread_group.add_argument("-r", "--right", help="Right (Reverse) reads; required for short read polishing methods")
+    shortread_group.add_argument("-r", "--right", type=str, help="Right (Reverse) reads; required for short read polishing methods")
 
     longread_group = parser_polish.add_argument_group(title="NextPolish2 / Racon required arguments")
 
-    longread_group.add_argument("-lr", "--longreads", help="Long Read FASTQ (PacBio or ONT/HiFi); required for NextPolish2 and Racon")
+    longread_group.add_argument("-lr", "--longreads", type=str, help="Long Read FASTQ (PacBio or ONT/HiFi); required for NextPolish2 and Racon")
 
     optional = parser_polish.add_argument_group("optional arguments")
 
@@ -803,13 +804,13 @@ def sort_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_sort.add_argument_group("required arguments")
     optional = parser_sort.add_argument_group("optional arguments")
 
-    required.add_argument("-i", "--input", "--infile", required=True, dest="input", help="Input genome assembly FASTA")
+    required.add_argument("-i", "--input", "--infile", type=str, required=True, dest="input", help="Input genome assembly FASTA")
 
-    required.add_argument("-o", "--out", "--output", required=True, dest="out", help="Output genome assembly FASTA")
+    required.add_argument("-o", "--out", "--output", type=str, required=True, dest="out", help="Output genome assembly FASTA")
 
     optional.add_argument("-ml", "--minlen", type=int, default=0, help="Minimum contig length to keep, shorter ones are dropped")
 
-    optional.add_argument("-n", "--name", "--basename", default="scaffold", dest="name", help="Basename to rename FASTA headers")
+    optional.add_argument("-n", "--name", "--basename", type=str, default="scaffold", dest="name", help="Basename to rename FASTA headers")
 
     menu_common_args(optional)
 
@@ -840,6 +841,7 @@ def assess_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         "-i",
         "--input",
         "--infile",
+        type=str,
         required=True,
         help="Input genome assembly to test completeness and provide summary statistics",
     )
@@ -877,11 +879,11 @@ def fix_tbl_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_fix.add_argument_group("required arguments")
     optional = parser_fix.add_argument_group("optional arguments")
 
-    required.add_argument("-t", "--table", "--infile", type=ap.FileType("rt"), required=True, help="Annotation table in NCBI .tbl format")
+    required.add_argument("-t", "--table", "--infile", type=str, required=True, help="Annotation table in NCBI .tbl format")
 
-    required.add_argument("-r", "--report", type=ap.FileType("rt"), required=True, help="NCBI FCS action report (tab-separated: accession, length, action, range(s), ...)")
+    required.add_argument("-r", "--report", type=str, required=True, help="NCBI FCS action report (tab-separated: accession, length, action, range(s), ...)")
 
-    required.add_argument("-o", "--output", type=ap.FileType("wt"), required=True, help="Write fixed TBL file")
+    required.add_argument("-o", "--output", type=str, required=True, help="Write fixed TBL file")
 
     menu_common_args(optional)
 
@@ -912,6 +914,7 @@ def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         "-i",
         "--input",
         "--infile",
+        type=str,
         required=True,
         dest="input",
         help="Input genome assembly FASTA (e.g. *.sorted.fasta)",
@@ -920,18 +923,21 @@ def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required.add_argument(
         "-l",
         "--left",
+        type=str,
         help="Left (Forward) Illumina reads FASTQ",
     )
 
     optional.add_argument(
         "-r",
         "--right",
+        type=str,
         help="Right (Reverse) Illumina reads FASTQ",
     )
 
     optional.add_argument(
         "-lr",
         "--longreads",
+        type=str,
         help="Long reads FASTQ (PacBio or ONT)",
     )
 
@@ -1045,7 +1051,7 @@ def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("-w", "--workdir", type=str, help="temp directory")
 
-    optional.add_argument("--sourdb", help="SourMash LCA k-31 taxonomy database")
+    optional.add_argument("--sourdb", type=str, help="SourMash LCA k-31 taxonomy database")
 
     optional.add_argument("--mincovpct", default=5, type=int, help="Minimum percent of N50 coverage to remove")
 
