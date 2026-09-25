@@ -1,6 +1,137 @@
 # Changelog
 
-## 0.6.1 (Development)
+## 0.7.0 (Development)
+
+Changes since `v0.7.0-beta.4`. This is a large refactor: many command-line options changed, so
+check the **Breaking changes** before updating scripts.
+
+### Breaking changes
+
+ - **Package renamed** from `AAFTF` to `aaftf` for imports (`import aaftf`, `from aaftf.utility import ...`).
+   The PyPI distribution and the `AAFTF` command keep their names.
+ - **Read options renamed**: `-l/--left` and `-r/--right` are now `-1/--read1` and `-2/--read2` in
+   `trim`, `mito`, `filter`, `assemble`, `sourpurge`, `polish`, `depth` and `pipeline`
+   (`-r` remains `--report` in `assess` and `fix_tbl`).
+ - **Subcommands renamed**: `check_dependencies` → `dependency`, `download` → `database`. Subcommand
+   aliases (e.g. `asm`, `stats`, `purge`, `gx`) were removed; each subcommand has one name.
+ - **Common flags**: the version flag is now `-V/--version`; `-v` is now `-v/--verbose` (was
+   `-v/--debug`). The `--pipe` option was removed from every subcommand: "next command" hints are
+   shown unless `-q/--quiet` is given.
+ - **Removed options**: `assemble --method dipspades` and `--haplocontigs` (dipSPAdes is no longer
+   packaged by SPAdes); `mito --reference` and `mito --starting` (circular mitochondrial genomes are
+   always rotated to start at the cob gene); `fix_tbl` no longer reads stdin / writes stdout via `-`.
+ - **`pipeline` no longer runs `polish` or `mito`**: it runs trim → filter → assemble → vecscreen →
+   sourpurge → rmdup → sort → assess, and each step now uses its own command-line defaults
+   (e.g. `assemble` with `--isolate`, `polish` default `polypolish`) unless a pipeline option overrides
+   them. `pipeline -m/--memory` is now passed to every step that has `-m` (was 75% of RAM).
+ - **Databases are downloaded only by `AAFTF database`**: `filter`, `vecscreen`, `sourpurge` and
+   `fcs_screen` read them from the database folder and stop with the `AAFTF database ...` command to
+   run when one is missing (`filter -a/-u` still download what they are given). `$AAFTF_DB` may list
+   several folders separated by `:`, and defaults to `~/.cache/aaftf`.
+ - **Exit codes**: errors now exit with 1, a missing input file, tool or database with 2, and Ctrl-C
+   with 130 (the traceback is shown with `-v`).
+ - **Changed defaults / behaviour**:
+   - `assess` default telomere monomer is now `TAAC{3,5}`.
+   - `mito` subsamples to 1,500,000 read pairs by default (`--subsample 0` uses all reads).
+   - `-m/--memory` is an integer number of GB everywhere (`assemble` used a string).
+   - `vecscreen` writes its outputs next to `-o/--outfile` (was always the current directory).
+   - `assess` reports BASES MASKED / PERCENT MASKED only when the assembly is soft-masked.
+   - `fcs_gx_purge` drops only contigs FCS-GX marks EXCLUDE (TRIM/FIX/REVIEW rows are warned about
+     and kept; previously every reported contig was dropped).
+
+### Added
+
+ - **`dependency`** (was `check_dependencies`): checks the tools and Python packages in two groups —
+   what the default pipeline needs (an error if missing) and what only optional steps or non-default
+   options use — printed in a fixed order with each tool's location or where a missing one is used;
+   `-q` prints only the status. Suggests rebuilding bowtie2 for AVX2 when the conda build is installed.
+ - **`database`** (was `download`): lists every reference database with its size, users and storage
+   folder, split into databases the default pipeline needs and optional ones; downloads them by short
+   name, file name, `required`, `optional` or `all`; `--force` re-downloads.
+ - **`mito --subsample PAIRS`** (default 1,500,000; BBTools `reformat.sh`, fixed seed), and a
+   "next command" hint that suggests `filter -s <mito.fasta>` to screen mitochondrial reads out.
+ - **Per-step log files**: steps with a working directory write `<workdir>/<step>.log` (INFO and above
+   even with `-q`, full tracebacks on errors), kept whenever the working directory is kept (own `-w`,
+   `-v`, or a failed run); steps without one write `./<step>.log` with `-v`.
+ - `-c/--cpus` and `-m/--memory` are lowered to what the machine/job can provide, with a warning.
+ - Grouped `AAFTF -h` (Setup / Assembly pipeline / Annotation) with optional steps marked "(Optional)".
+ - `depth`: quantized coverage plots (heatmap and barplot, paginated by contig length), `--min_contig_len`,
+   `--no-plot`, `--plot-format`; errors on samtools merge/index/flagstat failures.
+ - pixi environments `default` (default pipeline), `complete` (every optional tool) and `dev` (tests
+   and lint), mirrored by `environment.yml` and `environment.dev.yml`; an `install-bowtie2` task that
+   rebuilds bowtie2 with AVX2 support.
+ - Documentation site (`docs/`, Read the Docs) with a page for every subcommand, including `dependency`.
+ - GitHub Actions CI (`ci.yml`): pre-commit lint, unit tests on Python 3.10–3.14, integration tests in
+   the locked pixi environment, and a strict Sphinx docs build.
+ - conda package recipe (`ci/recipe/recipe.yaml`, rattler-build) and a publishing workflow.
+
+### Changed
+
+ - `polish` is optional and recommended only with long reads; `rmdup`'s next-command hint now suggests `sort`.
+ - `fix_tbl` rewritten: features are clipped at trimmed contig ends and marked partial (`<`/`>`),
+   features inside trimmed regions or on excluded contigs are dropped, minus-strand features and
+   multi-interval features are handled, and the output is written via a temporary file so a failed
+   run never leaves a truncated table.
+ - `sourpurge`: the classification status must be exactly `found`; `--just-show-taxonomy` saves the
+   classification CSV and cleans up its working directory.
+ - `rmdup` reads the assembly once and matches contig IDs exactly.
+ - `-h` output unified across subcommands: consistent help text and metavars (`FASTQ`, `FASTA`, `DIR`,
+   `INT`, `GB`, `BP`, `PCT`, `PREFIX`) and a consistent option order (inputs, outputs, working
+   directory, options, CPUs, memory, `-q`/`-v`, then tool-specific options).
+ - Aligner → sorted BAM steps pipe straight into `samtools sort --write-index` (samtools >=1.13; no
+   intermediate SAM files).
+ - Bundled data (NOVOPlasty seed, config template, cob start sequence) is read with `importlib.resources`.
+ - Containers build the pixi `complete` environment and report the correct version (`AAFTF_VERSION`
+   build argument, converted to PEP 440).
+ - Release workflow understands prerelease tags (e.g. `v0.7.0-beta.4` + `prerelease` → `v0.7.0-beta.5`);
+   PyPI builds use the full git history so the published version matches the tag.
+
+### Fixed
+
+ - `assemble --method megahit` passed `-m` to MEGAHIT as bytes (32 GB became 32 bytes); it is now
+   converted from GB. An existing MEGAHIT output folder is refused instead of failing inside MEGAHIT.
+ - `assemble`: SPAdes restart passed `--restart-from last` as one argument; Unicycler dropped the paired
+   reads when `--merged` was given; a missing assembly output now fails the step.
+ - `trim`: the Trimmomatic adaptor search ignored `<prefix>/share/trimmomatic`, and the found adaptor
+   file was never passed to Trimmomatic; missing reads or adaptors now raise errors.
+ - `filter`: an unknown `--aligner` silently produced no output; the single-end hint suggested an
+   `assemble` command that would not parse.
+ - `fcs_screen` failed when FCS-adaptor had already created its output folder; FCS failures are reported.
+ - `fcs_gx_purge` ignored `run_gx.py` failures.
+ - `mito` picked NOVOPlasty's output by directory order (a circular assembly could be missed); a run
+   with no assembly now fails.
+ - `sourpurge` crashed when no N50 contig had coverage data (the filter is now skipped with a warning).
+ - `assess` crashed on missing or empty input and never closed its report file.
+ - `depth`: `-1` and `--longread_preset` were listed as required in `-h`; samtools failures were ignored.
+ - `vecscreen` left input files open.
+ - Trim/filter work around a BBDuk PairStreamer bug in paired mode; `pipeline` type mismatches that
+   crashed `sourpurge` and `polish` were fixed.
+
+### Removed
+
+ - `assemble --method dipspades` and `--haplocontigs`; `mito --reference` and `--starting`; the `--pipe`
+   option; subcommand aliases; the old `check_dependencies` / `download` names.
+ - Unused utility functions and duplicated helpers across modules (consolidated in `aaftf/utility.py`).
+ - Obsolete shell-script "tests", BUSCO/AUGUSTUS benchmark files and cluster-only test data from `tests/`.
+ - Unused packages from the environments and conda recipe (pilon, masurca, diamond, flye, fastqc,
+   hifiasm, kraken2, gfatools, taxonkit).
+
+### Known issues
+
+ - `sourpurge --sourdb_type gtdb` / `gtdbrep`: the GTDB databases are downloaded as sourmash `.dna.zip`
+   collections but `sourmash lca classify` needs LCA databases, so these options likely fail (the
+   default `gbk` database works). See `TODO.md`.
+
+### Internal
+
+ - Every `run()` takes its command-line option names as keyword arguments; all argparse menus live in
+   `aaftf/_menu.py`; subcommands raise exceptions instead of calling `sys.exit`; logging uses the
+   `logging` module.
+ - Google-style docstrings and type hints throughout; mypy-clean; PEP 8 names; ruff targets Python 3.10.
+ - Test suite rewritten and extended (about 700 tests, 96% line coverage), with tests isolated in
+   temporary directories.
+
+## 0.6.1 (unreleased notes, superseded by 0.7.0)
 
 ### Tests
 

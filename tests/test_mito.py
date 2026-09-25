@@ -19,7 +19,7 @@ class TestOrientToStart:
 
         fasta_in, fasta_out = tmp_path / "in.fa", tmp_path / "out.fa"
         fasta_in.write_text(f">mt\n{seq}\n")
-        paf = [PafHit("COB", 100, qs, 100, strand, "mt", len(seq), ts, te, 100, 100, 60) for qs, strand, ts, te in hits]
+        paf = [PafHit("COB", 100, q_start, 100, strand, "mt", len(seq), t_start, t_end, 100, 100, 60) for q_start, strand, t_start, t_end in hits]
         with patch("aaftf.mito.paf_hits", return_value=iter(paf)):
             _orient_to_start(str(fasta_in), str(fasta_out))
         return "".join(fasta_out.read_text().splitlines()[1:])
