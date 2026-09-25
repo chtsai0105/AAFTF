@@ -1,13 +1,13 @@
 """Hard-coded URLs, accessions and database definitions used across AAFTF.
 
 Holds the NCBI/EBI download locations for contaminant and vector databases, sourmash LCA
-databases, NCBI FCS-adaptor release details, seed mitochondrial sequences, and the
+databases, NCBI FCS-adaptor release details, and the
 ``DATABASES`` table that ``AAFTF database`` downloads from.
 """
 
 from typing import Any
 
-__all__ = ["NCBI", "CONTAMINANT_ACCESSIONS", "DB_LINKS", "EUTILS", "SEQ_DBS", "MITO_SEQS", "FCSADAPTOR", "DATABASES"]
+__all__ = ["NCBI", "CONTAMINANT_ACCESSIONS", "DB_LINKS", "EUTILS", "SEQ_DBS", "FCSADAPTOR", "DATABASES"]
 
 
 # base URL of the NCBI FTP site
@@ -40,19 +40,6 @@ SEQ_DBS = {
     "nucleotide": f"{EUTILS}/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta",
     "nucleotide_ebi": "https://www.ebi.ac.uk/ena/data/view/%s?display=fasta",
     "nucleotide_ncbi": f"{EUTILS}/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta",
-}
-
-# seed mitochondrial gene sequences (e.g. for NOVOPlasty in ``mito``)
-MITO_SEQS = {
-    "COB1": (
-        "atgagaattttaaaaagtcatcctttattaaaattagttaatagttatattattg"
-        + "attcaccacaaccttctaatattagttatttatgaaattttggatctttattagc"
-        + "tttatgtttagttatacaaattgtaactggtgttacattagctatgcactataca"
-        + "cctaatgttgatttagcttttaattctgtagaacatattatgagagatgtaaata"
-        + "atggttgattaataagatatttacatgctaatactgcttcagcattctttttctt"
-        + "agttatatttacatataggtagaggattatattatggttcatataaatcacctag"
-        + "aacttaacatgagctattgg"
-    ),
 }
 
 # NCBI Foreign Contaminant Screen (FCS-adaptor) release, container image and script links

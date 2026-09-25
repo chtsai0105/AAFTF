@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from aaftf.utility import (
+    COMPLEMENT,
     PafHit,
     align_to_sorted_bam,
     available_cpus,
@@ -637,3 +638,36 @@ class TestPafHits:
         hits = list(paf_hits(["printf", paf], quiet=True))
         assert hits == [PafHit("q1", 1000, 10, 990, "-", "t1", 5000, 100, 1080, 950, 980, 60)]
         assert hits[0].strand == "-" and hits[0].target_end == 1080
+
+
+def _rev_comp(seq):
+    """Reverse complement the way callers use COMPLEMENT."""
+    return seq.translate(COMPLEMENT)[::-1]
+
+
+class TestComplement:
+    """COMPLEMENT (with slicing) reverse complements DNA, keeping case and IUPAC codes."""
+
+    def test_simple(self):
+        assert _rev_comp("ATCG") == "CGAT"
+
+    def test_complement_only(self):
+        assert _rev_comp("AAAA") == "TTTT"
+        assert _rev_comp("CCCC") == "GGGG"
+
+    def test_palindrome(self):
+        assert _rev_comp("AATTAATT") == "AATTAATT"
+
+    def test_preserves_case(self):
+        assert _rev_comp("atcg") == "cgat"
+        assert _rev_comp("AAcgTT") == "AAcgTT"
+
+    def test_iupac_codes(self):
+        assert _rev_comp("RYKMN") == "NKMRY"
+
+    def test_longer_sequence(self):
+        assert _rev_comp("ATCGATCG") == "CGATCGAT"
+
+    def test_all_bases(self):
+        # A<->T, C<->G
+        assert _rev_comp("ACGT") == "ACGT"

@@ -282,11 +282,20 @@ def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("--maxlen", default=100000, type=int, help="Maximum expected genome size")
 
-    optional.add_argument("-s", "--seed", type=str, help="Seed sequence, ie related mitochondrial genome. default: A. nidulans")
+    optional.add_argument(
+        "-s",
+        "--seed",
+        type=str,
+        metavar="FASTA",
+        help="Seed for NOVOPlasty: a mitochondrial sequence (e.g. a gene, or a related species' mitochondrial genome) the assembly is extended from. Default: the bundled Aspergillus nidulans cob fragment",
+    )
 
-    optional.add_argument("--starting", type=str, help="FASTA file of start sequence, rotate genome to, default COB")
-
-    optional.add_argument("--reference", type=str, help="Run NOVOplasty in reference mode")
+    optional.add_argument(
+        "--starting",
+        type=str,
+        metavar="FASTA",
+        help="Start gene: a circular assembly is rotated (and reverse complemented if needed) to begin at this sequence. Default: the bundled consensus of fungal cob genes",
+    )
 
     optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max Memory (in GB)")
 

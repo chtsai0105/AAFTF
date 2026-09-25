@@ -5,40 +5,9 @@ from unittest.mock import patch
 
 import pytest
 
-from aaftf.mito import _rev_comp, run
+from aaftf.mito import run
 
 pytestmark = pytest.mark.unit
-
-
-# ---------------------------------------------------------------------------
-# _rev_comp
-# ---------------------------------------------------------------------------
-
-
-class TestRevComp:
-    def test_simple(self):
-        assert _rev_comp("ATCG") == "CGAT"
-
-    def test_complement_only(self):
-        assert _rev_comp("AAAA") == "TTTT"
-        assert _rev_comp("CCCC") == "GGGG"
-
-    def test_palindrome(self):
-        assert _rev_comp("AATTAATT") == "AATTAATT"
-
-    def test_preserves_case(self):
-        assert _rev_comp("atcg") == "cgat"
-        assert _rev_comp("AAcgTT") == "AAcgTT"
-
-    def test_iupac_codes(self):
-        assert _rev_comp("RYKMN") == "NKMRY"
-
-    def test_longer_sequence(self):
-        assert _rev_comp("ATCGATCG") == "CGATCGAT"
-
-    def test_all_bases(self):
-        # A↔T, C↔G
-        assert _rev_comp("ACGT") == "ACGT"
 
 
 class TestOrientToStart:
@@ -52,7 +21,7 @@ class TestOrientToStart:
         fasta_in.write_text(f">mt\n{seq}\n")
         paf = [PafHit("COB", 100, qs, 100, strand, "mt", len(seq), ts, te, 100, 100, 60) for qs, strand, ts, te in hits]
         with patch("aaftf.mito.paf_hits", return_value=iter(paf)):
-            _orient_to_start(str(fasta_in), str(fasta_out), folder=str(tmp_path))
+            _orient_to_start(str(fasta_in), str(fasta_out))
         return "".join(fasta_out.read_text().splitlines()[1:])
 
     def test_forward_hit_rotates_to_target_start(self, tmp_path):
@@ -60,9 +29,9 @@ class TestOrientToStart:
         assert self._orient(tmp_path, [(0, "+", 4, 8)], seq) == "CCCCGGGGTTTTAAAA"
 
     def test_reverse_hit_rotates_and_reverse_complements(self, tmp_path):
-        seq = "AAAACCCCGGGGTTTT"
-        rotated = seq[8:] + seq[:8]
-        assert self._orient(tmp_path, [(0, "-", 4, 8)], seq) == _rev_comp(rotated)
+        seq = "AAAACCCCGGGGTTTA"  # not its own reverse complement once rotated
+        # rotated to start at 8 -> GGGGTTTAAAAACCCC, then reverse complemented
+        assert self._orient(tmp_path, [(0, "-", 4, 8)], seq) == "GGGGTTTTTAAACCCC"
 
     def test_no_hit_leaves_sequence_unrotated(self, tmp_path):
         seq = "AAAACCCCGGGGTTTT"
@@ -128,3 +97,36 @@ class TestNovoplastyOutputChoice:
     def test_no_assembly_raises(self, tmp_path):
         with pytest.raises(RuntimeError, match="NOVOplasty did not produce an assembly"):
             self._run(tmp_path, {})
+
+
+class TestDefaultStartSequence:
+    def test_bundled_cob_consensus_is_aligned_by_default(self, tmp_path):
+        """With no --starting, minimap2 gets the bundled aaftf/data/mito-start-cob.fasta."""
+        from importlib.resources import files
+
+        from aaftf.mito import _orient_to_start
+
+        fasta_in = tmp_path / "in.fa"
+        fasta_in.write_text(">mt\nACGT\n")
+        seen = []
+
+        def _fake_paf_hits(cmd):
+            seen.append(Path(cmd[-1]).read_text())
+            return iter([])
+
+        with patch("aaftf.mito.paf_hits", side_effect=_fake_paf_hits):
+            _orient_to_start(str(fasta_in), str(tmp_path / "out.fa"))
+        bundled = (files("aaftf") / "data" / "mito-start-cob.fasta").read_text()
+        assert seen == [bundled] and bundled.startswith(">COB1")
+
+    def test_given_start_file_is_aligned_directly(self, tmp_path):
+        """A --starting FASTA is passed to minimap2 as-is, not copied."""
+        from aaftf.mito import _orient_to_start
+
+        fasta_in, start = tmp_path / "in.fa", tmp_path / "nad1.fa"
+        fasta_in.write_text(">mt\nACGT\n")
+        start.write_text(">nad1\nACGT\n")
+        cmds = []
+        with patch("aaftf.mito.paf_hits", side_effect=lambda cmd: cmds.append(cmd) or iter([])):
+            _orient_to_start(str(fasta_in), str(tmp_path / "out.fa"), start_gene=str(start))
+        assert cmds[0][-1] == str(start)

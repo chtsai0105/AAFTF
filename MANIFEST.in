@@ -2,5 +2,6 @@ include requirements.txt
 include version.py
 include aaftf/data/novoplasty-config.txt
 include aaftf/data/mito-seed.fasta
+include aaftf/data/mito-start-cob.fasta
 
 recursive-exclude .trunk *
