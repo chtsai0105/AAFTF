@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def run(
-    left: str,
+    read1: str,
     out: str | None,
     method: str = "spades",
     workdir: str | None = None,
@@ -33,7 +33,7 @@ def run(
     careful: bool = True,
     assembler_args: list[str] | None = None,
     tmpdir: str | None = None,
-    right: str | None = None,
+    read2: str | None = None,
     longreads: str | None = None,
     merged: str | None = None,
     debug: bool = False,
@@ -43,8 +43,8 @@ def run(
     """Run the ``assemble`` subcommand by dispatching to the chosen assembler.
 
     Args:
-        left: Left/forward (or single-end) FASTQ.
-        out: Output assembly FASTA; derived from ``left`` if None.
+        read1: Read 1 (forward, or single-end) FASTQ.
+        out: Output assembly FASTA; derived from ``read1`` if None.
         method: Assembler: ``"spades"``, ``"megahit"`` or ``"unicycler"``
             (``"masurca"``/``"nextdenovo"`` only log that they are not implemented).
         workdir: Assembler output directory; a unique name is generated if None.
@@ -54,7 +54,7 @@ def run(
         careful: Pass ``--careful`` to SPAdes (only when ``isolate`` is False).
         assembler_args: Extra arguments appended to the assembler command.
         tmpdir: Assembler temporary directory.
-        right: Right/reverse FASTQ, or None for single-end.
+        read2: Read 2 (reverse) FASTQ, or None for single-end.
         longreads: Long-read FASTQ (Unicycler only).
         merged: Merged-pair FASTQ, or None.
         debug: Show external command output when True.
@@ -65,15 +65,15 @@ def run(
         ValueError: If ``method`` is not a known assembler.
     """
     if method == "spades":
-        run_spades(workdir=workdir, cpus=cpus, memory=memory, isolate=isolate, careful=careful, assembler_args=assembler_args, tmpdir=tmpdir, left=left, right=right, merged=merged, out=out, debug=debug, pipe=pipe)
+        run_spades(workdir=workdir, cpus=cpus, memory=memory, isolate=isolate, careful=careful, assembler_args=assembler_args, tmpdir=tmpdir, read1=read1, read2=read2, merged=merged, out=out, debug=debug, pipe=pipe)
     elif method == "megahit":
-        run_megahit(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, tmpdir=tmpdir, left=left, right=right, out=out, debug=debug, pipe=pipe)
+        run_megahit(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, tmpdir=tmpdir, read1=read1, read2=read2, out=out, debug=debug, pipe=pipe)
     elif method == "masurca":
         logger.info("Masurca assembly is not yet implemented in AAFTF")
     elif method == "nextdenovo":
         logger.info("NextDenovo assembly is not yet implemented in AAFTF")
     elif method == "unicycler":
-        run_unicycler(workdir=workdir, cpus=cpus, left=left, right=right, longreads=longreads, merged=merged, out=out, debug=debug, pipe=pipe)
+        run_unicycler(workdir=workdir, cpus=cpus, read1=read1, read2=read2, longreads=longreads, merged=merged, out=out, debug=debug, pipe=pipe)
     else:
         raise ValueError(f"Unknown assembler method {method}")
 
@@ -86,8 +86,8 @@ def run_spades(
     careful: bool = True,
     assembler_args: list[str] | None = None,
     tmpdir: str | None = None,
-    left: str | None = None,
-    right: str | None = None,
+    read1: str | None = None,
+    read2: str | None = None,
     merged: str | None = None,
     out: str | None = None,
     debug: bool = False,
@@ -106,10 +106,10 @@ def run_spades(
         careful: Pass ``--careful`` (only when ``isolate`` is False).
         assembler_args: Extra SPAdes arguments.
         tmpdir: SPAdes temporary directory.
-        left: Left/forward (or single-end) FASTQ.
-        right: Right/reverse FASTQ, or None.
+        read1: Read 1 (forward, or single-end) FASTQ.
+        read2: Read 2 (reverse) FASTQ, or None.
         merged: Merged-pair FASTQ, or None.
-        out: Output assembly FASTA; derived from ``left`` if None.
+        out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
         pipe: Suppress the "next command" hint when True.
         **kwargs: Extra keyword arguments; ignored.
@@ -133,7 +133,7 @@ def run_spades(
     if tmpdir:
         runcmd.extend(["--tmp-dir", tmpdir])
 
-    forward_reads, reverse_reads = _resolve_reads(left, right)
+    forward_reads, reverse_reads = _resolve_reads(read1, read2)
 
     if not reverse_reads:
         runcmd.extend(["--s1", forward_reads])
@@ -161,8 +161,8 @@ def run_megahit(
     memory: str | None = None,
     assembler_args: list[str] | None = None,
     tmpdir: str | None = None,
-    left: str | None = None,
-    right: str | None = None,
+    read1: str | None = None,
+    read2: str | None = None,
     out: str | None = None,
     debug: bool = False,
     pipe: bool = False,
@@ -176,9 +176,9 @@ def run_megahit(
         memory: Value for ``--memory``, as a string, or None to use the MEGAHIT default.
         assembler_args: Extra MEGAHIT arguments.
         tmpdir: Temporary directory.
-        left: Left/forward (or single-end) FASTQ.
-        right: Right/reverse FASTQ, or None.
-        out: Output assembly FASTA; derived from ``left`` if None.
+        read1: Read 1 (forward, or single-end) FASTQ.
+        read2: Read 2 (reverse) FASTQ, or None.
+        out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
         pipe: Suppress the "next command" hint when True.
         **kwargs: Extra keyword arguments; ignored.
@@ -197,7 +197,7 @@ def run_megahit(
     if tmpdir:
         runcmd.extend(["--tmp-dir", tmpdir])
 
-    forward_reads, reverse_reads = _resolve_reads(left, right)
+    forward_reads, reverse_reads = _resolve_reads(read1, read2)
 
     if not reverse_reads:
         runcmd.extend(["-r", forward_reads])
@@ -217,8 +217,8 @@ def run_megahit(
 def run_unicycler(
     workdir: str | None = None,
     cpus: int = 1,
-    left: str | None = None,
-    right: str | None = None,
+    read1: str | None = None,
+    read2: str | None = None,
     longreads: str | None = None,
     merged: str | None = None,
     out: str | None = None,
@@ -231,12 +231,12 @@ def run_unicycler(
     Args:
         workdir: Unicycler output directory; a unique ``unicycler_*`` name is generated if None.
         cpus: Number of threads.
-        left: Left/forward (or single-end) FASTQ.
-        right: Right/reverse FASTQ, or None.
+        read1: Read 1 (forward, or single-end) FASTQ.
+        read2: Read 2 (reverse) FASTQ, or None.
         longreads: Long-read FASTQ passed as ``--long``, or None.
         merged: Merged-pair FASTQ, passed as ``--unpaired`` alongside paired reads (Unicycler takes a
             single ``--unpaired`` file, so it is ignored for single-end input).
-        out: Output assembly FASTA; derived from ``left`` if None.
+        out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
         pipe: Suppress the "next command" hint when True.
         **kwargs: Extra keyword arguments; ignored.
@@ -249,7 +249,7 @@ def run_unicycler(
     # if memory:
     #    runcmd.extend(['--spades_options', f'-m {memory}'])
 
-    forward_reads, reverse_reads = _resolve_reads(left, right)
+    forward_reads, reverse_reads = _resolve_reads(read1, read2)
 
     if longreads:
         runcmd.extend(["--long", longreads])
@@ -276,23 +276,23 @@ def run_unicycler(
     _finish_assembly(Path(workdir, "assembly.fasta"), final_out, "Unicycler", cpus, pipe)
 
 
-def _resolve_reads(left: str | None, right: str | None) -> tuple[str, str | None]:
+def _resolve_reads(read1: str | None, read2: str | None) -> tuple[str, str | None]:
     """Resolve absolute paths for the forward and reverse reads.
 
     Args:
-        left: Forward reads path.
-        right: Reverse reads path, or None.
+        read1: Forward reads path.
+        read2: Reverse reads path, or None.
 
     Returns:
         Tuple of (absolute forward path, absolute reverse path or None).
 
     Raises:
-        ValueError: If ``left`` is not given.
+        ValueError: If ``read1`` is not given.
     """
-    forward_reads = str(Path(left).resolve()) if left else None
-    reverse_reads = str(Path(right).resolve()) if right else None
+    forward_reads = str(Path(read1).resolve()) if read1 else None
+    reverse_reads = str(Path(read2).resolve()) if read2 else None
     if not forward_reads:
-        raise ValueError("Unable to locate FASTQ raw reads, provide --left")
+        raise ValueError("Unable to locate FASTQ raw reads, provide --read1")
     return forward_reads, reverse_reads
 
 

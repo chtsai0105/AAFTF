@@ -34,7 +34,7 @@ From: debian:bookworm-slim
 
     Usage:
         singularity exec AAFTF.sif AAFTF --help
-        singularity exec --bind /path/to/data:/data AAFTF.sif AAFTF trim --left R1.fq.gz --right R2.fq.gz
+        singularity exec --bind /path/to/data:/data AAFTF.sif AAFTF trim --read1 R1.fq.gz --read2 R2.fq.gz
 
     The database directory is at /opt/aaftf_db (set AAFTF_DB to override).
 

@@ -60,7 +60,7 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF filter -l LEFT [-r RIGHT] [-o BASENAME] [-c CPUS]
+    AAFTF filter -1 READ1 [-2 READ2] [-o BASENAME] [-c CPUS]
                  [--aligner {bbduk,bowtie2,bwa,minimap2}] [-m MEMORY]
                  [-a ACCESSIONS ...] [-u URLS ...] [-s LOCAL_FASTA ...]
                  [-w WORKDIR] [-v] [--pipe]
@@ -76,11 +76,11 @@ Example
 
     AAFTF filter -c 16 --memory 64 --aligner bbduk \
         -o reads_trimmed/STRAINX \
-        --left reads_trimmed/STRAINX_1P.fastq.gz --right reads_trimmed/STRAINX_2P.fastq.gz
+        --read1 reads_trimmed/STRAINX_1P.fastq.gz --read2 reads_trimmed/STRAINX_2P.fastq.gz
 
     # also screen out a specific GenBank contaminant genome
     AAFTF filter -c 16 --aligner bbduk -o reads_trimmed/STRAINX \
-        --left STRAINX_1P.fastq.gz --right STRAINX_2P.fastq.gz \
+        --read1 STRAINX_1P.fastq.gz --read2 STRAINX_2P.fastq.gz \
         -a NC_001422.1
 
 Next step: :doc:`assemble`.

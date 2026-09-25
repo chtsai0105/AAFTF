@@ -107,60 +107,77 @@ This is partially a python re-write of [JAAWS](https://github.com/nextgenusfs/ja
 
 Trimming options spelled out:
 ```
-usage: AAFTF trim [-h] [-q] [-o BASENAME] [-c cpus] [-ml MINLEN] -l LEFT
-                  [-r RIGHT] [-v] [--pipe] [--method {bbduk,trimmomatic}]
-                  [-m MEMORY] [--trimmomatic trimmomatic_jar]
+usage: AAFTF trim [-h] -1 FASTQ [-2 FASTQ] [-o BASENAME] [-ml INT] [-aq INT]
+                  [--cutfront] [--cuttail] [--cutright]
+                  [--method {bbduk,trimmomatic,fastp}] [-c int] [-m MEMORY]
+                  [--pipe] [-q] [-v]
                   [--trimmomatic_adaptors TRIMMOMATIC_ADAPTORS]
                   [--trimmomatic_clip TRIMMOMATIC_CLIP]
                   [--trimmomatic_leadingwindow TRIMMOMATIC_LEADINGWINDOW]
                   [--trimmomatic_trailingwindow TRIMMOMATIC_TRAILINGWINDOW]
                   [--trimmomatic_slidingwindow TRIMMOMATIC_SLIDINGWINDOW]
-                  [--trimmomatic_quality TRIMMOMATIC_QUALITY]
+                  [--trimmomatic_quality TRIMMOMATIC_QUALITY] [--dedup]
+                  [--merge]
 
 This command trims reads in FASTQ format to remove low quality reads and trim
 adaptor sequences
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  -q, --quiet           Only show warnings and errors
-  -o BASENAME, --out BASENAME
-                        Output basename, default to base name of --left reads
-  -c cpus, --cpus cpus  Number of CPUs/threads to use.
-  -ml MINLEN, --minlen MINLEN
-                        Minimum read length after trimming, default: 75
-  -l LEFT, --left LEFT  left/forward reads of paired-end FASTQ or single-end
+
+required arguments:
+  -1 FASTQ, --read1 FASTQ
+                        Read 1 (forward) of paired-end FASTQ, or single-end
                         FASTQ.
-  -r RIGHT, --right RIGHT
-                        right/reverse reads of paired-end FASTQ.
-  -v, --verbose         Show debug messages and tool stderr, and keep temporary
-                        working directories
-  --pipe                AAFTF is running in pipeline mode
-  --method {bbduk,trimmomatic}
-                        Program to use for adapter trimming
+
+optional arguments:
+  -2 FASTQ, --read2 FASTQ
+                        Read 2 (reverse) of paired-end FASTQ.
+  -o BASENAME, --out BASENAME
+                        Output basename, default to base name of --read1 reads
+  -ml INT, --minlen INT
+                        Minimum read length after trimming (default: 75)
+  -aq INT, --avgqual INT
+                        Average Quality of reads must be > than this (default:
+                        10)
+  --cutfront            Run fastp 5' trimming based on quality. WARNING: this
+                        operation will interfere deduplication for SE data
+  --cuttail             Run fastp 3' trimming based on quality. WARNING: this
+                        operation will interfere deduplication for SE data
+  --cutright            Run fastp move a sliding window from front to tail, if
+                        meet one window with mean quality < threshold.
+                        WARNING: this operation will interfere deduplication
+                        for SE data
+  --method {bbduk,trimmomatic,fastp}
+                        Program to use for adapter trimming (default: bbduk)
+  -c int, --cpus int    Number of CPUs/threads to use. (default: 1)
   -m MEMORY, --memory MEMORY
-                        Max Memory (in GB)
-  --trimmomatic trimmomatic_jar, --jar trimmomatic_jar
-                        Trimmomatic JAR path
+                        Max Memory (in GB) (default: 8)
+  --pipe                AAFTF is running in pipeline mode
+  -q, --quiet           Only show warnings and errors
+  -v, --verbose         Show debug messages and tool stderr, and keep
+                        temporary working directories
 
 Trimmomatic options:
-  Trimmomatic trimming options
-
   --trimmomatic_adaptors TRIMMOMATIC_ADAPTORS
-                        Trimmomatic adaptor file, default: TruSeq3-PE.fa
+                        Trimmomatic adaptor file (default: TruSeq3-PE.fa)
   --trimmomatic_clip TRIMMOMATIC_CLIP
-                        Trimmomatic clipping, default:
-                        ILLUMINACLIP:TruSeq3-PE.fa:2:30:10
+                        Trimmomatic ILLUMINACLIP argument (default: 2:30:10)
   --trimmomatic_leadingwindow TRIMMOMATIC_LEADINGWINDOW
-                        Trimmomatic window processing arguments, default:
-                        LEADING:3
+                        Trimmomatic window processing arguments (default: 3)
   --trimmomatic_trailingwindow TRIMMOMATIC_TRAILINGWINDOW
-                        Trimmomatic window processing arguments, default:
-                        TRAILING:3
+                        Trimmomatic window processing arguments (default: 3)
   --trimmomatic_slidingwindow TRIMMOMATIC_SLIDINGWINDOW
-                        Trimmomatic window processing arguments, default:
-                        SLIDINGWINDOW:4:15
+                        Trimmomatic window processing arguments (default:
+                        4:15)
   --trimmomatic_quality TRIMMOMATIC_QUALITY
                         Trimmomatic quality encoding -phred33 or phred64
+                        (default: phred33)
+
+Fastp options:
+  --dedup               Run fastp deuplication of fastq reads (default uses
+                        ~4gb mem)
+  --merge               Merge paired end reads
 ```
 
 Example usage:
@@ -171,11 +188,11 @@ READSDIR=reads
 TRIMREAD=reads_trimmed
 CPU=8
 AAFTF trim --method bbduk --memory $MEM -c $CPU \
- --left $READSDIR/${BASE}_R1.fq.gz --right $READSDIR/${BASE}_R2.fq.gz \
+ --read1 $READSDIR/${BASE}_R1.fq.gz --read2 $READSDIR/${BASE}_R2.fq.gz \
   -o $TRIMREAD/${BASE}
 # this step make take a lot of memory depending on how many filtering libraries you use
 AAFTF filter -c $CPU --memory $MEM --aligner bbduk \
-	  -o $TRIMREAD/${BASE} --left $TRIMREAD/${BASE}_1P.fastq.gz --right $TRIMREAD/${BASE}_2P.fastq.gz
+	  -o $TRIMREAD/${BASE} --read1 $TRIMREAD/${BASE}_1P.fastq.gz --read2 $TRIMREAD/${BASE}_2P.fastq.gz
 ```
 
 ## Assembly
@@ -184,7 +201,7 @@ The specified assembler can be made through the `--method` option.
 The full set of options are below.
 
 ```
-usage: AAFTF assemble [-h] -l LEFT -o OUT [-r RIGHT] [-w WORKDIR]
+usage: AAFTF assemble [-h] -1 READ1 -o OUT [-2 READ2] [-w WORKDIR]
                       [--method {spades,megahit,unicycler}] [--merged MERGED]
                       [--tmpdir TMPDIR] [--assembler_args ASSEMBLER_ARGS]
                       [-c cpus] [-m MEMORY] [--pipe] [-q] [-v] [--no-careful]
@@ -196,12 +213,13 @@ options:
   -h, --help            show this help message and exit
 
 required arguments:
-  -l LEFT, --left LEFT  Left (Forward) reads
+  -1 READ1, --read1 READ1
+                        Read 1 (forward) FASTQ
   -o OUT, --out OUT     Output assembly FASTA
 
 optional arguments:
-  -r RIGHT, --right RIGHT
-                        Right (Reverse) reads
+  -2 READ2, --read2 READ2
+                        Read 2 (reverse) FASTQ
   -w WORKDIR, --workdir WORKDIR
                         assembly output directory
   --method {spades,megahit,unicycler}
@@ -234,14 +252,14 @@ Unicycler options:
 ```
 CPU=24
 MEM=96
-LEFT=$TRIMREAD/${BASE}_filtered_1.fastq.gz
-RIGHT=$TRIMREAD/${BASE}_filtered_2.fastq.gz
+READ1=$TRIMREAD/${BASE}_filtered_1.fastq.gz
+READ2=$TRIMREAD/${BASE}_filtered_2.fastq.gz
 WORKDIR=working_AAFTF
 OUTDIR=genomes
 ASMFILE=$OUTDIR/${BASE}.spades.fasta
 mkdir -p $WORKDIR $OUTDIR
 AAFTF assemble -c $CPU --mem $MEM \
-	  --left $LEFT --right $RIGHT  \
+	  --read1 $READ1 --read2 $READ2  \
 	   -o $ASMFILE -w $WORKDIR/spades_$BASE
 ```
 
@@ -250,8 +268,8 @@ AAFTF assemble -c $CPU --mem $MEM \
 ```
 CPU=16
 MEM=16
-LEFT=$TRIMREAD/${BASE}_filtered_1.fastq.gz
-RIGHT=$TRIMREAD/${BASE}_filtered_2.fastq.gz
+READ1=$TRIMREAD/${BASE}_filtered_1.fastq.gz
+READ2=$TRIMREAD/${BASE}_filtered_2.fastq.gz
 WORKDIR=working_AAFTF
 OUTDIR=genomes
 ASMFILE=$OUTDIR/${BASE}.spades.fasta
@@ -268,7 +286,7 @@ plus at least one of `minimap2` (default for both Illumina and long reads) or `b
 
 ```
 AAFTF depth -i genome.final.fasta \
-    --left reads_1P.fastq.gz --right reads_2P.fastq.gz \
+    --read1 reads_1P.fastq.gz --read2 reads_2P.fastq.gz \
     -c $CPU -o coverage_report.txt
 ```
 
@@ -276,7 +294,7 @@ Long reads can be added alongside or instead of Illumina reads:
 
 ```
 AAFTF depth -i genome.final.fasta \
-    --left reads_1P.fastq.gz --right reads_2P.fastq.gz \
+    --read1 reads_1P.fastq.gz --read2 reads_2P.fastq.gz \
     --longreads nanopore.fastq.gz \
     -c $CPU -o coverage_report.txt
 ```

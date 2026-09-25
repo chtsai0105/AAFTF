@@ -5,7 +5,7 @@ Covers:
   - bbduk command construction for paired-end and single-end reads
   - fastp command construction including merge, dedup, and cut flags
   - trimmomatic guard: exits when no jar is found
-  - basename auto-derivation from the left-reads filename
+  - basename auto-derivation from the read1-reads filename
 """
 
 import sys
@@ -44,15 +44,15 @@ def _parse_trim(argv):
 _UNSET = object()
 
 
-def _make_trim_args(tmp_path, method="bbduk", left=None, right=_UNSET, **overrides):
-    if left is None:
-        left = str(tmp_path / "sample_R1.fastq.gz")
-    if right is _UNSET:
-        right = str(tmp_path / "sample_R2.fastq.gz")
+def _make_trim_args(tmp_path, method="bbduk", read1=None, read2=_UNSET, **overrides):
+    if read1 is None:
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+    if read2 is _UNSET:
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
     defaults = dict(
         method=method,
-        left=left,
-        right=right,
+        read1=read1,
+        read2=read2,
         basename=None,
         cpus=1,
         memory=None,
@@ -83,103 +83,103 @@ def _make_trim_args(tmp_path, method="bbduk", left=None, right=_UNSET, **overrid
 
 class TestTrimParser:
     def test_debug_false_by_default(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.debug is False
 
     def test_debug_flag_sets_true(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "-v"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "-v"])
         assert args.debug is True
 
     def test_pipe_false_by_default(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.pipe is False
 
     def test_pipe_flag_sets_true(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "--pipe"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "--pipe"])
         assert args.pipe is True
 
     def test_default_method_is_bbduk(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.method == "bbduk"
 
     def test_method_trimmomatic(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "--method", "trimmomatic"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "--method", "trimmomatic"])
         assert args.method == "trimmomatic"
 
     def test_method_fastp(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "--method", "fastp"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "--method", "fastp"])
         assert args.method == "fastp"
 
     def test_default_minlen(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.minlen == 75
 
     def test_custom_minlen(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "-ml", "50"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "-ml", "50"])
         assert args.minlen == 50
 
     def test_default_avgqual(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.avgqual == 10
 
     def test_custom_avgqual(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "-aq", "20"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "-aq", "20"])
         assert args.avgqual == 20
 
     def test_default_cpus(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.cpus == 1
 
     def test_custom_cpus(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "-c", "8"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "-c", "8"])
         assert args.cpus == 8
 
     def test_memory_default_is_8gb_int(self):
         # an int, so bbduk gets -Xmx8g (Java rejects -Xmx8.0g and -XmxNoneg)
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.memory == 8 and isinstance(args.memory, int)
 
     def test_merge_false_by_default(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.merge is False
 
     def test_merge_flag_sets_true(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "--merge"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "--merge"])
         assert args.merge is True
 
     def test_dedup_false_by_default(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.dedup is False
 
     def test_dedup_flag_sets_true(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "--dedup"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "--dedup"])
         assert args.dedup is True
 
     def test_cutfront_false_by_default(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.cutfront is False
 
     def test_cuttail_false_by_default(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.cuttail is False
 
     def test_cutright_false_by_default(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.cutright is False
 
-    def test_parses_left_reads(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
-        assert args.left == "R1.fq"
+    def test_parses_read1_reads(self):
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
+        assert args.read1 == "R1.fq"
 
-    def test_parses_right_reads(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq", "-r", "R2.fq"])
-        assert args.right == "R2.fq"
+    def test_parses_read2_reads(self):
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq", "-2", "R2.fq"])
+        assert args.read2 == "R2.fq"
 
-    def test_right_none_by_default(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
-        assert args.right is None
+    def test_read2_none_by_default(self):
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
+        assert args.read2 is None
 
-    def test_missing_left_exits_nonzero(self):
+    def test_missing_read1_exits_nonzero(self):
         with patch.object(sys, "argv", ["AAFTF", "trim"]):
             with pytest.raises(SystemExit) as exc:
                 main()
@@ -192,11 +192,11 @@ class TestTrimParser:
         assert exc.value.code == 0
 
     def test_default_trimmomatic_adaptors(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.trimmomatic_adaptors == "TruSeq3-PE.fa"
 
     def test_default_trimmomatic_quality(self):
-        args = _parse_trim(["AAFTF", "trim", "-l", "R1.fq"])
+        args = _parse_trim(["AAFTF", "trim", "-1", "R1.fq"])
         assert args.trimmomatic_quality == "phred33"
 
 
@@ -205,9 +205,9 @@ class TestTrimParser:
 # ---------------------------------------------------------------------------
 
 
-def _run_bbduk(tmp_path, left, right=None, **extra):
+def _run_bbduk(tmp_path, read1, read2=None, **extra):
     """Invoke trim.run() with method=bbduk, return captured subprocess commands."""
-    args = _make_trim_args(tmp_path, method="bbduk", left=left, right=right, **extra)
+    args = _make_trim_args(tmp_path, method="bbduk", read1=read1, read2=read2, **extra)
     cmds = []
     with patch("aaftf.trim.count_fastq", return_value=100):
         with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)) as _:
@@ -219,62 +219,62 @@ def _run_bbduk(tmp_path, left, right=None, **extra):
 
 class TestTrimRunBbduk:
     def test_pe_command_includes_in1(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left, right)
-        assert any(f"in1={left}" in " ".join(c) for c in cmds)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1, read2)
+        assert any(f"in1={read1}" in " ".join(c) for c in cmds)
 
     def test_pe_command_includes_in2(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left, right)
-        assert any(f"in2={right}" in " ".join(c) for c in cmds)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1, read2)
+        assert any(f"in2={read2}" in " ".join(c) for c in cmds)
 
     def test_pe_command_includes_out1_out2(self, tmp_path):
         # PE bbduk runs as shuffle.sh -> bbduk.sh -> reformat.sh (see a136d93);
         # the final out1/out2 filenames are written by the reformat.sh step,
         # not the first command.
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left, right)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1, read2)
         assert any("out1=sample_1P.fastq.gz" in " ".join(c) for c in cmds)
         assert any("out2=sample_2P.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_se_command_includes_in(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left, right=None)
-        assert any(f"in={left}" in " ".join(c) for c in cmds)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1, read2=None)
+        assert any(f"in={read1}" in " ".join(c) for c in cmds)
 
     def test_se_command_includes_out(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left, right=None)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1, read2=None)
         assert any("out=sample_1U.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_command_includes_minlen(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left, right, minlen=50)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1, read2, minlen=50)
         assert any("minlen=50" in " ".join(c) for c in cmds)
 
     def test_command_includes_avgqual(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left, right, avgqual=20)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1, read2, avgqual=20)
         assert any("maq=20" in " ".join(c) for c in cmds)
 
     def test_basename_derived_from_underscore_split(self, tmp_path):
-        left = str(tmp_path / "MySample_R1.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left)
+        read1 = str(tmp_path / "MySample_R1.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1)
         assert any("out=MySample_1U.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_basename_derived_from_dot_split(self, tmp_path):
-        left = str(tmp_path / "MySample.R1.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left)
+        read1 = str(tmp_path / "MySample.R1.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1)
         assert any("out=MySample_1U.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_explicit_basename_not_overridden(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        cmds, _ = _run_bbduk(tmp_path, left, basename="mybase")
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        cmds, _ = _run_bbduk(tmp_path, read1, basename="mybase")
         assert any("out=mybase_1U.fastq.gz" in " ".join(c) for c in cmds)
 
 
@@ -283,8 +283,8 @@ class TestTrimRunBbduk:
 # ---------------------------------------------------------------------------
 
 
-def _run_fastp(tmp_path, left, right=None, **extra):
-    args = _make_trim_args(tmp_path, method="fastp", left=left, right=right, **extra)
+def _run_fastp(tmp_path, read1, read2=None, **extra):
+    args = _make_trim_args(tmp_path, method="fastp", read1=read1, read2=read2, **extra)
     cmds = []
     with patch("aaftf.trim.count_fastq", return_value=100):
         with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
@@ -296,75 +296,75 @@ def _run_fastp(tmp_path, left, right=None, **extra):
 
 class TestTrimRunFastp:
     def test_pe_command_includes_in1_in2(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, _ = _run_fastp(tmp_path, left, right)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, _ = _run_fastp(tmp_path, read1, read2)
         cmd_str = " ".join(cmds[0])
-        assert f"--in1={left}" in cmd_str
-        assert f"--in2={right}" in cmd_str
+        assert f"--in1={read1}" in cmd_str
+        assert f"--in2={read2}" in cmd_str
 
     def test_pe_command_includes_out1_out2(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, _ = _run_fastp(tmp_path, left, right)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, _ = _run_fastp(tmp_path, read1, read2)
         cmd_str = " ".join(cmds[0])
         assert "--out1=s_1P.fastq.gz" in cmd_str
         assert "--out2=s_2P.fastq.gz" in cmd_str
 
     def test_merge_adds_merge_flag_and_output(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, _ = _run_fastp(tmp_path, left, right, merge=True)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, _ = _run_fastp(tmp_path, read1, read2, merge=True)
         cmd_str = " ".join(cmds[0])
         assert "--merge" in cmd_str
         assert "--merged_out=s_MG.fastq.gz" in cmd_str
 
     def test_dedup_adds_dedup_flag(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, _ = _run_fastp(tmp_path, left, right, dedup=True)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, _ = _run_fastp(tmp_path, read1, read2, dedup=True)
         assert "--dedup" in cmds[0]
 
     def test_cutfront_adds_flag(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, _ = _run_fastp(tmp_path, left, right, cutfront=True)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, _ = _run_fastp(tmp_path, read1, read2, cutfront=True)
         assert "--cut_front" in cmds[0]
 
     def test_cuttail_adds_flag(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, _ = _run_fastp(tmp_path, left, right, cuttail=True)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, _ = _run_fastp(tmp_path, read1, read2, cuttail=True)
         assert "--cut_tail" in cmds[0]
 
     def test_cutright_adds_flag(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, _ = _run_fastp(tmp_path, left, right, cutright=True)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, _ = _run_fastp(tmp_path, read1, read2, cutright=True)
         assert "--cut_right" in cmds[0]
 
     def test_se_uses_in_out(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        cmds, args = _run_fastp(tmp_path, left, right=None)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        cmds, args = _run_fastp(tmp_path, read1, read2=None)
         cmd_str = " ".join(cmds[0])
-        assert f"--in={left}" in cmd_str
+        assert f"--in={read1}" in cmd_str
 
     def test_merge_not_added_when_false(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, _ = _run_fastp(tmp_path, left, right, merge=False)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, _ = _run_fastp(tmp_path, read1, read2, merge=False)
         assert "--merge" not in cmds[0]
 
     def test_command_includes_minlen(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, _ = _run_fastp(tmp_path, left, right, minlen=50)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, _ = _run_fastp(tmp_path, read1, read2, minlen=50)
         assert "50" in cmds[0]
 
     def test_html_json_reports_included(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        cmds, args = _run_fastp(tmp_path, left, right)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        cmds, args = _run_fastp(tmp_path, read1, read2)
         cmd_str = " ".join(cmds[0])
         assert ".fastp.html" in cmd_str
         assert ".fastp.json" in cmd_str
@@ -377,9 +377,9 @@ class TestTrimRunFastp:
 
 class TestTrimRunTrimmomatic:
     def test_no_jar_raises(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
-        args = _make_trim_args(tmp_path, method="trimmomatic", left=left, right=right)
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
+        args = _make_trim_args(tmp_path, method="trimmomatic", read1=read1, read2=read2)
 
         from aaftf.trim import run
 
@@ -389,16 +389,16 @@ class TestTrimRunTrimmomatic:
                     run(**vars(args))
 
     def test_jar_found_builds_pe_command(self, tmp_path):
-        left = str(tmp_path / "s_R1.fastq.gz")
-        right = str(tmp_path / "s_R2.fastq.gz")
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        read2 = str(tmp_path / "s_R2.fastq.gz")
         fake_jar = str(tmp_path / "trimmomatic.jar")
         fake_adaptor = str(tmp_path / "TruSeq3-PE.fa")
         (tmp_path / "TruSeq3-PE.fa").write_text(">adapt\nATCG\n")
         args = _make_trim_args(
             tmp_path,
             method="trimmomatic",
-            left=left,
-            right=right,
+            read1=read1,
+            read2=read2,
             trimmomatic_adaptors=fake_adaptor,
         )
         cmds = []
@@ -421,7 +421,7 @@ class TestTrimmomaticAdaptorLookup:
     """run_trimmomatic finds the adaptors next to the jar or under <prefix>/share/trimmomatic."""
 
     def _run(self, tmp_path, jar):
-        args = _make_trim_args(tmp_path, method="trimmomatic", left=str(tmp_path / "s_R1.fastq.gz"), right=str(tmp_path / "s_R2.fastq.gz"), trimmomatic_adaptors="missing.fa")
+        args = _make_trim_args(tmp_path, method="trimmomatic", read1=str(tmp_path / "s_R1.fastq.gz"), read2=str(tmp_path / "s_R2.fastq.gz"), trimmomatic_adaptors="missing.fa")
         cmds = []
         with patch("aaftf.trim._find_trimmomatic", return_value=str(jar)):
             with patch("aaftf.trim.count_fastq", return_value=100):

@@ -23,7 +23,7 @@ def _cli_defaults(step):
     return {a.dest: a.default for a in parser._actions if a.dest != "help"}
 
 
-def _run_pipeline(tmp_path, right=True, **options):
+def _run_pipeline(tmp_path, read2=True, **options):
     """Run pipeline.run() with every step's run() replaced; return {step: kwargs it was called with}."""
     base = str(tmp_path / "sample")
     calls = {}
@@ -41,7 +41,7 @@ def _run_pipeline(tmp_path, right=True, **options):
     for p in patches:
         p.start()
     try:
-        pipeline.run(left="R1.fq.gz", right="R2.fq.gz" if right else None, basename=base, phylum=["Ascomycota"], **options)
+        pipeline.run(read1="R1.fq.gz", read2="R2.fq.gz" if read2 else None, basename=base, phylum=["Ascomycota"], **options)
     finally:
         for p in patches:
             p.stop()
@@ -67,7 +67,7 @@ class TestSteps:
     def test_missing_output_raises(self, tmp_path):
         with patch("aaftf.pipeline.trim.run"):
             with pytest.raises(RuntimeError, match="AAFTF trim failed"):
-                pipeline.run(left="R1.fq.gz", basename=str(tmp_path / "sample"), phylum=["Ascomycota"])
+                pipeline.run(read1="R1.fq.gz", basename=str(tmp_path / "sample"), phylum=["Ascomycota"])
 
 
 class TestDefaults:
@@ -140,8 +140,8 @@ class TestFileChaining:
     def test_each_step_reads_the_previous_output(self, tmp_path):
         calls = _run_pipeline(tmp_path)
         base = str(tmp_path / "sample")
-        assert (calls["filter"]["left"], calls["filter"]["right"]) == (f"{base}_1P.fastq.gz", f"{base}_2P.fastq.gz")
-        assert calls["assemble"]["left"] == f"{base}_filtered_1.fastq.gz"
+        assert (calls["filter"]["read1"], calls["filter"]["read2"]) == (f"{base}_1P.fastq.gz", f"{base}_2P.fastq.gz")
+        assert calls["assemble"]["read1"] == f"{base}_filtered_1.fastq.gz"
         assert calls["vecscreen"]["infile"] == f"{base}.spades.fasta"
         assert calls["sourpurge"]["input"] == f"{base}.vecscreen.fasta"
         assert calls["rmdup"]["input"] == f"{base}.sourpurge.fasta"
@@ -149,6 +149,6 @@ class TestFileChaining:
         assert calls["sort"]["input"] == f"{base}.polish.fasta"
         assert calls["assess"]["input"] == f"{base}.final.fasta"
 
-    def test_single_end_reads_have_no_right(self, tmp_path):
-        calls = _run_pipeline(tmp_path, right=False)
-        assert all(calls[s]["right"] is None for s in ("trim", "filter", "assemble", "sourpurge", "polish"))
+    def test_single_end_reads_have_no_read2(self, tmp_path):
+        calls = _run_pipeline(tmp_path, read2=False)
+        assert all(calls[s]["read2"] is None for s in ("trim", "filter", "assemble", "sourpurge", "polish"))

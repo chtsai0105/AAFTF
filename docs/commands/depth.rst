@@ -84,7 +84,7 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF depth -i INPUT [-o OUT] [-l LEFT] [-r RIGHT] [-lr LONGREADS]
+    AAFTF depth -i INPUT [-o OUT] [-1 READ1] [-2 READ2] [-lr LONGREADS]
                [--aligner {minimap2,bwa}]
                [--longread_preset {map-ont,map-pb,map-hifi}]
                [--min_contig_len N]
@@ -99,12 +99,12 @@ Example
 .. code-block:: bash
 
     AAFTF depth -i genome.final.fasta \
-        --left reads_1P.fastq.gz --right reads_2P.fastq.gz \
+        --read1 reads_1P.fastq.gz --read2 reads_2P.fastq.gz \
         -c 16 -o coverage_report.txt
 
     # Illumina + long reads together, PDF plots
     AAFTF depth -i genome.final.fasta \
-        --left reads_1P.fastq.gz --right reads_2P.fastq.gz \
+        --read1 reads_1P.fastq.gz --read2 reads_2P.fastq.gz \
         --longreads nanopore.fastq.gz --longread_preset map-ont \
         -c 16 -o coverage_report.txt
 

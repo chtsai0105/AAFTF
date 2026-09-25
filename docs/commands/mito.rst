@@ -66,11 +66,11 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF mito -l LEFT -r RIGHT [-o OUT] [--minlen N] [--maxlen N]
+    AAFTF mito -1 READ1 -2 READ2 [-o OUT] [--minlen N] [--maxlen N]
                [-s/--seed FASTA] [--subsample PAIRS] [-m MEMORY]
                [-w WORKDIR] [-q] [-v] [--pipe]
 
-``-l/--left`` and ``-r/--right`` are required (``mito`` only supports paired-end data); ``-o/--out``
+``-1/--read1`` and ``-2/--read2`` are required (``mito`` only supports paired-end data); ``-o/--out``
 defaults to ``mito.fasta``.
 
 Example
@@ -78,11 +78,11 @@ Example
 
 .. code-block:: bash
 
-    AAFTF mito -l reads_trimmed/STRAINX_1P.fastq.gz -r reads_trimmed/STRAINX_2P.fastq.gz \
+    AAFTF mito -1 reads_trimmed/STRAINX_1P.fastq.gz -2 reads_trimmed/STRAINX_2P.fastq.gz \
         -o STRAINX.mito.fasta
 
     # Seed with a related species' mitogenome
-    AAFTF mito -l STRAINX_1P.fastq.gz -r STRAINX_2P.fastq.gz -o STRAINX.mito.fasta \
+    AAFTF mito -1 STRAINX_1P.fastq.gz -2 STRAINX_2P.fastq.gz -o STRAINX.mito.fasta \
         --seed related_species_mito.fasta
 
 ``mito`` is not part of ``pipeline``. To keep mitochondrial reads out of the nuclear assembly,

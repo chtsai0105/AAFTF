@@ -2,7 +2,7 @@
 
 Covers:
   - CLI parser defaults and flag presence for the 'assemble' subcommand
-  - run() guard: no left reads → sys.exit(1) for each assembler
+  - run() guard: no read1 reads → sys.exit(1) for each assembler
   - spades command construction for PE, SE, and merged reads
   - spades success path: scaffolds.fasta copied to outfile
   - spades graceful handling of missing scaffolds.fasta
@@ -49,13 +49,13 @@ def _parse_assemble(argv):
 _UNSET = object()
 
 
-def _make_asm_args(tmp_path, method="spades", left=_UNSET, right=None, **overrides):
-    if left is _UNSET:
-        left = str(tmp_path / "sample_filtered_1.fastq.gz")
+def _make_asm_args(tmp_path, method="spades", read1=_UNSET, read2=None, **overrides):
+    if read1 is _UNSET:
+        read1 = str(tmp_path / "sample_filtered_1.fastq.gz")
     defaults = dict(
         method=method,
-        left=left,
-        right=right,
+        read1=read1,
+        read2=read2,
         longreads=None,
         merged=None,
         # Confine assemble.py's workdir (which it otherwise creates relative
@@ -83,76 +83,76 @@ def _make_asm_args(tmp_path, method="spades", left=_UNSET, right=None, **overrid
 
 class TestAssembleParser:
     def test_debug_false_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
         assert args.debug is False
 
     def test_debug_flag_sets_true(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "-v"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-v"])
         assert args.debug is True
 
     def test_pipe_false_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
         assert args.pipe is False
 
     def test_pipe_flag_sets_true(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "--pipe"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "--pipe"])
         assert args.pipe is True
 
     def test_default_method_is_spades(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
         assert args.method == "spades"
 
     def test_method_megahit(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "--method", "megahit"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "--method", "megahit"])
         assert args.method == "megahit"
 
     def test_method_unicycler(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "--method", "unicycler"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "--method", "unicycler"])
         assert args.method == "unicycler"
 
     def test_default_memory_string(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
         assert args.memory == "32"
 
     def test_custom_memory(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "-m", "64"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-m", "64"])
         assert args.memory == "64"
 
     def test_default_cpus(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
         assert args.cpus == 1
 
     def test_custom_cpus(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "-c", "8"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-c", "8"])
         assert args.cpus == 8
 
     def test_careful_true_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
         assert args.careful is True
 
     def test_no_careful_flag(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "--no-careful"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "--no-careful"])
         assert args.careful is False
 
     def test_isolate_true_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
         assert args.isolate is True
 
     def test_no_isolate_flag(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "--no-isolate"])
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "--no-isolate"])
         assert args.isolate is False
 
-    def test_parses_left_reads(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
-        assert args.left == "R1.fq"
+    def test_parses_read1_reads(self):
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+        assert args.read1 == "R1.fq"
 
-    def test_parses_right_reads(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa", "-r", "R2.fq"])
-        assert args.right == "R2.fq"
+    def test_parses_read2_reads(self):
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-2", "R2.fq"])
+        assert args.read2 == "R2.fq"
 
-    def test_right_none_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
-        assert args.right is None
+    def test_read2_none_by_default(self):
+        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+        assert args.read2 is None
 
     def test_assemble_help_exits_zero(self):
         with patch.object(sys, "argv", ["AAFTF", "assemble", "--help"]):
@@ -162,27 +162,27 @@ class TestAssembleParser:
 
 
 # ---------------------------------------------------------------------------
-# run() guard: no left reads
+# run() guard: no read1 reads
 # ---------------------------------------------------------------------------
 
 
 class TestAssembleRunGuards:
-    def test_spades_no_left_raises(self, tmp_path):
-        args = _make_asm_args(tmp_path, method="spades", left=None)
+    def test_spades_no_read1_raises(self, tmp_path):
+        args = _make_asm_args(tmp_path, method="spades", read1=None)
         from aaftf.assemble import run
 
         with pytest.raises(ValueError):
             run(**vars(args))
 
-    def test_megahit_no_left_raises(self, tmp_path):
-        args = _make_asm_args(tmp_path, method="megahit", left=None)
+    def test_megahit_no_read1_raises(self, tmp_path):
+        args = _make_asm_args(tmp_path, method="megahit", read1=None)
         from aaftf.assemble import run
 
         with pytest.raises(ValueError):
             run(**vars(args))
 
-    def test_unicycler_no_left_raises(self, tmp_path):
-        args = _make_asm_args(tmp_path, method="unicycler", left=None)
+    def test_unicycler_no_read1_raises(self, tmp_path):
+        args = _make_asm_args(tmp_path, method="unicycler", read1=None)
         from aaftf.assemble import run
 
         with pytest.raises(ValueError):
@@ -194,9 +194,9 @@ class TestAssembleRunGuards:
 # ---------------------------------------------------------------------------
 
 
-def _run_spades(tmp_path, left, right=None, create_output=True, **extra):
+def _run_spades(tmp_path, read1, read2=None, create_output=True, **extra):
     """Invoke run_spades() with subprocess mocked; return captured commands."""
-    args = _make_asm_args(tmp_path, method="spades", left=left, right=right, **extra)
+    args = _make_asm_args(tmp_path, method="spades", read1=read1, read2=read2, **extra)
     cmds = []
 
     def _fake_run(cmd, **kw):
@@ -215,80 +215,80 @@ def _run_spades(tmp_path, left, right=None, create_output=True, **extra):
 
 class TestAssembleRunSpades:
     def test_pe_command_includes_pe1_1(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        cmds, _ = _run_spades(tmp_path, left, right)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        cmds, _ = _run_spades(tmp_path, read1, read2)
         assert any("--pe1-1" in c for c in cmds[0])
 
     def test_pe_command_includes_pe1_2(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        cmds, _ = _run_spades(tmp_path, left, right)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        cmds, _ = _run_spades(tmp_path, read1, read2)
         assert any("--pe1-2" in c for c in cmds[0])
 
     def test_se_command_includes_s1(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        cmds, _ = _run_spades(tmp_path, left, right=None)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        cmds, _ = _run_spades(tmp_path, read1, read2=None)
         assert any("--s1" in c for c in cmds[0])
 
     def test_merged_adds_s1_for_pe(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
         merged = str(tmp_path / "merged.fastq.gz")
-        cmds, _ = _run_spades(tmp_path, left, right, merged=merged)
+        cmds, _ = _run_spades(tmp_path, read1, read2, merged=merged)
         cmd_str = " ".join(cmds[0])
         assert "--s1" in cmd_str
 
     def test_command_includes_threads(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        cmds, _ = _run_spades(tmp_path, left, right)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        cmds, _ = _run_spades(tmp_path, read1, read2)
         assert "--threads" in cmds[0]
 
     def test_command_includes_memory(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        cmds, args = _run_spades(tmp_path, left, right)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        cmds, args = _run_spades(tmp_path, read1, read2)
         assert "--mem" in cmds[0]
         assert args.memory in cmds[0]
 
     def test_careful_flag_added(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        cmds, _ = _run_spades(tmp_path, left, right, careful=True, isolate=False)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        cmds, _ = _run_spades(tmp_path, read1, read2, careful=True, isolate=False)
         assert "--careful" in cmds[0]
 
     def test_isolate_overrides_careful(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        cmds, _ = _run_spades(tmp_path, left, right, careful=False, isolate=True)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        cmds, _ = _run_spades(tmp_path, read1, read2, careful=False, isolate=True)
         assert "--isolate" in cmds[0]
         assert "--careful" not in cmds[0]
 
     def test_scaffolds_copied_to_outfile(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
         out = str(tmp_path / "assembly.fasta")
-        _run_spades(tmp_path, left, right, out=out, create_output=True)
+        _run_spades(tmp_path, read1, read2, out=out, create_output=True)
         assert Path(out).exists()
 
     def test_missing_scaffolds_raises(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
         with pytest.raises(RuntimeError, match="Spades assembly output"):
-            _run_spades(tmp_path, left, right, create_output=False)
+            _run_spades(tmp_path, read1, read2, create_output=False)
 
     def test_existing_workdir_restarts_from_last(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        args = _make_asm_args(tmp_path, method="spades", left=left)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        args = _make_asm_args(tmp_path, method="spades", read1=read1)
         Path(args.workdir).mkdir(parents=True, exist_ok=True)
-        cmds, _ = _run_spades(tmp_path, left)
+        cmds, _ = _run_spades(tmp_path, read1)
         assert cmds[0][-2:] == ["--restart-from", "last"]
 
     def test_cov_cutoff_auto_in_command(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        cmds, _ = _run_spades(tmp_path, left, right)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        cmds, _ = _run_spades(tmp_path, read1, read2)
         cmd_str = " ".join(cmds[0])
         assert "--cov-cutoff" in cmd_str
         assert "auto" in cmd_str
@@ -299,8 +299,8 @@ class TestAssembleRunSpades:
 # ---------------------------------------------------------------------------
 
 
-def _run_megahit(tmp_path, left, right=None, create_output=True, **extra):
-    args = _make_asm_args(tmp_path, method="megahit", left=left, right=right, **extra)
+def _run_megahit(tmp_path, read1, read2=None, create_output=True, **extra):
+    args = _make_asm_args(tmp_path, method="megahit", read1=read1, read2=read2, **extra)
     cmds = []
 
     def _fake_run(cmd, **kw):
@@ -319,39 +319,39 @@ def _run_megahit(tmp_path, left, right=None, create_output=True, **extra):
 
 class TestAssembleRunMegahit:
     def test_pe_command_uses_1_2_flags(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        cmds, _ = _run_megahit(tmp_path, left, right)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        cmds, _ = _run_megahit(tmp_path, read1, read2)
         assert "-1" in cmds[0]
         assert "-2" in cmds[0]
 
     def test_se_command_uses_r_flag(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        cmds, _ = _run_megahit(tmp_path, left, right=None)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        cmds, _ = _run_megahit(tmp_path, read1, read2=None)
         assert "-r" in cmds[0]
 
     def test_command_includes_threads(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
-        cmds, _ = _run_megahit(tmp_path, left, right)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        cmds, _ = _run_megahit(tmp_path, read1, read2)
         assert "-t" in cmds[0]
 
     def test_final_contigs_copied_to_outfile(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
         out = str(tmp_path / "assembly.megahit.fasta")
-        _run_megahit(tmp_path, left, right, out=out, create_output=True)
+        _run_megahit(tmp_path, read1, read2, out=out, create_output=True)
         assert Path(out).exists()
 
     def test_missing_final_contigs_raises(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        right = str(tmp_path / "filtered_2.fastq.gz")
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
         with pytest.raises(RuntimeError, match="Megahit assembly output"):
-            _run_megahit(tmp_path, left, right, create_output=False)
+            _run_megahit(tmp_path, read1, read2, create_output=False)
 
     def test_command_starts_with_megahit(self, tmp_path):
-        left = str(tmp_path / "filtered_1.fastq.gz")
-        cmds, _ = _run_megahit(tmp_path, left)
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        cmds, _ = _run_megahit(tmp_path, read1)
         assert cmds[0][0] == "megahit"
 
 
@@ -360,9 +360,9 @@ class TestAssembleRunMegahit:
 # ---------------------------------------------------------------------------
 
 
-def _run_unicycler(tmp_path, left, right=None, **extra):
+def _run_unicycler(tmp_path, read1, read2=None, **extra):
     """Invoke run_unicycler() with subprocess mocked (writing assembly.fasta); return the command."""
-    args = _make_asm_args(tmp_path, method="unicycler", left=left, right=right, **extra)
+    args = _make_asm_args(tmp_path, method="unicycler", read1=read1, read2=read2, **extra)
     cmds = []
 
     def _fake_run(cmd, **kw):

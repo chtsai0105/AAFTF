@@ -83,43 +83,43 @@ class TestSubcommandRegistration:
 
 class TestDepthParser:
     def test_parses_input_flag(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "genome.fa", "-l", "left.fq"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "genome.fa", "-1", "read1.fq"])
         assert args.input == "genome.fa"
 
-    def test_parses_left_reads(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "left.fq"])
-        assert args.left == "left.fq"
+    def test_parses_read1_reads(self):
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "read1.fq"])
+        assert args.read1 == "read1.fq"
 
-    def test_parses_right_reads(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "-r", "r.fq"])
-        assert args.right == "r.fq"
+    def test_parses_read2_reads(self):
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "-2", "r.fq"])
+        assert args.read2 == "r.fq"
 
     def test_parses_longreads(self):
         args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-lr", "lr.fq"])
         assert args.longreads == "lr.fq"
 
     def test_default_out(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq"])
         assert args.out == "coverage_stats.txt"
 
     def test_custom_out(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "-o", "my_report.txt"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "-o", "my_report.txt"])
         assert args.out == "my_report.txt"
 
     def test_default_cpus(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq"])
         assert args.cpus == 1
 
     def test_custom_cpus(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "-c", "8"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "-c", "8"])
         assert args.cpus == 8
 
     def test_default_aligner(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq"])
         assert args.aligner == "minimap2"
 
     def test_bwa_aligner(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "--aligner", "bwa"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "--aligner", "bwa"])
         assert args.aligner == "bwa"
 
     def test_longread_preset_none_by_default(self):
@@ -131,41 +131,41 @@ class TestDepthParser:
         assert args.longread_preset == "map-pb"
 
     def test_debug_flag_false_by_default(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq"])
         assert args.debug is False
 
     def test_debug_flag_set(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "-v"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "-v"])
         assert args.debug is True
 
     def test_pipe_flag_false_by_default(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq"])
         assert args.pipe is False
 
     def test_missing_input_exits_nonzero(self):
-        with patch.object(sys, "argv", ["AAFTF", "depth", "-l", "l.fq"]):
+        with patch.object(sys, "argv", ["AAFTF", "depth", "-1", "l.fq"]):
             with pytest.raises(SystemExit) as exc:
                 main()
         assert exc.value.code != 0
 
     def test_default_plot_format_is_pdf(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq"])
         assert args.plot_format == "pdf"
 
     def test_plot_format_svg(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "--plot-format", "svg"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "--plot-format", "svg"])
         assert args.plot_format == "svg"
 
     def test_plot_format_png(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "--plot-format", "png"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "--plot-format", "png"])
         assert args.plot_format == "png"
 
     def test_no_plot_false_by_default(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq"])
         assert args.no_plot is False
 
     def test_no_plot_flag(self):
-        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "--no-plot"])
+        args = _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "--no-plot"])
         assert args.no_plot is True
 
 
@@ -274,7 +274,7 @@ class TestCpusCappedToAvailable:
 
     def _parse(self, cpus, available):
         with patch("aaftf.main.available_cpus", return_value=available):
-            return _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-l", "l.fq", "-c", str(cpus)])
+            return _parse_with_main(["AAFTF", "depth", "-i", "g.fa", "-1", "l.fq", "-c", str(cpus)])
 
     # main() configures logging to stderr (propagation off), so read captured stderr, not caplog
     def test_too_many_cpus_capped(self, capsys):
@@ -291,24 +291,24 @@ class TestMemoryCappedToAvailable:
 
     def test_too_much_memory_capped(self, capsys):
         with patch("aaftf.main.get_ram", return_value=5.6):
-            args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq", "-m", "16"])
+            args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq", "-m", "16"])
         assert args.memory == 5
         assert "WARNING: -m/--memory 16 GB is more than the 5.6 GB of RAM available" in capsys.readouterr().err
 
     def test_string_memory_stays_a_string(self):
         with patch("aaftf.main.get_ram", return_value=10.0):
-            args = _parse_with_main(["AAFTF", "assemble", "-l", "R1.fq", "-o", "out.fa"])
+            args = _parse_with_main(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
         assert args.memory == "10"
 
     def test_within_available_unchanged(self, capsys):
         with patch("aaftf.main.get_ram", return_value=64.0):
-            args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
+            args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])
         assert args.memory == 16
         assert "RAM available" not in capsys.readouterr().err
 
     def test_never_below_1gb(self):
         with patch("aaftf.main.get_ram", return_value=0.3):
-            args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
+            args = _parse_with_main(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])
         assert args.memory == 1
 
 

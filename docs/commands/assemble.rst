@@ -60,7 +60,7 @@ Invocation
 
     AAFTF assemble --method {spades,megahit,unicycler} -o OUT
                    [-w WORKDIR] [-c CPUS] [-m MEMORY]
-                   [-l LEFT] [-r RIGHT] [-lr LONGREADS] [--single/--merged FILE]
+                   [-1 READ1] [-2 READ2] [-lr LONGREADS] [--single/--merged FILE]
                    [--careful/--no-careful] [--isolate/--no-isolate]
                    [--tmpdir DIR] [--assembler_args ARG ...]
                    [-v] [--pipe]
@@ -74,12 +74,12 @@ Example
 .. code-block:: bash
 
     AAFTF assemble -c 24 --memory 96 \
-        --left reads_filtered_1.fastq.gz --right reads_filtered_2.fastq.gz \
+        --read1 reads_filtered_1.fastq.gz --read2 reads_filtered_2.fastq.gz \
         -o genomes/STRAINX.spades.fasta -w working_AAFTF/spades_STRAINX
 
     # Hybrid short+long read assembly with Unicycler
     AAFTF assemble --method unicycler -c 24 \
-        --left reads_filtered_1.fastq.gz --right reads_filtered_2.fastq.gz \
+        --read1 reads_filtered_1.fastq.gz --read2 reads_filtered_2.fastq.gz \
         --longreads ont_reads.fastq.gz \
         -o genomes/STRAINX.unicycler.fasta
 

@@ -50,7 +50,7 @@ class TestNovoplastyInputs:
                 popen.return_value.communicate.return_value = (b"", b"")
                 # no NOVOPlasty output is faked, so run() stops after writing its inputs
                 with pytest.raises(RuntimeError, match="did not produce an assembly"):
-                    run(left=str(tmp_path / "R1.fq"), right=str(tmp_path / "R2.fq"), out=str(tmp_path / "mt.fa"), workdir=str(workdir), subsample=0, **kwargs)
+                    run(read1=str(tmp_path / "R1.fq"), read2=str(tmp_path / "R2.fq"), out=str(tmp_path / "mt.fa"), workdir=str(workdir), subsample=0, **kwargs)
         return workdir
 
     def test_default_seed_copied_from_package_and_config_filled(self, tmp_path):
@@ -83,7 +83,7 @@ class TestNovoplastyOutputChoice:
         with patch("aaftf.mito.require_tools"), patch("aaftf.mito.estimate_read_length", return_value=150):
             with patch("aaftf.mito.subprocess.Popen", side_effect=_fake_popen):
                 with patch("aaftf.mito._orient_to_start", side_effect=lambda draft, out, **kw: orient.append(Path(draft).name)):
-                    run(left="R1.fq", right="R2.fq", out=str(out), workdir=str(tmp_path / "wd"), subsample=0)
+                    run(read1="R1.fq", read2="R2.fq", out=str(out), workdir=str(tmp_path / "wd"), subsample=0)
         return orient, out
 
     def test_circular_preferred(self, tmp_path):
@@ -137,7 +137,7 @@ class TestSubsample:
             with patch("aaftf.mito.subprocess.Popen") as popen:
                 popen.return_value.communicate.return_value = (b"", b"")
                 with pytest.raises(RuntimeError):  # no NOVOPlasty output faked (or reformat.sh fails)
-                    run(left=str(tmp_path / "R1.fq"), right=str(tmp_path / "R2.fq"), workdir=str(workdir), subsample=subsample)
+                    run(read1=str(tmp_path / "R1.fq"), read2=str(tmp_path / "R2.fq"), workdir=str(workdir), subsample=subsample)
         config = workdir / "novo-config.txt"
         return cmds, config.read_text() if config.exists() else None
 
@@ -164,4 +164,4 @@ class TestSubsample:
 
     def test_negative_subsample_raises(self, tmp_path):
         with pytest.raises(ValueError, match="--subsample"):
-            run(left="R1.fq", right="R2.fq", workdir=str(tmp_path / "wd"), subsample=-1)
+            run(read1="R1.fq", read2="R2.fq", workdir=str(tmp_path / "wd"), subsample=-1)

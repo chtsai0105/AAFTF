@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 # flake8: noqa: C901
 def run(
-    left: str,
-    right: str | None = None,
+    read1: str,
+    read2: str | None = None,
     workdir: str | None = None,
     cpus: int = 1,
     screen_accessions: list[str] | None = None,
@@ -43,14 +43,14 @@ def run(
     current directory.
 
     Args:
-        left: Forward (or single-end) FASTQ file.
-        right: Reverse FASTQ file for paired-end data.
+        read1: Forward (or single-end) FASTQ file.
+        read2: Reverse FASTQ file for paired-end data.
         workdir: Working directory; a temporary one is created when None.
         cpus: Number of threads.
         screen_accessions: GenBank nucleotide accessions to download and add to the screen.
         screen_urls: URLs of FASTA files to download and add to the screen.
         screen_local: Local FASTA files to add to the screen.
-        basename: Output file prefix; derived from ``left`` when None.
+        basename: Output file prefix; derived from ``read1`` when None.
         aligner: One of ``bbduk``, ``bowtie2``, ``bwa`` or ``minimap2``.
         memory: Java heap size in GB for BBDuk.
         debug: Show external tool output and keep the work directory.
@@ -58,7 +58,7 @@ def run(
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
 
     Raises:
-        ValueError: If ``left`` is not given.
+        ValueError: If ``read1`` is not given.
     """
     workdir, custom_workdir = make_workdir(workdir, "filter")
     bamthreads = min(cpus, 4)
@@ -83,12 +83,12 @@ def run(
 
     # find reads
     forward_reads, reverse_reads = (None,) * 2
-    if left:
-        forward_reads = str(Path(left).resolve())
-    if right:
-        reverse_reads = str(Path(right).resolve())
+    if read1:
+        forward_reads = str(Path(read1).resolve())
+    if read2:
+        reverse_reads = str(Path(read2).resolve())
     if not forward_reads:
-        raise ValueError("Must provide --left, unable to locate FASTQ reads")
+        raise ValueError("Must provide --read1, unable to locate FASTQ reads")
     total = count_fastq(forward_reads)
     if reverse_reads:
         total = total * 2
@@ -144,7 +144,7 @@ def run(
         if reverse_reads:
             logger.info(f"Filtering complete:\nFor: {clean_reads}_1.fastq.gz\nRev: {clean_reads}_2.fastq.gz")
             if not pipe:
-                logger.info(f"Your next command might be:\nAAFTF assemble -l {clean_reads}_1.fastq.gz -r {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
+                logger.info(f"Your next command might be:\nAAFTF assemble -1 {clean_reads}_1.fastq.gz -2 {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
         else:
             logger.info(f"Filtering complete:\nSingle: {clean_reads}_U.fastq.gz")
@@ -209,11 +209,11 @@ def run(
         if reverse_reads:
             logger.info(f"Filtering complete:\nFor: {clean_reads}_1.fastq.gz\nRev: {clean_reads}_2.fastq.gz")
             if not pipe:
-                logger.info(f"Your next command might be:\nAAFTF assemble -l {clean_reads}_1.fastq.gz -r {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
+                logger.info(f"Your next command might be:\nAAFTF assemble -1 {clean_reads}_1.fastq.gz -2 {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
         else:
             logger.info(f"Filtering complete:\nSingle: {clean_reads}.fastq.gz")
             if not pipe:
-                logger.info(f"Your next command might be:\nAAFTF assemble -l {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta")
+                logger.info(f"Your next command might be:\nAAFTF assemble -1 {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
 
 def _rebuild_index_if_stale(marker_file: str, contamdb: str, build_cmd: list[str], debug: bool) -> None:

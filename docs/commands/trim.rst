@@ -65,7 +65,7 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF trim -l LEFT [-r RIGHT] [-o BASENAME] [-c CPUS] [-ml MINLEN] [-aq AVGQUAL]
+    AAFTF trim -1 READ1 [-2 READ2] [-o BASENAME] [-c CPUS] [-ml MINLEN] [-aq AVGQUAL]
                [--method {bbduk,trimmomatic,fastp}] [-m MEMORY]
                [--dedup] [--cutfront] [--cuttail] [--cutright] [--merge]
                [--trimmomatic JAR] [--trimmomatic_adaptors FILE] [--trimmomatic_clip STR]
@@ -73,8 +73,8 @@ Invocation
                [--trimmomatic_slidingwindow W:Q] [--trimmomatic_quality {phred33,phred64}]
                [-v] [--pipe]
 
-``-l/--left`` is required; ``-r/--right`` is optional (omit for single-end reads). If
-``-o/--out`` (``basename``) is not given, it is derived from ``--left``'s filename (text before
+``-1/--read1`` is required; ``-2/--read2`` is optional (omit for single-end reads). If
+``-o/--out`` (``basename``) is not given, it is derived from ``--read1``'s filename (text before
 the first ``_`` or ``.``).
 
 **Output:** paired mode writes ``{basename}_1P.fastq.gz`` / ``{basename}_2P.fastq.gz``;
@@ -86,12 +86,12 @@ Example
 .. code-block:: bash
 
     AAFTF trim --method bbduk --memory 64 -c 16 \
-        --left reads/STRAINX_R1.fq.gz --right reads/STRAINX_R2.fq.gz \
+        --read1 reads/STRAINX_R1.fq.gz --read2 reads/STRAINX_R2.fq.gz \
         -o reads_trimmed/STRAINX
 
     # fastp with deduplication and read merging
     AAFTF trim --method fastp -c 16 --dedup --merge \
-        --left reads/STRAINX_R1.fq.gz --right reads/STRAINX_R2.fq.gz \
+        --read1 reads/STRAINX_R1.fq.gz --read2 reads/STRAINX_R2.fq.gz \
         -o reads_trimmed/STRAINX
 
 Next step: :doc:`filter` (or :doc:`mito` first, for paired data, to seed a mitochondrial

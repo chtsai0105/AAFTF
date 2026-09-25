@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 
 # flake8: noqa: C901
 def run(
-    left: str,
-    right: str | None = None,
+    read1: str,
+    read2: str | None = None,
     basename: str | None = None,
     method: str = "bbduk",
     cpus: int = 1,
@@ -60,9 +60,9 @@ def run(
     """Run the ``trim`` subcommand: count input reads and dispatch to the chosen trimmer.
 
     Args:
-        left: Left/forward (or single-end) FASTQ.
-        right: Right/reverse FASTQ for paired-end data, or None.
-        basename: Output file prefix; derived from ``left`` if not given.
+        read1: Read 1 (forward, or single-end) FASTQ.
+        read2: Read 2 (reverse) FASTQ for paired-end data, or None.
+        basename: Output file prefix; derived from ``read1`` if not given.
         method: Trimmer to use: ``"bbduk"``, ``"trimmomatic"`` or ``"fastp"``.
         cpus: Number of threads.
         memory: Java heap size in GB (BBDuk only).
@@ -84,19 +84,19 @@ def run(
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
     """
     if not basename:
-        basename = basename_from_reads(left)
+        basename = basename_from_reads(read1)
 
-    total = count_fastq(left)
-    if right:
+    total = count_fastq(read1)
+    if read2:
         total = total * 2
     logger.info(f"Loading {total:,} total reads")
 
     if method == "bbduk":
-        run_bbduk(left, right, basename, cpus, memory, minlen, avgqual, debug, pipe)
+        run_bbduk(read1, read2, basename, cpus, memory, minlen, avgqual, debug, pipe)
     elif method == "trimmomatic":
         run_trimmomatic(
-            left,
-            right,
+            read1,
+            read2,
             basename,
             cpus,
             minlen,
@@ -110,20 +110,20 @@ def run(
             pipe,
         )
     elif method == "fastp":
-        run_fastp(left, right, basename, cpus, minlen, avgqual, merge, dedup, cutfront, cuttail, cutright, debug, pipe)
+        run_fastp(read1, read2, basename, cpus, minlen, avgqual, merge, dedup, cutfront, cuttail, cutright, debug, pipe)
     else:
         logger.info(f"Unknown trimming method: {method}")
 
 
-def run_bbduk(left: str, right: str | None, basename: str, cpus: int, memory: int, minlen: int, avgqual: int, debug: bool, pipe: bool) -> None:
+def run_bbduk(read1: str, read2: str | None, basename: str, cpus: int, memory: int, minlen: int, avgqual: int, debug: bool, pipe: bool) -> None:
     """Trim reads with BBDuk.
 
     Paired reads are interleaved with ``shuffle.sh`` before trimming and split back into
     ``<basename>_1P``/``_2P`` files with ``reformat.sh``; single-end output is ``<basename>_1U``.
 
     Args:
-        left: Left/forward (or single-end) FASTQ.
-        right: Right/reverse FASTQ, or None for single-end.
+        read1: Read 1 (forward, or single-end) FASTQ.
+        read2: Read 2 (reverse) FASTQ, or None for single-end.
         basename: Output file prefix.
         cpus: Number of threads.
         memory: Java heap size in GB.
@@ -151,7 +151,7 @@ def run_bbduk(left: str, right: str | None, basename: str, cpus: int, memory: in
         "tbo",
         "overwrite=true",
     ]
-    if left and right:
+    if read1 and read2:
         # Paired mode (in1=/in2=) hits a bug in this BBDuk build's
         # PairStreamer on large/variable-length paired FASTQ: it silently
         # truncates the stream after a few hundred reads instead of
@@ -160,7 +160,7 @@ def run_bbduk(left: str, right: str | None, basename: str, cpus: int, memory: in
         # then de-interleave the trimmed output.
         interleaved_in = f"{basename}_ivl.fq.gz"
         interleaved_out = f"{basename}_ivl.trimmed.fq.gz"
-        shuffle_cmd = ["shuffle.sh", f"in1={left}", f"in2={right}", f"out={interleaved_in}"]
+        shuffle_cmd = ["shuffle.sh", f"in1={read1}", f"in2={read2}", f"out={interleaved_in}"]
         run_cmd(shuffle_cmd, debug)
 
         cmd = bbduk_base + [f"in={interleaved_in}", "interleaved=true", f"out={interleaved_out}"]
@@ -175,16 +175,16 @@ def run_bbduk(left: str, right: str | None, basename: str, cpus: int, memory: in
         run_cmd(reformat_cmd, debug)
         safe_remove(interleaved_in)
         safe_remove(interleaved_out)
-    elif left:
-        cmd = bbduk_base + [f"in={left}", f"out={basename}_1U.fastq.gz"]
+    elif read1:
+        cmd = bbduk_base + [f"in={read1}", f"out={basename}_1U.fastq.gz"]
         run_cmd(cmd, debug)
 
-    _report_trimmed(basename, right, pipe, cpus)
+    _report_trimmed(basename, read2, pipe, cpus)
 
 
 def run_trimmomatic(
-    left: str,
-    right: str | None,
+    read1: str,
+    read2: str | None,
     basename: str,
     cpus: int,
     minlen: int,
@@ -204,8 +204,8 @@ def run_trimmomatic(
     and returns without trimming if none is found.
 
     Args:
-        left: Left/forward (or single-end) FASTQ.
-        right: Right/reverse FASTQ, or None for single-end.
+        read1: Read 1 (forward, or single-end) FASTQ.
+        read2: Read 2 (reverse) FASTQ, or None for single-end.
         basename: Output file prefix.
         cpus: Number of threads.
         minlen: Minimum read length after trimming.
@@ -236,7 +236,7 @@ def run_trimmomatic(
     quality = f"-{quality}"  # add leading dash
 
     if not Path(path_to_adaptors).exists():
-        adaptor_name = TRIMMOMATIC_TRUSEQPE if right else TRIMMOMATIC_TRUSEQSE
+        adaptor_name = TRIMMOMATIC_TRUSEQPE if read2 else TRIMMOMATIC_TRUSEQSE
         path_to_adaptors = str(Path(jarfile).parent / adaptor_name)
 
         # otherwise look for <prefix>/share/trimmomatic/<adaptors> in each folder above the jar
@@ -251,7 +251,7 @@ def run_trimmomatic(
             raise FileNotFoundError(f"Cannot find the Trimmomatic adaptors file {trimmomatic_adaptors}; pass its path with --trimmomatic_adaptors")
     clipstr = f"ILLUMINACLIP:{path_to_adaptors}:{trimmomatic_clip}"
 
-    if left and right:
+    if read1 and read2:
         cmd = [
             "java",
             "-jar",
@@ -260,8 +260,8 @@ def run_trimmomatic(
             "-threads",
             str(cpus),
             quality,
-            left,
-            right,
+            read1,
+            read2,
             basename + "_1P.fastq.gz",
             basename + "_1U.fastq.gz",
             basename + "_2P.fastq.gz",
@@ -272,7 +272,7 @@ def run_trimmomatic(
             slidingwindow,
             f"MINLEN:{minlen}",
         ]
-    elif left and not right:
+    elif read1 and not read2:
         cmd = [
             "java",
             "-jar",
@@ -281,7 +281,7 @@ def run_trimmomatic(
             "-threads",
             str(cpus),
             quality,
-            left,
+            read1,
             basename + "_1U.fastq.gz",
             clipstr,
             leadingwindow,
@@ -290,29 +290,29 @@ def run_trimmomatic(
             f"MINLEN:{minlen}",
         ]
     else:
-        logger.info("Must provide left and right pairs or single read set")
+        logger.info("Must provide read1 and read2 pairs or a single read set")
         return
 
     logger.info("Running trimmomatic adapter and quality trimming")
     run_cmd(cmd, debug)
-    if right:
+    if read2:
         safe_remove(basename + "_1U.fastq.gz")
         safe_remove(basename + "_2U.fastq.gz")
         logger.info("Trimming finished:\nFor: {:}\nRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
         if not pipe:
-            logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
+            logger.info("Your next command might be:\n" + "AAFTF filter -1 {:} -2 {:} -o {:} -c {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
     else:
         logger.info("Trimming finished:\nSingle: {:}".format(basename + "_1U.fastq.gz"))
         if not pipe:
-            logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -o {:} -c {:}".format(basename + "_1U.fastq.gz", basename, cpus))
+            logger.info("Your next command might be:\n" + "AAFTF filter -1 {:} -o {:} -c {:}".format(basename + "_1U.fastq.gz", basename, cpus))
 
 
-def run_fastp(left: str, right: str | None, basename: str, cpus: int, minlen: int, avgqual: int, merge: bool, dedup: bool, cutfront: bool, cuttail: bool, cutright: bool, debug: bool, pipe: bool) -> None:
+def run_fastp(read1: str, read2: str | None, basename: str, cpus: int, minlen: int, avgqual: int, merge: bool, dedup: bool, cutfront: bool, cuttail: bool, cutright: bool, debug: bool, pipe: bool) -> None:
     """Trim reads with fastp, writing HTML and JSON reports alongside the trimmed FASTQ.
 
     Args:
-        left: Left/forward (or single-end) FASTQ.
-        right: Right/reverse FASTQ, or None for single-end.
+        read1: Read 1 (forward, or single-end) FASTQ.
+        read2: Read 2 (reverse) FASTQ, or None for single-end.
         basename: Output file prefix.
         cpus: Number of threads.
         minlen: Minimum read length after trimming.
@@ -337,19 +337,19 @@ def run_fastp(left: str, right: str | None, basename: str, cpus: int, minlen: in
         f"{cpus}",
     ]
 
-    if left and right:
+    if read1 and read2:
         # could add merging ...
         cmd += [
-            f"--in1={left}",
-            f"--in2={right}",
+            f"--in1={read1}",
+            f"--in2={read2}",
             f"--out1={basename}_1P.fastq.gz",
             f"--out2={basename}_2P.fastq.gz",
         ]
         if merge:
             cmd += ["--merge", f"--merged_out={basename}_MG.fastq.gz"]
 
-    elif left:
-        cmd += [f"--in={left}", f"--out={basename}_1U.fastq.gz"]
+    elif read1:
+        cmd += [f"--in={read1}", f"--out={basename}_1U.fastq.gz"]
     if dedup:
         cmd += ["--dedup"]
     if cutfront:
@@ -362,31 +362,31 @@ def run_fastp(left: str, right: str | None, basename: str, cpus: int, minlen: in
     cmd += [f"--html={basename}.fastp.html", f"--json={basename}.fastp.json"]
     run_cmd(cmd, debug)
 
-    _report_trimmed(basename, right, pipe, cpus)
+    _report_trimmed(basename, read2, pipe, cpus)
 
 
-def _report_trimmed(basename: str, right: str | None, pipe: bool, cpus: int) -> None:
+def _report_trimmed(basename: str, read2: str | None, pipe: bool, cpus: int) -> None:
     """Log the number of reads left after trimming and the suggested next command.
 
     Args:
         basename: Output file prefix of the trimmed reads.
-        right: Right/reverse FASTQ; truthy means paired-end output is counted.
+        read2: Read 2 (reverse) FASTQ; truthy means paired-end output is counted.
         pipe: Suppress the "next command" hint when True.
         cpus: Thread count shown in the suggested command.
     """
-    if right:
+    if read2:
         clean = count_fastq(f"{basename}_1P.fastq.gz")
         clean = clean * 2
         logger.info(f"{clean:,} reads remaining and writing to file")
         logger.info("Trimming finished:\nFor: {:}\nRev {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz"))
         if not pipe:
-            logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -r {:} -o {:} -c {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
+            logger.info("Your next command might be:\n" + "AAFTF filter -1 {:} -2 {:} -o {:} -c {:}".format(basename + "_1P.fastq.gz", basename + "_2P.fastq.gz", basename, cpus))
     else:
         clean = count_fastq(f"{basename}_1U.fastq.gz")
         logger.info(f"{clean:,} reads remaining and writing to file")
         logger.info("Trimming finished:\nSingle: {:}".format(basename + "_1U.fastq.gz"))
         if not pipe:
-            logger.info("Your next command might be:\n" + "AAFTF filter -l {:} -o {:} -c {:}".format(basename + "_1U.fastq.gz", basename, cpus))
+            logger.info("Your next command might be:\n" + "AAFTF filter -1 {:} -o {:} -c {:}".format(basename + "_1U.fastq.gz", basename, cpus))
 
 
 def _find_trimmomatic() -> str | None:

@@ -16,19 +16,19 @@ in ``aaftf/polish.py``:
   ``bwa index``, aligns each read file *separately* with ``bwa mem -a`` (reporting all
   alignments, as Polypolish requires), filters the resulting SAM pairs by insert size with
   ``polypolish filter``, then runs ``polypolish polish``. Requires paired reads
-  (``-l/--left`` and ``-r/--right``).
+  (``-1/--read1`` and ``-2/--read2``).
 * **pypolca** -- Single-pass polishing via `pypolca <https://github.com/replikation/pypolca>`_,
   a Python reimplementation of MaSuRCA's POLCA algorithm (``bwa`` + ``samtools`` + ``freebayes``,
   run internally by pypolca itself) that works with any modern samtools. AAFTF invokes
   ``pypolca run`` once against the input assembly with both read files and copies out the
   corrected FASTA plus its ``.vcf``/``.report`` outputs (saved as ``{output}.vcf`` /
-  ``{output}.pypolca_report.txt``). Requires ``-l/--left`` (and typically ``-r/--right``).
+  ``{output}.pypolca_report.txt``). Requires ``-1/--read1`` (and typically ``-2/--read2``).
 * **nextpolish2** -- Repeat-aware polishing of HiFi assemblies via
   `NextPolish2 <https://github.com/Nextomics/NextPolish2>`_. AAFTF builds a short-read k-mer
   database with ``yak count``, maps the HiFi long reads to the assembly with
   ``minimap2 -ax map-hifi`` (piped into ``samtools sort``), then runs ``nextPolish2`` using the
-  HiFi alignments plus the k-mer database. Requires both short reads (``-l/--left`` /
-  ``-r/--right``, used to build the k-mer database) and HiFi long reads (``-lr/--longreads``).
+  HiFi alignments plus the k-mer database. Requires both short reads (``-1/--read1`` /
+  ``-2/--read2``, used to build the k-mer database) and HiFi long reads (``-lr/--longreads``).
 * **racon** -- Long-read polishing via `Racon <https://github.com/isovic/racon>`_. AAFTF maps
   the long reads to the assembly with ``minimap2 -x map-ont`` to produce PAF overlaps, then runs
   ``racon`` using those overlaps to correct the assembly. Requires ``-lr/--longreads``; not
@@ -64,12 +64,12 @@ Invocation
 .. code-block:: text
 
     AAFTF polish -i INFILE [-o OUTFILE] --method {polypolish,pypolca,nextpolish2,racon}
-                [-l LEFT] [-r RIGHT] [-lr LONGREADS]
+                [-1 READ1] [-2 READ2] [-lr LONGREADS]
                 [-c CPUS] [-m MEMORY]
                 [-w WORKDIR] [-v] [--pipe]
 
-``-i/--infile`` is required. ``polypolish``/``pypolca`` need ``-l/--left`` (and typically
-``-r/--right``); ``nextpolish2`` needs both short reads and ``-lr/--longreads`` (HiFi);
+``-i/--infile`` is required. ``polypolish``/``pypolca`` need ``-1/--read1`` (and typically
+``-2/--read2``); ``nextpolish2`` needs both short reads and ``-lr/--longreads`` (HiFi);
 ``racon`` needs ``-lr/--longreads``.
 
 Example
@@ -80,19 +80,19 @@ Example
     # Polypolish (default)
     AAFTF polish -c 24 --memory 96 \
         -i genomes/STRAINX.rmdup.fasta -o genomes/STRAINX.polish.fasta \
-        --left reads_filtered_1.fastq.gz --right reads_filtered_2.fastq.gz
+        --read1 reads_filtered_1.fastq.gz --read2 reads_filtered_2.fastq.gz
 
     # pypolca instead of Polypolish
     AAFTF polish --method pypolca \
         -c 24 --memory 96 \
         -i genomes/STRAINX.rmdup.fasta -o genomes/STRAINX.polish.fasta \
-        --left reads_filtered_1.fastq.gz --right reads_filtered_2.fastq.gz
+        --read1 reads_filtered_1.fastq.gz --read2 reads_filtered_2.fastq.gz
 
     # NextPolish2 (HiFi + short reads for the k-mer database)
     AAFTF polish --method nextpolish2 \
         -c 24 --memory 96 \
         -i genomes/STRAINX.rmdup.fasta -o genomes/STRAINX.polish.fasta \
-        --left reads_filtered_1.fastq.gz --right reads_filtered_2.fastq.gz \
+        --read1 reads_filtered_1.fastq.gz --read2 reads_filtered_2.fastq.gz \
         --longreads hifi_reads.fastq.gz
 
     # Racon (ONT/PacBio long reads only)

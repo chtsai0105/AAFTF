@@ -158,22 +158,22 @@ def trim_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     optional = parser_trim.add_argument_group("optional arguments")
 
     required.add_argument(
-        "-l",
-        "--left",
+        "-1",
+        "--read1",
         type=str,
         metavar="FASTQ",
         required=True,
-        help="left/forward reads of paired-end FASTQ or single-end FASTQ.",
+        help="Read 1 (forward) of paired-end FASTQ, or single-end FASTQ.",
     )
 
-    optional.add_argument("-r", "--right", type=str, metavar="FASTQ", help="right/reverse reads of paired-end FASTQ.")
+    optional.add_argument("-2", "--read2", type=str, metavar="FASTQ", help="Read 2 (reverse) of paired-end FASTQ.")
 
     optional.add_argument(
         "-o",
         "--out",
         type=str,
         dest="basename",
-        help="Output basename, default to base name of --left reads",
+        help="Output basename, default to base name of --read1 reads",
     )
 
     optional.add_argument("-ml", "--minlen", type=int, metavar="INT", default=75, help="Minimum read length after trimming")
@@ -263,9 +263,9 @@ def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_mito.add_argument_group("required arguments")
     optional = parser_mito.add_argument_group("optional arguments")
 
-    required.add_argument("-l", "--left", type=str, required=True, help="Left (Forward) reads")
+    required.add_argument("-1", "--read1", type=str, required=True, help="Read 1 (forward) FASTQ")
 
-    required.add_argument("-r", "--right", type=str, required=True, help="Right (Reverse) reads")
+    required.add_argument("-2", "--read2", type=str, required=True, help="Read 2 (reverse) FASTQ")
 
     optional.add_argument("-o", "--out", type=str, default="mito.fasta", help="Output FASTA file for mitochondrial genome")
 
@@ -325,9 +325,9 @@ def filter_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_filter.add_argument_group("required arguments")
     optional = parser_filter.add_argument_group("optional arguments")
 
-    required.add_argument("-l", "--left", type=str, required=True, help="Left (Forward) reads")
+    required.add_argument("-1", "--read1", type=str, required=True, help="Read 1 (forward) FASTQ")
 
-    optional.add_argument("-r", "--right", type=str, help="Right (Reverse) reads")
+    optional.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) FASTQ")
 
     optional.add_argument("-o", "--out", dest="basename", type=str, help="Output basename")
 
@@ -383,11 +383,11 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     optional = parser_asm.add_argument_group("optional arguments")
 
     required.add_argument(
-        "-l",
-        "--left",
+        "-1",
+        "--read1",
         type=str,
         required=True,  # every implemented --method (spades/megahit/unicycler) requires this
-        help="Left (Forward) reads",
+        help="Read 1 (forward) FASTQ",
     )
 
     required.add_argument(
@@ -398,7 +398,7 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="Output assembly FASTA",
     )
 
-    optional.add_argument("-r", "--right", type=str, help="Right (Reverse) reads")
+    optional.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) FASTQ")
 
     optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="assembly output directory")
 
@@ -634,9 +634,9 @@ def sourpurge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         help="Temporary directory to store datafiles and processes in",
     )
 
-    optional.add_argument("-l", "--left", type=str, help="Left (Forward) reads")
+    optional.add_argument("-1", "--read1", type=str, help="Read 1 (forward) FASTQ")
 
-    optional.add_argument("-r", "--right", type=str, help="Right (Reverse) reads")
+    optional.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) FASTQ")
 
     optional.add_argument("--sourdb", type=str, help="SourMash LCA taxonomy database (defaults to k-31)")
 
@@ -754,9 +754,9 @@ def polish_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     shortread_group = parser_polish.add_argument_group(title="polypolish / pypolca / NextPolish2 required arguments")
 
-    shortread_group.add_argument("-l", "--left", type=str, help="Left (Forward) reads; required for short read polishing methods")
+    shortread_group.add_argument("-1", "--read1", type=str, help="Read 1 (forward) FASTQ; required for short read polishing methods")
 
-    shortread_group.add_argument("-r", "--right", type=str, help="Right (Reverse) reads; required for short read polishing methods")
+    shortread_group.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) FASTQ; required for short read polishing methods")
 
     longread_group = parser_polish.add_argument_group(title="NextPolish2 / Racon required arguments")
 
@@ -931,17 +931,17 @@ def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     )
 
     required.add_argument(
-        "-l",
-        "--left",
+        "-1",
+        "--read1",
         type=str,
-        help="Left (Forward) Illumina reads FASTQ",
+        help="Read 1 (forward) Illumina FASTQ",
     )
 
     optional.add_argument(
-        "-r",
-        "--right",
+        "-2",
+        "--read2",
         type=str,
-        help="Right (Reverse) Illumina reads FASTQ",
+        help="Read 2 (reverse) Illumina FASTQ",
     )
 
     optional.add_argument(
@@ -1035,7 +1035,7 @@ def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     required = parser_pipeline.add_argument_group("required arguments")
     optional = parser_pipeline.add_argument_group("optional arguments")
 
-    required.add_argument("-l", "--left", type=str, required=True, help="left/forward reads of paired-end FASTQ or single-end FASTQ.")
+    required.add_argument("-1", "--read1", type=str, required=True, help="Read 1 (forward) of paired-end FASTQ, or single-end FASTQ.")
 
     required.add_argument("-o", "--out", type=str, required=True, dest="basename", help="Output basename (prefix for every step's output files)")
 
@@ -1047,7 +1047,7 @@ def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     optional.add_argument("--assembler_args", action="append", help="Additional SPAdes/Megahit arguments")
     optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler"], default="spades", help="Assembly method: spades, megahit, unicycler")
 
-    optional.add_argument("-r", "--right", type=str, help="right/reverse reads of paired-end FASTQ.")
+    optional.add_argument("-2", "--read2", type=str, help="Read 2 (reverse) of paired-end FASTQ.")
 
     optional.add_argument("-m", "--memory", type=int, dest="memory", help="Memory (in GB) for every step that takes -m/--memory (trim, filter, assemble, polish); default: each step's own default")
 

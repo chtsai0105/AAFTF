@@ -65,14 +65,14 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF pipeline -l LEFT [-r RIGHT] -o BASENAME -p PHYLUM [PHYLUM ...]
+    AAFTF pipeline -1 READ1 [-2 READ2] -o BASENAME -p PHYLUM [PHYLUM ...]
                    [-c CPUS] [-m MEMORY] [-ml MINLEN]
                    [-mc MINCONTIGLEN] [--method {spades,megahit,unicycler}]
                    [-a ACCESSIONS ...] [-u URLS ...] [--sourdb PATH]
                    [--mincovpct PCT] [-w WORKDIR]
                    [--assembler_args ARG ...] [--tmpdir DIR] [-v] [--pipe]
 
-``-l/--left``, ``-o/--out`` (basename), and ``-p/--phylum`` are required.
+``-1/--read1``, ``-o/--out`` (basename), and ``-p/--phylum`` are required.
 
 Example
 =======
@@ -82,7 +82,7 @@ Example
     export AAFTF_DB=~/lib/AAFTF_DB
 
     AAFTF pipeline \
-        -l reads/STRAINX_R1.fq.gz -r reads/STRAINX_R2.fq.gz \
+        -1 reads/STRAINX_R1.fq.gz -2 reads/STRAINX_R2.fq.gz \
         -o STRAINX -c 24 -m 96 \
         --phylum Ascomycota
 

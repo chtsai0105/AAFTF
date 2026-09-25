@@ -29,10 +29,10 @@ logger = logging.getLogger(__name__)
 
 
 def run(
-    left: str,
+    read1: str,
     basename: str,
     phylum: list[str],
-    right: str | None = None,
+    read2: str | None = None,
     cpus: int = 1,
     tmpdir: str | None = None,
     assembler_args: list[str] | None = None,
@@ -52,10 +52,10 @@ def run(
     """Run the whole AAFTF pipeline, skipping steps whose output file already exists.
 
     Args:
-        left: Left/forward (or single-end) raw FASTQ reads.
+        read1: Read 1 (forward, or single-end) raw FASTQ reads.
         basename: Prefix for every output file (``{basename}_1P.fastq.gz``, ``{basename}.final.fasta``, ...).
         phylum: Phyla whose sourmash matches are kept by ``sourpurge``.
-        right: Right/reverse raw FASTQ reads, or None for single-end data.
+        read2: Read 2 (reverse) raw FASTQ reads, or None for single-end data.
         cpus: Threads for every step that takes ``-c/--cpus``.
         tmpdir: Assembler temporary directory.
         assembler_args: Extra arguments passed through to the assembler.
@@ -77,14 +77,14 @@ def run(
     """
     # passed to every step that has an option of the same name
     shared = {"cpus": cpus, "memory": memory, "workdir": workdir, "debug": debug, "quiet": quiet}
-    trimmed_1, trimmed_2 = basename + "_1P.fastq.gz", (basename + "_2P.fastq.gz" if right else None)
-    filtered_1, filtered_2 = basename + "_filtered_1.fastq.gz", (basename + "_filtered_2.fastq.gz" if right else None)
+    trimmed_1, trimmed_2 = basename + "_1P.fastq.gz", (basename + "_2P.fastq.gz" if read2 else None)
+    filtered_1, filtered_2 = basename + "_filtered_1.fastq.gz", (basename + "_filtered_2.fastq.gz" if read2 else None)
 
-    _run_step(trim, "trim", trimmed_1, shared, left=left, right=right, basename=basename, minlen=minlen)
-    _run_step(aaftf_filter, "filter", filtered_1, shared, left=trimmed_1, right=trimmed_2, basename=basename, screen_accessions=screen_accessions, screen_urls=screen_urls)
+    _run_step(trim, "trim", trimmed_1, shared, read1=read1, read2=read2, basename=basename, minlen=minlen)
+    _run_step(aaftf_filter, "filter", filtered_1, shared, read1=trimmed_1, read2=trimmed_2, basename=basename, screen_accessions=screen_accessions, screen_urls=screen_urls)
 
     assembly = basename + f".{method}.fasta"
-    _run_step(assemble, "assemble", assembly, shared, left=filtered_1, right=filtered_2, out=assembly, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
+    _run_step(assemble, "assemble", assembly, shared, read1=filtered_1, read2=filtered_2, out=assembly, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
 
     vecscreen_file = basename + ".vecscreen.fasta"
     _run_step(vecscreen, "vecscreen", vecscreen_file, shared, infile=assembly, outfile=vecscreen_file)
@@ -97,8 +97,8 @@ def run(
         shared,
         input=vecscreen_file,
         outfile=sourpurge_file,
-        left=filtered_1,
-        right=filtered_2,
+        read1=filtered_1,
+        read2=filtered_2,
         phylum=phylum,
         sourdb=sourdb,
         mincovpct=mincovpct,
@@ -108,7 +108,7 @@ def run(
     _run_step(rmdup, "rmdup", rmdup_file, shared, input=sourpurge_file, out=rmdup_file, minlen=mincontiglen)
 
     polish_file = basename + ".polish.fasta"
-    _run_step(polish, "polish", polish_file, shared, infile=rmdup_file, outfile=polish_file, left=filtered_1, right=filtered_2)
+    _run_step(polish, "polish", polish_file, shared, infile=rmdup_file, outfile=polish_file, read1=filtered_1, read2=filtered_2)
 
     final_file = basename + ".final.fasta"
     _run_step(aaftf_sort, "sort", final_file, shared, input=polish_file, out=final_file, minlen=mincontiglen)

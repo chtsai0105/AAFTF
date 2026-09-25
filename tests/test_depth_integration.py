@@ -138,8 +138,8 @@ def _depth_args(synthetic_data, tmp_path, **overrides):
     """Build a complete Namespace for depth.run() with sensible defaults."""
     defaults = dict(
         input=synthetic_data.genome,
-        left=synthetic_data.r1,
-        right=synthetic_data.r2,
+        read1=synthetic_data.r1,
+        read2=synthetic_data.r2,
         longreads=None,
         illumina_preset="sr",
         longread_preset="map-ont",
@@ -171,8 +171,8 @@ class TestMapReadsReal:
         workdir.mkdir()
         bam_ill, bam_lr, bam_combined = depth.map_reads(
             genome=synthetic_data.genome,
-            reads_left=synthetic_data.r1,
-            reads_right=synthetic_data.r2,
+            read1=synthetic_data.r1,
+            read2=synthetic_data.r2,
             longreads=None,
             workdir=str(workdir),
             cpus=2,
@@ -192,8 +192,8 @@ class TestMapReadsReal:
         workdir.mkdir()
         _, _, bam = depth.map_reads(
             genome=synthetic_data.genome,
-            reads_left=synthetic_data.r1,
-            reads_right=synthetic_data.r2,
+            read1=synthetic_data.r1,
+            read2=synthetic_data.r2,
             longreads=None,
             workdir=str(workdir),
             cpus=2,
@@ -217,8 +217,8 @@ class TestMosdepthReal:
         workdir.mkdir()
         _, _, bam = depth.map_reads(
             genome=synthetic_data.genome,
-            reads_left=synthetic_data.r1,
-            reads_right=synthetic_data.r2,
+            read1=synthetic_data.r1,
+            read2=synthetic_data.r2,
             longreads=None,
             workdir=str(workdir),
             cpus=2,
@@ -240,8 +240,8 @@ class TestMosdepthReal:
         workdir.mkdir()
         _, _, bam = depth.map_reads(
             genome=synthetic_data.genome,
-            reads_left=synthetic_data.r1,
-            reads_right=synthetic_data.r2,
+            read1=synthetic_data.r1,
+            read2=synthetic_data.r2,
             longreads=None,
             workdir=str(workdir),
             cpus=2,
@@ -262,8 +262,8 @@ class TestMosdepthReal:
         workdir.mkdir()
         _, _, bam = depth.map_reads(
             genome=synthetic_data.genome,
-            reads_left=synthetic_data.r1,
-            reads_right=synthetic_data.r2,
+            read1=synthetic_data.r1,
+            read2=synthetic_data.r2,
             longreads=None,
             workdir=str(workdir),
             cpus=2,

@@ -2,7 +2,7 @@
 #
 # Usage:
 #   docker compose run --rm aaftf AAFTF --help
-#   docker compose run --rm aaftf AAFTF trim --left /data/R1.fq.gz --right /data/R2.fq.gz
+#   docker compose run --rm aaftf AAFTF trim --read1 /data/R1.fq.gz --read2 /data/R2.fq.gz
 #
 # Environment variables (override on the command line or in a .env file):
 #   DATA_DIR   — host path to your FASTQ / assembly data  (default: ./data)

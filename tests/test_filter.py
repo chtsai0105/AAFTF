@@ -2,11 +2,11 @@
 
 Covers:
   - CLI parser defaults and flag presence for the 'filter' subcommand
-  - run() guard: no left reads → sys.exit(1)
+  - run() guard: no read1 reads → sys.exit(1)
   - bbduk command construction for paired-end and single-end reads
   - bwa/bowtie2/minimap2 command construction
   - contamdb FASTA is created from source files
-  - basename auto-derivation from left-reads filename
+  - basename auto-derivation from read1-reads filename
 
 External network access and actual aligners are mocked throughout.
 """
@@ -51,15 +51,15 @@ def _parse_filter(argv):
 _UNSET = object()
 
 
-def _make_filter_args(tmp_path, left=_UNSET, right=None, aligner="bbduk", **overrides):
-    if left is _UNSET:
-        left = str(tmp_path / "sample_R1.fastq.gz")
+def _make_filter_args(tmp_path, read1=_UNSET, read2=None, aligner="bbduk", **overrides):
+    if read1 is _UNSET:
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
     defaults = dict(
         workdir=str(tmp_path / "workdir"),
         cpus=1,
         memory=None,
-        left=left,
-        right=right,
+        read1=read1,
+        read2=read2,
         basename=None,
         aligner=aligner,
         screen_accessions=None,
@@ -112,70 +112,70 @@ def _stub_databases():
 
 class TestFilterParser:
     def test_debug_false_by_default(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
         assert args.debug is False
 
     def test_debug_flag_sets_true(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq", "-v"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq", "-v"])
         assert args.debug is True
 
     def test_pipe_false_by_default(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
         assert args.pipe is False
 
     def test_pipe_flag_sets_true(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq", "--pipe"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq", "--pipe"])
         assert args.pipe is True
 
     def test_default_aligner_is_bbduk(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
         assert args.aligner == "bbduk"
 
     def test_aligner_bowtie2(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq", "--aligner", "bowtie2"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq", "--aligner", "bowtie2"])
         assert args.aligner == "bowtie2"
 
     def test_aligner_bwa(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq", "--aligner", "bwa"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq", "--aligner", "bwa"])
         assert args.aligner == "bwa"
 
     def test_aligner_minimap2(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq", "--aligner", "minimap2"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq", "--aligner", "minimap2"])
         assert args.aligner == "minimap2"
 
     def test_default_cpus(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
         assert args.cpus == 1
 
     def test_custom_cpus(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq", "-c", "4"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq", "-c", "4"])
         assert args.cpus == 4
 
     def test_screen_accessions_none_by_default(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
         assert args.screen_accessions is None
 
     def test_screen_urls_none_by_default(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
         assert args.screen_urls is None
 
     def test_screen_local_none_by_default(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
         assert args.screen_local is None
 
-    def test_parses_left_reads(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
-        assert args.left == "R1.fq"
+    def test_parses_read1_reads(self):
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
+        assert args.read1 == "R1.fq"
 
-    def test_parses_right_reads(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq", "-r", "R2.fq"])
-        assert args.right == "R2.fq"
+    def test_parses_read2_reads(self):
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq", "-2", "R2.fq"])
+        assert args.read2 == "R2.fq"
 
-    def test_right_none_by_default(self):
-        args = _parse_filter(["AAFTF", "filter", "-l", "R1.fq"])
-        assert args.right is None
+    def test_read2_none_by_default(self):
+        args = _parse_filter(["AAFTF", "filter", "-1", "R1.fq"])
+        assert args.read2 is None
 
-    def test_missing_left_exits_nonzero(self):
+    def test_missing_read1_exits_nonzero(self):
         with patch.object(sys, "argv", ["AAFTF", "filter"]):
             with pytest.raises(SystemExit) as exc:
                 main()
@@ -189,13 +189,13 @@ class TestFilterParser:
 
 
 # ---------------------------------------------------------------------------
-# run() guard: no left reads
+# run() guard: no read1 reads
 # ---------------------------------------------------------------------------
 
 
 class TestFilterRunGuards:
-    def test_no_left_raises(self, tmp_path):
-        args = _make_filter_args(tmp_path, left=None)
+    def test_no_read1_raises(self, tmp_path):
+        args = _make_filter_args(tmp_path, read1=None)
         from aaftf.filter import run
 
         with patch("aaftf.filter.download_file", side_effect=_mock_download):
@@ -211,8 +211,8 @@ class TestFilterRunGuards:
 
 class TestFilterContamdbCreation:
     def test_contamdb_created_in_workdir(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        args = _make_filter_args(tmp_path, left=left, aligner="bbduk")
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        args = _make_filter_args(tmp_path, read1=read1, aligner="bbduk")
         workdir = Path(args.workdir)
         workdir.mkdir(parents=True, exist_ok=True)
 
@@ -227,10 +227,10 @@ class TestFilterContamdbCreation:
         assert contamdb.exists()
 
     def test_screen_local_added_to_contamdb(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
         local_fa = tmp_path / "extra.fa"
         local_fa.write_text(">extra\nATCGATCG\n")
-        args = _make_filter_args(tmp_path, left=left, aligner="bbduk", screen_local=[str(local_fa)])
+        args = _make_filter_args(tmp_path, read1=read1, aligner="bbduk", screen_local=[str(local_fa)])
         Path(args.workdir).mkdir(parents=True, exist_ok=True)
 
         from aaftf.filter import run
@@ -245,8 +245,8 @@ class TestFilterContamdbCreation:
         assert ">extra" in content
 
     def test_contamdb_contains_downloaded_stubs(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        args = _make_filter_args(tmp_path, left=left, aligner="bbduk")
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        args = _make_filter_args(tmp_path, read1=read1, aligner="bbduk")
         Path(args.workdir).mkdir(parents=True, exist_ok=True)
 
         from aaftf.filter import run
@@ -265,9 +265,9 @@ class TestFilterContamdbCreation:
 # ---------------------------------------------------------------------------
 
 
-def _run_filter_bbduk(tmp_path, left, right=None, **extra):
+def _run_filter_bbduk(tmp_path, read1, read2=None, **extra):
     """Run filter.run() with aligner=bbduk; return captured subprocess commands."""
-    args = _make_filter_args(tmp_path, left=left, right=right, aligner="bbduk", **extra)
+    args = _make_filter_args(tmp_path, read1=read1, read2=read2, aligner="bbduk", **extra)
     Path(args.workdir).mkdir(parents=True, exist_ok=True)
     cmds = []
 
@@ -285,50 +285,50 @@ class TestFilterRunBbduk:
     # the BBDuk PairStreamer paired-mode workaround), so a given argument may
     # land on any of the three commands rather than the first.
     def test_pe_command_includes_in(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, _ = _run_filter_bbduk(tmp_path, left, right)
-        assert any(f"in1={left}" in " ".join(c) for c in cmds)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, _ = _run_filter_bbduk(tmp_path, read1, read2)
+        assert any(f"in1={read1}" in " ".join(c) for c in cmds)
 
     def test_pe_command_includes_in2(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, _ = _run_filter_bbduk(tmp_path, left, right)
-        assert any(f"in2={right}" in " ".join(c) for c in cmds)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, _ = _run_filter_bbduk(tmp_path, read1, read2)
+        assert any(f"in2={read2}" in " ".join(c) for c in cmds)
 
     def test_pe_output_files_use_filtered_basename(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, _ = _run_filter_bbduk(tmp_path, left, right)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, _ = _run_filter_bbduk(tmp_path, read1, read2)
         assert any("sample_filtered_1.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_se_output_uses_u_suffix(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        cmds, _ = _run_filter_bbduk(tmp_path, left, right=None)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        cmds, _ = _run_filter_bbduk(tmp_path, read1, read2=None)
         cmd_str = " ".join(cmds[0])
         assert "sample_filtered_U.fastq.gz" in cmd_str
 
     def test_command_starts_with_bbduk(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, _ = _run_filter_bbduk(tmp_path, left, right)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, _ = _run_filter_bbduk(tmp_path, read1, read2)
         assert any(c[0] == "bbduk.sh" for c in cmds)
 
     def test_command_includes_contamdb_ref(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, args = _run_filter_bbduk(tmp_path, left, right)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, args = _run_filter_bbduk(tmp_path, read1, read2)
         # contamdb.fa is passed via ref= argument on the bbduk.sh step
         assert any("contamdb.fa" in " ".join(c) for c in cmds)
 
     def test_basename_derived_from_underscore_split(self, tmp_path):
-        left = str(tmp_path / "MySample_R1.fastq.gz")
-        cmds, _ = _run_filter_bbduk(tmp_path, left)
+        read1 = str(tmp_path / "MySample_R1.fastq.gz")
+        cmds, _ = _run_filter_bbduk(tmp_path, read1)
         assert any("MySample_filtered_U.fastq.gz" in " ".join(c) for c in cmds)
 
     def test_explicit_basename_preserved(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        cmds, _ = _run_filter_bbduk(tmp_path, left, basename="custom")
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        cmds, _ = _run_filter_bbduk(tmp_path, read1, basename="custom")
         assert any("custom_filtered_U.fastq.gz" in " ".join(c) for c in cmds)
 
 
@@ -337,9 +337,9 @@ class TestFilterRunBbduk:
 # ---------------------------------------------------------------------------
 
 
-def _run_filter_bwa(tmp_path, left, right=None, **extra):
+def _run_filter_bwa(tmp_path, read1, read2=None, **extra):
     """Run filter.run() with aligner=bwa; return captured subprocess commands."""
-    args = _make_filter_args(tmp_path, left=left, right=right, aligner="bwa", **extra)
+    args = _make_filter_args(tmp_path, read1=read1, read2=read2, aligner="bwa", **extra)
     workdir = Path(args.workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     cmds = []
@@ -381,31 +381,31 @@ def _run_filter_bwa(tmp_path, left, right=None, **extra):
 
 class TestFilterRunBwa:
     def test_bwa_index_called(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, popen_cmds, _ = _run_filter_bwa(tmp_path, left, right)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, popen_cmds, _ = _run_filter_bwa(tmp_path, read1, read2)
         all_cmds = cmds + popen_cmds
         assert any(c and c[0] == "bwa" and "index" in c for c in all_cmds)
 
     def test_bwa_mem_called(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, popen_cmds, _ = _run_filter_bwa(tmp_path, left, right)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, popen_cmds, _ = _run_filter_bwa(tmp_path, read1, read2)
         all_cmds = cmds + popen_cmds
         assert any(c and c[0] == "bwa" and "mem" in c for c in all_cmds)
 
     def test_bwa_mem_includes_reads(self, tmp_path):
-        left = str(tmp_path / "sample_R1.fastq.gz")
-        right = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, popen_cmds, _ = _run_filter_bwa(tmp_path, left, right)
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        cmds, popen_cmds, _ = _run_filter_bwa(tmp_path, read1, read2)
         mem_cmds = [c for c in popen_cmds if c and c[0] == "bwa" and "mem" in c]
         assert len(mem_cmds) > 0
-        assert left in mem_cmds[0]
+        assert read1 in mem_cmds[0]
 
 
 class TestFilterDatabases:
     def _run(self, tmp_path, **extra):
-        args = _make_filter_args(tmp_path, left=str(tmp_path / "sample_R1.fastq.gz"), **extra)
+        args = _make_filter_args(tmp_path, read1=str(tmp_path / "sample_R1.fastq.gz"), **extra)
         from aaftf.filter import run
 
         calls = []

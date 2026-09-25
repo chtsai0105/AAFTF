@@ -24,8 +24,8 @@ _SUBSAMPLE_SEED = 42
 
 
 def run(
-    left: str,
-    right: str,
+    read1: str,
+    read2: str,
     out: str = "mito.fasta",
     workdir: str | None = None,
     minlen: int = 10000,
@@ -56,8 +56,8 @@ def run(
     are written as ``contig_N``.
 
     Args:
-        left: Forward reads FASTQ.
-        right: Reverse reads FASTQ.
+        read1: Forward reads FASTQ.
+        read2: Reverse reads FASTQ.
         out: Output FASTA path.
         workdir: Working directory; a temporary one is created when None.
         minlen: Minimum expected genome size (NOVOPlasty genome range).
@@ -82,10 +82,10 @@ def run(
     workdir, custom_workdir = make_workdir(workdir, "mito")
 
     if subsample:
-        left, right = _subsample_pairs(left, right, subsample, workdir, memory, debug)
+        read1, read2 = _subsample_pairs(read1, read2, subsample, workdir, memory, debug)
 
     # now estimate read lengths of FASTQ
-    read_len = estimate_read_length(left)
+    read_len = estimate_read_length(read1)
 
     # NOVOPlasty seed: --seed, else the bundled default (copied into the work directory so
     # NOVOPlasty gets a real file path even from a zipped install)
@@ -103,8 +103,8 @@ def run(
         "<MAXMEM>": str(memory),
         "<SEED>": seed_fasta,
         "<READLEN>": str(read_len),
-        "<FORWARD>": str(Path(left).resolve()),
-        "<REVERSE>": str(Path(right).resolve()),
+        "<FORWARD>": str(Path(read1).resolve()),
+        "<REVERSE>": str(Path(read2).resolve()),
     }
     config_text = (_PACKAGE_DATA / "novoplasty-config.txt").read_text()
     for placeholder, value in placeholders.items():
@@ -150,15 +150,15 @@ def run(
     cleanup_workdir(workdir, debug, custom_workdir)
 
 
-def _subsample_pairs(left: str, right: str, pairs: int, workdir: str, memory: int, debug: bool) -> tuple[str, str]:
-    """Randomly keep ``pairs`` read pairs from ``left``/``right`` with BBTools ``reformat.sh``.
+def _subsample_pairs(read1: str, read2: str, pairs: int, workdir: str, memory: int, debug: bool) -> tuple[str, str]:
+    """Randomly keep ``pairs`` read pairs from ``read1``/``read2`` with BBTools ``reformat.sh``.
 
     Both files are sampled together so mates stay paired, with a fixed seed so reruns keep the
     same pairs. If there are fewer than ``pairs`` pairs, all of them are kept.
 
     Args:
-        left: Forward reads FASTQ.
-        right: Reverse reads FASTQ.
+        read1: Forward reads FASTQ.
+        read2: Reverse reads FASTQ.
         pairs: Number of read pairs to keep.
         workdir: Directory the subsampled FASTQ files are written to.
         memory: Java heap size for ``reformat.sh``, in GB.
@@ -175,8 +175,8 @@ def _subsample_pairs(left: str, right: str, pairs: int, workdir: str, memory: in
     cmd = [
         "reformat.sh",
         f"-Xmx{memory}g",
-        f"in={left}",
-        f"in2={right}",
+        f"in={read1}",
+        f"in2={read2}",
         f"out={sub_left}",
         f"out2={sub_right}",
         f"samplereadstarget={pairs}",
@@ -185,7 +185,7 @@ def _subsample_pairs(left: str, right: str, pairs: int, workdir: str, memory: in
     ]
     logger.info(f"Subsampling to {pairs:,} read pairs")
     if run_cmd(cmd, debug).returncode != 0:
-        raise RuntimeError(f"reformat.sh failed to subsample {left} / {right}")
+        raise RuntimeError(f"reformat.sh failed to subsample {read1} / {read2}")
     return sub_left, sub_right
 
 

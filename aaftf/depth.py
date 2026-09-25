@@ -60,8 +60,8 @@ _HEATMAP_MAX_LENGTH_RATIO = 10  # max longest/shortest contig length ratio per p
 def run(
     input: str,
     out: str = "coverage_stats.txt",
-    left: str | None = None,
-    right: str | None = None,
+    read1: str | None = None,
+    read2: str | None = None,
     longreads: str | None = None,
     longread_preset: str | None = None,
     aligner: str = "minimap2",
@@ -87,8 +87,8 @@ def run(
     Args:
         input: Path to the genome assembly FASTA.
         out: Path of the coverage report to write.
-        left: Forward (or single-end) Illumina FASTQ, or None.
-        right: Reverse Illumina FASTQ, or None.
+        read1: Forward (or single-end) Illumina FASTQ, or None.
+        read2: Reverse Illumina FASTQ, or None.
         longreads: Long-read FASTQ, or None.
         longread_preset: minimap2 preset for long reads (``map-ont``, ``map-pb`` or ``map-hifi``);
             required when ``longreads`` is given.
@@ -103,15 +103,15 @@ def run(
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
 
     Raises:
-        ValueError: If neither ``left`` nor ``longreads`` is given, or ``longreads`` lacks a preset.
+        ValueError: If neither ``read1`` nor ``longreads`` is given, or ``longreads`` lacks a preset.
         FileNotFoundError: If the assembly or a read file is missing or empty.
         RuntimeError: If mapping produces no BAM or mosdepth produces no summary file.
     """
     # ------------------------------------------------------------------
     # Validate inputs
     # ------------------------------------------------------------------
-    if not left and not longreads:
-        raise ValueError("provide at least --left (Illumina) or --longreads")
+    if not read1 and not longreads:
+        raise ValueError("provide at least --read1 (Illumina) or --longreads")
 
     if longreads and not longread_preset:
         raise ValueError("--longread_preset is required when --longreads is provided (map-ont, map-pb, or map-hifi)")
@@ -120,11 +120,11 @@ def run(
         raise FileNotFoundError(f"assembly file not found or empty: {input}")
 
     genome = str(Path(input).resolve())
-    reads_left = str(Path(left).resolve()) if left else None
-    reads_right = str(Path(right).resolve()) if right else None
+    read1 = str(Path(read1).resolve()) if read1 else None
+    read2 = str(Path(read2).resolve()) if read2 else None
     longreads = str(Path(longreads).resolve()) if longreads else None
 
-    for label, fpath in [("--left", reads_left), ("--right", reads_right), ("--longreads", longreads)]:
+    for label, fpath in [("--read1", read1), ("--read2", read2), ("--longreads", longreads)]:
         if fpath and not check_file(fpath):
             raise FileNotFoundError(f"read file not found or empty ({label}): {fpath}")
 
@@ -132,7 +132,7 @@ def run(
     # Check required tools
     # ------------------------------------------------------------------
     required = {"samtools", "mosdepth"}
-    if reads_left:
+    if read1:
         required.add(aligner)
     if longreads:
         required.add("minimap2")
@@ -156,7 +156,7 @@ def run(
     # ------------------------------------------------------------------
     logger.info("Counting input reads...")
     read_counts = {}  # -1 marks a file that could not be read; reported as "unknown"
-    for key, fastq in (("left", reads_left), ("right", reads_right), ("long", longreads)):
+    for key, fastq in (("read1", read1), ("read2", read2), ("long", longreads)):
         if fastq:
             logger.info(f"Counting reads in {Path(fastq).name}")
             try:
@@ -170,8 +170,8 @@ def run(
     logger.info("Mapping reads to assembly...")
     bam_illumina, bam_longreads, bam_combined = map_reads(
         genome,
-        reads_left,
-        reads_right,
+        read1,
+        read2,
         longreads,
         workdir,
         cpus,
@@ -258,13 +258,13 @@ def run(
 
         # --- Section 1: Read Input Summary ---
         fout.write("=== 1. Read Input Summary ===\n")
-        if reads_left:
-            n = read_counts["left"]
-            fout.write(f"  Illumina left reads:  {reads_left}\n")
+        if read1:
+            n = read_counts["read1"]
+            fout.write(f"  Illumina read 1:  {read1}\n")
             fout.write(f"    Read count:         {n:,}\n" if n >= 0 else "    Read count:         unknown\n")
-        if reads_right:
-            n = read_counts["right"]
-            fout.write(f"  Illumina right reads: {reads_right}\n")
+        if read2:
+            n = read_counts["read2"]
+            fout.write(f"  Illumina read 2:  {read2}\n")
             fout.write(f"    Read count:         {n:,}\n" if n >= 0 else "    Read count:         unknown\n")
         if longreads:
             fout.write(f"  Long reads:           {longreads}\n")
@@ -340,8 +340,8 @@ def run(
 
 def map_reads(
     genome: str,
-    reads_left: str | None,
-    reads_right: str | None,
+    read1: str | None,
+    read2: str | None,
     longreads: str | None,
     workdir: str,
     cpus: int,
@@ -358,8 +358,8 @@ def map_reads(
 
     Args:
         genome: Absolute path to genome assembly FASTA.
-        reads_left: Path to forward Illumina FASTQ (or None).
-        reads_right: Path to reverse Illumina FASTQ (or None).
+        read1: Path to forward Illumina FASTQ (or None).
+        read2: Path to reverse Illumina FASTQ (or None).
         longreads: Path to long-read FASTQ (or None).
         workdir: Directory for intermediate files.
         cpus: Number of CPU threads.
@@ -382,7 +382,7 @@ def map_reads(
     bam_longreads = None
 
     # --- Illumina reads ---
-    if reads_left:
+    if read1:
         bam_illumina = str(Path(workdir, "illumina.sorted.bam"))
         if aligner == "bwa":
             # Copy genome to workdir so BWA index files stay contained
@@ -393,13 +393,13 @@ def map_reads(
             if ret.returncode != 0:
                 raise RuntimeError("bwa index failed")
             read_group = r"@RG\tID:illumina\tSM:illumina\tPL:illumina"
-            map_cmd = ["bwa", "mem", "-t", str(cpus), "-R", read_group, genome_local, reads_left]
-            if reads_right:
-                map_cmd.append(reads_right)
+            map_cmd = ["bwa", "mem", "-t", str(cpus), "-R", read_group, genome_local, read1]
+            if read2:
+                map_cmd.append(read2)
         else:
-            map_cmd = ["minimap2", "-ax", illumina_preset, "-t", str(cpus), genome, reads_left]
-            if reads_right:
-                map_cmd.append(reads_right)
+            map_cmd = ["minimap2", "-ax", illumina_preset, "-t", str(cpus), genome, read1]
+            if read2:
+                map_cmd.append(read2)
 
         align_to_sorted_bam(map_cmd, bam_illumina, cpus, debug=debug)
 

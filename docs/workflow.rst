@@ -104,7 +104,7 @@ output file already exists (so an interrupted run can simply be re-launched):
 .. code-block:: bash
 
     AAFTF pipeline \
-        -l reads_R1.fq.gz -r reads_R2.fq.gz \
+        -1 reads_R1.fq.gz -2 reads_R2.fq.gz \
         -o STRAINX -c 24 -m 96 \
         --phylum Ascomycota
 
@@ -123,34 +123,34 @@ Running step-by-step
     mkdir -p "$TRIMREAD" "$OUTDIR"
 
     AAFTF trim --method bbduk --memory $MEM -c $CPU \
-        --left $READSDIR/${BASE}_R1.fq.gz --right $READSDIR/${BASE}_R2.fq.gz \
+        --read1 $READSDIR/${BASE}_R1.fq.gz --read2 $READSDIR/${BASE}_R2.fq.gz \
         -o $TRIMREAD/${BASE}
 
     AAFTF filter -c $CPU --memory $MEM --aligner bbduk \
         -o $TRIMREAD/${BASE} \
-        --left $TRIMREAD/${BASE}_1P.fastq.gz --right $TRIMREAD/${BASE}_2P.fastq.gz
+        --read1 $TRIMREAD/${BASE}_1P.fastq.gz --read2 $TRIMREAD/${BASE}_2P.fastq.gz
 
     AAFTF assemble -c $CPU --memory $MEM \
-        --left $TRIMREAD/${BASE}_filtered_1.fastq.gz --right $TRIMREAD/${BASE}_filtered_2.fastq.gz \
+        --read1 $TRIMREAD/${BASE}_filtered_1.fastq.gz --read2 $TRIMREAD/${BASE}_filtered_2.fastq.gz \
         -o $OUTDIR/${BASE}.spades.fasta -w working_AAFTF/spades_${BASE}
 
     AAFTF vecscreen -c $CPU -i $OUTDIR/${BASE}.spades.fasta -o $OUTDIR/${BASE}.vecscreen.fasta
 
     AAFTF sourpurge -c $CPU --phylum Ascomycota \
         -i $OUTDIR/${BASE}.vecscreen.fasta -o $OUTDIR/${BASE}.sourpurge.fasta \
-        --left $TRIMREAD/${BASE}_filtered_1.fastq.gz --right $TRIMREAD/${BASE}_filtered_2.fastq.gz
+        --read1 $TRIMREAD/${BASE}_filtered_1.fastq.gz --read2 $TRIMREAD/${BASE}_filtered_2.fastq.gz
 
     AAFTF rmdup -c $CPU -i $OUTDIR/${BASE}.sourpurge.fasta -o $OUTDIR/${BASE}.rmdup.fasta
 
     AAFTF polish -c $CPU --memory $MEM -i $OUTDIR/${BASE}.rmdup.fasta -o $OUTDIR/${BASE}.polish.fasta \
-        --left $TRIMREAD/${BASE}_filtered_1.fastq.gz --right $TRIMREAD/${BASE}_filtered_2.fastq.gz
+        --read1 $TRIMREAD/${BASE}_filtered_1.fastq.gz --read2 $TRIMREAD/${BASE}_filtered_2.fastq.gz
 
     AAFTF sort -i $OUTDIR/${BASE}.polish.fasta -o $OUTDIR/${BASE}.final.fasta
 
     AAFTF assess -i $OUTDIR/${BASE}.final.fasta -r $OUTDIR/${BASE}.stats.txt
 
     AAFTF depth -i $OUTDIR/${BASE}.final.fasta \
-        --left $TRIMREAD/${BASE}_filtered_1.fastq.gz --right $TRIMREAD/${BASE}_filtered_2.fastq.gz \
+        --read1 $TRIMREAD/${BASE}_filtered_1.fastq.gz --read2 $TRIMREAD/${BASE}_filtered_2.fastq.gz \
         -c $CPU -o $OUTDIR/${BASE}.coverage_stats.txt
 
 Each individual command page under :doc:`commands/index` documents its own defaults and cutoffs

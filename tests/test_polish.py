@@ -45,8 +45,8 @@ def _make_args(tmp_path, method="pypolca", **overrides):
         method=method,
         memory=4,
         cpus=2,
-        left=str(tmp_path / "R1.fq"),
-        right=str(tmp_path / "R2.fq"),
+        read1=str(tmp_path / "R1.fq"),
+        read2=str(tmp_path / "R2.fq"),
         longreads=None,
         workdir=str(tmp_path / "workdir"),
         infile=str(tmp_path / "asm.fa"),
@@ -66,27 +66,27 @@ def _make_args(tmp_path, method="pypolca", **overrides):
 @pytest.mark.unit
 class TestPolishParser:
     def test_debug_false_by_default(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])
         assert args.debug is False
 
     def test_debug_flag_sets_true(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq", "-v"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq", "-v"])
         assert args.debug is True
 
     def test_pipe_false_by_default(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])
         assert args.pipe is False
 
     def test_pipe_flag_sets_true(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq", "--pipe"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq", "--pipe"])
         assert args.pipe is True
 
     def test_default_method_is_polypolish(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])
         assert args.method == "polypolish"
 
     def test_method_polypolish(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq", "--method", "polypolish"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq", "--method", "polypolish"])
         assert args.method == "polypolish"
 
     def test_method_nextpolish2(self):
@@ -104,35 +104,35 @@ class TestPolishParser:
         assert exc.value.code != 0
 
     def test_default_cpus(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])
         assert args.cpus == 1
 
     def test_custom_cpus(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq", "-c", "8"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq", "-c", "8"])
         assert args.cpus == 8
 
     def test_default_memory(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])
         assert args.memory == 16
 
     def test_custom_memory(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq", "-m", "32"])
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq", "-m", "32"])
         assert args.memory == 32
 
-    def test_parses_left_reads(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq"])
-        assert args.left == "R1.fq"
+    def test_parses_read1_reads(self):
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq"])
+        assert args.read1 == "R1.fq"
 
-    def test_parses_right_reads(self):
-        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-l", "R1.fq", "-r", "R2.fq"])
-        assert args.right == "R2.fq"
+    def test_parses_read2_reads(self):
+        args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-1", "R1.fq", "-2", "R2.fq"])
+        assert args.read2 == "R2.fq"
 
     def test_parses_longreads(self):
         args = _parse_polish(["AAFTF", "polish", "-i", "asm.fa", "-lr", "lr.fq"])
         assert args.longreads == "lr.fq"
 
     def test_missing_infile_exits_nonzero(self):
-        with patch.object(sys, "argv", ["AAFTF", "polish", "-l", "R1.fq"]):
+        with patch.object(sys, "argv", ["AAFTF", "polish", "-1", "R1.fq"]):
             with pytest.raises(SystemExit) as exc:
                 main()
         assert exc.value.code != 0
@@ -152,7 +152,7 @@ class TestPolishParser:
 @pytest.mark.unit
 class TestPolishRunGuards:
     def test_racon_without_longreads_raises(self, tmp_path):
-        args = _make_args(tmp_path, method="racon", longreads=None, left=None, right=None)
+        args = _make_args(tmp_path, method="racon", longreads=None, read1=None, read2=None)
         from aaftf.polish import run
 
         with pytest.raises(ValueError):
@@ -166,23 +166,23 @@ class TestPolishRunGuards:
             run(**vars(args))
 
     def test_pypolca_without_reads_raises(self, tmp_path):
-        args = _make_args(tmp_path, method="pypolca", left=None, right=None)
+        args = _make_args(tmp_path, method="pypolca", read1=None, read2=None)
         from aaftf.polish import run
 
         with pytest.raises(ValueError):
             run(**vars(args))
 
     def test_polypolish_without_reads_raises(self, tmp_path):
-        args = _make_args(tmp_path, method="polypolish", left=None, right=None)
+        args = _make_args(tmp_path, method="polypolish", read1=None, read2=None)
         from aaftf.polish import run
 
         with pytest.raises(ValueError):
             run(**vars(args))
 
-    def test_polypolish_without_right_reads_raises(self, tmp_path):
+    def test_polypolish_without_read2_reads_raises(self, tmp_path):
         """Polypolish requires paired reads."""
         (tmp_path / "R1.fq").write_text("@r\nA\n+\nI\n")
-        args = _make_args(tmp_path, method="polypolish", right=None)
+        args = _make_args(tmp_path, method="polypolish", read2=None)
         from aaftf.polish import run
 
         with patch("aaftf.polish.shutil.which", return_value=True):
@@ -210,8 +210,8 @@ def _setup_pypolca_run(tmp_path, outfile=None):
         method="pypolca",
         infile=str(infile),
         workdir=str(workdir),
-        left=str(r1),
-        right=str(r2),
+        read1=str(r1),
+        read2=str(r2),
         outfile=outfile,
     )
 
@@ -365,8 +365,8 @@ def _setup_polypolish_run(tmp_path, outfile=None):
         method="polypolish",
         infile=str(infile),
         workdir=str(workdir),
-        left=str(r1),
-        right=str(r2),
+        read1=str(r1),
+        read2=str(r2),
         outfile=outfile,
     )
 
@@ -452,8 +452,8 @@ def _setup_racon_run(tmp_path, outfile=None):
         method="racon",
         infile=str(infile),
         workdir=str(workdir),
-        left=None,
-        right=None,
+        read1=None,
+        read2=None,
         longreads=str(lr),
         outfile=outfile,
     )
@@ -544,8 +544,8 @@ def _setup_nextpolish2_run(tmp_path, outfile=None):
         method="nextpolish2",
         infile=str(infile),
         workdir=str(workdir),
-        left=str(r1),
-        right=str(r2),
+        read1=str(r1),
+        read2=str(r2),
         longreads=str(lr),
         outfile=outfile,
     )

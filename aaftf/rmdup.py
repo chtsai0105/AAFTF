@@ -103,7 +103,7 @@ def run(
     next_out = next_step_name(out, ".polish.fasta")
 
     if not pipe:
-        logger.info(f"Your next command might be:\nAAFTF polish -i {out} -l PE_R1.fastq.gz -r PE_R2.fastq.gz -o {next_out}")
+        logger.info(f"Your next command might be:\nAAFTF polish -i {out} -1 PE_R1.fastq.gz -2 PE_R2.fastq.gz -o {next_out}")
 
     cleanup_workdir(workdir, debug, custom_workdir)
 

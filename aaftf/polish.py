@@ -28,8 +28,8 @@ def run(
     method: str = "polypolish",
     memory: int = 16,
     cpus: int = 1,
-    left: str | None = None,
-    right: str | None = None,
+    read1: str | None = None,
+    read2: str | None = None,
     longreads: str | None = None,
     workdir: str | None = None,
     debug: bool = False,
@@ -47,8 +47,8 @@ def run(
         method: ``"polypolish"``, ``"pypolca"``, ``"nextpolish2"`` or ``"racon"`` (case-insensitive).
         memory: Total memory in GB (pypolca only).
         cpus: Number of threads.
-        left: Left/forward short reads, or None.
-        right: Right/reverse short reads, or None.
+        read1: Read 1 (forward) short reads, or None.
+        read2: Read 2 (reverse) short reads, or None.
         longreads: Long-read FASTQ, or None.
         workdir: Working directory; a temporary one is created if None.
         debug: Keep the working directory and show command output when True.
@@ -63,10 +63,10 @@ def run(
     logger.info(f"calling {method} with input memory {memory}GB and num cpus {cpus}")
 
     forward_reads, reverse_reads = (None,) * 2
-    if left:
-        forward_reads = str(Path(left).resolve())
-    if right:
-        reverse_reads = str(Path(right).resolve())
+    if read1:
+        forward_reads = str(Path(read1).resolve())
+    if read2:
+        reverse_reads = str(Path(read2).resolve())
     if longreads:
         longreads = str(Path(longreads).resolve())
 
@@ -75,7 +75,7 @@ def run(
     if method == "nextpolish2" and not longreads:
         raise ValueError("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads (nextpolish2 requires HiFi long reads)")
     if method in ("pypolca", "masurca", "polypolish", "nextpolish2") and not forward_reads:
-        raise ValueError("Unable to locate FASTQ raw reads, pass via -l,--left and/or -r,--right")
+        raise ValueError("Unable to locate FASTQ raw reads, pass via -1/--read1 and/or -2/--read2")
 
     workdir, custom_workdir = make_workdir(workdir, "polish")
 
@@ -152,7 +152,7 @@ def run_polypolish(infile: str, forward_reads: str, reverse_reads: str | None, c
         ValueError: If ``reverse_reads`` is not given.
     """
     if not reverse_reads:
-        raise ValueError("--method polypolish requires paired reads (-l/--left and -r/--right)")
+        raise ValueError("--method polypolish requires paired reads (-1/--read1 and -2/--read2)")
 
     assembly = str(Path(workdir, Path(infile).name))
     shutil.copyfile(infile, assembly)

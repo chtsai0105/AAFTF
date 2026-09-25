@@ -17,7 +17,7 @@ Algorithm
    does **not** include one of the phyla listed in ``-p/--phylum`` is marked for removal --
    contigs with *no* classification (``nomatch``) are kept (not penalized, since sourmash can't
    classify novel/divergent sequence).
-2. **Low-coverage screen** (only run if ``-l/--left`` reads are supplied). Maps reads to the
+2. **Low-coverage screen** (only run if ``-1/--read1`` reads are supplied). Maps reads to the
    taxonomy-filtered assembly with ``bwa mem`` + ``samtools sort``, computes per-contig read
    coverage with ``samtools bedcov``, then computes the mean coverage of contigs at/above the
    assembly's **N50** contig length as a "true genome coverage" baseline. Any contig with
@@ -60,12 +60,12 @@ Invocation
 .. code-block:: text
 
     AAFTF sourpurge -i INPUT -o OUTFILE -p PHYLUM [PHYLUM ...]
-                    [-l LEFT] [-r RIGHT] [-k KMER] [--sourdb PATH] [--sourdb_type {gbk,gtdb,gtdbrep}]
+                    [-1 READ1] [-2 READ2] [-k KMER] [--sourdb PATH] [--sourdb_type {gbk,gtdb,gtdbrep}]
                     [-mc MINCOVPCT] [-c CPUS] [-w WORKDIR]
                     [--just-show-taxonomy] [-v] [--pipe]
 
-``-i/--input``, ``-o/--outfile``, and ``-p/--phylum`` are required. Providing ``-l/--left`` (and
-``-r/--right`` for paired data) enables the low-coverage screen; without reads, only the taxonomy
+``-i/--input``, ``-o/--outfile``, and ``-p/--phylum`` are required. Providing ``-1/--read1`` (and
+``-2/--read2`` for paired data) enables the low-coverage screen; without reads, only the taxonomy
 screen runs. ``--just-show-taxonomy`` prints classifications and exits without purging anything
 (useful to sanity-check what phyla are present before choosing ``--phylum``).
 
@@ -75,7 +75,7 @@ Example
 .. code-block:: bash
 
     AAFTF sourpurge -c 24 -i genomes/STRAINX.vecscreen.fasta -o genomes/STRAINX.sourpurge.fasta \
-        --left reads_filtered_1.fastq.gz --right reads_filtered_2.fastq.gz \
+        --read1 reads_filtered_1.fastq.gz --read2 reads_filtered_2.fastq.gz \
         --phylum Ascomycota
 
     # Preview classifications before deciding which phylum to keep

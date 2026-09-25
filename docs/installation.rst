@@ -76,7 +76,7 @@ itself ships as a container image invoked from inside AAFTF -- see :doc:`command
     docker run --rm \
         -v /path/to/data:/data \
         -v /path/to/aaftf_db:/opt/aaftf_db \
-        aaftf:latest AAFTF trim --left /data/R1.fq.gz --right /data/R2.fq.gz
+        aaftf:latest AAFTF trim --read1 /data/R1.fq.gz --read2 /data/R2.fq.gz
 
 A second, simpler conda-based image is available via ``Dockerfile.conda`` for environments where
 the pixi-based build is undesirable; build/run commands are the same.
@@ -95,10 +95,10 @@ the pixi-based build is undesirable; build/run commands are the same.
     # Run
     singularity exec AAFTF.sif AAFTF --help
     singularity exec --bind /path/to/data:/data AAFTF.sif \
-        AAFTF trim --left /data/R1.fq.gz --right /data/R2.fq.gz
+        AAFTF trim --read1 /data/R1.fq.gz --read2 /data/R2.fq.gz
 
     # Or use the built-in runscript
-    singularity run --bind /path/to/data:/data AAFTF.sif trim --left /data/R1.fq.gz --right /data/R2.fq.gz
+    singularity run --bind /path/to/data:/data AAFTF.sif trim --read1 /data/R1.fq.gz --read2 /data/R2.fq.gz
 
 The database directory defaults to ``/opt/aaftf_db`` inside the container (override with
 ``AAFTF_DB``). Both the Docker entrypoint and the Singularity ``%environment``/``/etc/profile.d``

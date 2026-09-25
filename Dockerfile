@@ -24,7 +24,7 @@
 #   docker run --rm \
 #     -v /path/to/data:/data \
 #     -v /path/to/aaftf_db:/opt/aaftf_db \
-#     aaftf:latest AAFTF trim --left /data/R1.fq.gz --right /data/R2.fq.gz
+#     aaftf:latest AAFTF trim --read1 /data/R1.fq.gz --read2 /data/R2.fq.gz
 # =============================================================================
 
 FROM ubuntu:noble

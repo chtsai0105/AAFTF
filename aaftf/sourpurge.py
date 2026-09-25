@@ -24,8 +24,8 @@ def run(
     phylum: list[str],
     workdir: str | None = None,
     cpus: int = 1,
-    left: str | None = None,
-    right: str | None = None,
+    read1: str | None = None,
+    read2: str | None = None,
     sourdb: str | None = None,
     sourdb_type: str = "gbk",
     kmer: str = "31",
@@ -49,8 +49,8 @@ def run(
         phylum: Taxon names (usually phyla) to keep.
         workdir: Working directory; a temporary one is created when None.
         cpus: Number of threads for BWA.
-        left: Forward reads FASTQ; enables the coverage filter.
-        right: Reverse reads FASTQ for paired-end data.
+        read1: Forward reads FASTQ; enables the coverage filter.
+        read2: Reverse reads FASTQ for paired-end data.
         sourdb: Path to a sourmash LCA database; when None the one for ``sourdb_type`` is used.
         sourdb_type: Installed database to use: ``gbk``, ``gtdbrep`` or ``gtdb``.
         kmer: k-mer size (as a string) used for ``sourmash compute``.
@@ -65,12 +65,12 @@ def run(
 
     # find reads
     forward_reads, reverse_reads = (None,) * 2
-    if left:
-        forward_reads = str(Path(left).resolve())
-    if right:
-        reverse_reads = str(Path(right).resolve())
+    if read1:
+        forward_reads = str(Path(read1).resolve())
+    if read2:
+        reverse_reads = str(Path(read2).resolve())
     if not forward_reads:
-        logger.info("Unable to located FASTQ raw reads, low coverage will be skipped. Provide -l,--left (and if paired -r,--right) to enable low coverage filtering.")
+        logger.info("Unable to located FASTQ raw reads, low coverage will be skipped. Provide -1/--read1 (and if paired -2/--read2) to enable low coverage filtering.")
 
     # parse database locations
     if not sourdb:
