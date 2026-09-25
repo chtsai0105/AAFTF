@@ -1,53 +1,41 @@
 # AAFTF - Automatic Assembly For The Fungi
-*Authors: Jason Stajich and Jon Palmer*
+*Authors: Jason Stajich, Jon Palmer and Cheng-Hung Tsai*
 
 ![AAFTF logo](docs/AAFTF.png)
 
+AAFTF automates draft genome assembly from Illumina short reads (optionally with long reads), with
+read trimming and contaminant filtering, assembly, vector and contaminant screening of contigs,
+duplicate removal, contig sorting and renaming, and summary statistics including telomere detection.
+Each step is a subcommand that can be run on its own, or all together with `AAFTF pipeline`.
+
 # Requirements
-Python >=3.10 and the external tools below; all can be installed from conda (bioconda) or with pixi (see Install).
-AAFTF needs samtools >=1.13. Run `AAFTF dependency` to see which tools are found.
+Python >=3.10 and the external tools below. Everything can be installed with conda (bioconda) or
+pixi (see Install). Run `AAFTF dependency` to see which tools are found and which are missing.
 
-## read aligners for polishing and depth of coverage calculation
-- bwa - https://github.com/lh3/bwa
-- minimap2 - https://github.com/lh3/minimap2
-- bowtie2 - http://bowtie-bio.sourceforge.net/bowtie2/index.shtml (Optional; not default)
-- BBTools - https://github.com/bbushnell/BBTools
+**Needed by the default pipeline** (`trim`, `filter`, `assemble`, `vecscreen`, `sourpurge`, `rmdup`,
+`sort`, `assess` with their default settings):
 
-## QC and trimming
-- BBTools - https://bbmap.org/ - supports read-level filtering for contamination and vector/primer
-- Trimmomatic - https://github.com/usadellab/Trimmomatic (Optional; not default)
-- fastp - alternative (preferred) read trimming and quality control https://github.com/OpenGene/fastp
+- [BBTools](https://bbmap.org/) (`bbduk.sh`, `shuffle.sh`, `reformat.sh`; needs Java) - read trimming and contaminant filtering
+- [SPAdes](https://github.com/ablab/spades) - assembly
+- [NCBI BLAST+](https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/) - vector/contaminant screening (`vecscreen`)
+- [sourmash](https://sourmash.readthedocs.io/) >=4 ([paper](https://pubmed.ncbi.nlm.nih.gov/31508216/)) - taxonomic screening of contigs (`sourpurge`)
+- [bwa](https://github.com/lh3/bwa) and [samtools](https://github.com/samtools/samtools) >=1.13 - read mapping for the `sourpurge` coverage filter
+- [minimap2](https://github.com/lh3/minimap2) - duplicate contig detection (`rmdup`)
+- Python packages: biopython, psutil (and matplotlib for `depth` plots)
 
-## Assemblers
-- SPAdes - https://github.com/ablab/spades
-- megahit - https://github.com/voutcn/megahit
-- NOVOplasty - https://github.com/ndierckx/NOVOPlasty for MT genome assembly
-- unicycler - https://github.com/rrwick/Unicycler (which runs spades)
+**Only needed for optional steps or non-default options:**
 
-## Assembly Contamination screening support
-- [sourmash](https://pubmed.ncbi.nlm.nih.gov/31508216/) (>=v4)- https://sourmash.readthedocs.io/ (install via conda/pip)
-- NCBI BLAST+ - https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/
-- [ncbi-fcs](https://pubmed.ncbi.nlm.nih.gov/38409096/) (for vector screening) - https://github.com/ncbi/fcs/
-- [ncbi-fcs-gx](https://pubmed.ncbi.nlm.nih.gov/38409096/) (for contaminant filtering, alternative to sourmash, requires large memory or SSD drive) https://github.com/ncbi/fcs-gx
-
-
-## Assembly polishing
-- [polca](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007981) via [pypolca](https://github.com/replikation/pypolca) -
-  a Python reimplementation of MaSuRCA's POLCA algorithm that works with any modern samtools
-- [Polypolish](https://github.com/rrwick/Polypolish) - alignment-filtering short-read polisher
-- [NextPolish2](https://github.com/Nextomics/NextPolish2) - repeat-aware polishing of HiFi assemblies using a short-read k-mer (yak) database
-- [Racon](https://github.com/lbcb-sci/racon) - long-read polishing
-
-## Depth of coverage
-- [mosdepth](https://github.com/brentp/mosdepth) and samtools
-
-
-# Authors
-* Jason Stajich [@hyphaltip](https://github.com/hyphaltip) - http://lab.stajich.org, [@hyphaltip.bsky](https://bsky.app/profile/hyphaltip.bsky.social)
-* Jon Palmer [@nextgenusfs](https://github.com/nextgenusfs) - [@jonpalmer.bsky](https://bsky.app/profile/jonpalmer.bsky.social)
-
-# Citation
-Palmer JM and Stajich JE. (2023). Automatic assembly for the fungi (AAFTF): genome assembly pipeline (v0.5.0). Zenodo. doi: 10.5281/zenodo.1620526
+| Tool | Used by |
+|---|---|
+| [fastp](https://github.com/OpenGene/fastp), [Trimmomatic](https://github.com/usadellab/Trimmomatic) | `trim --method fastp` / `trimmomatic` |
+| [bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/index.shtml) | `filter --aligner bowtie2` (`bwa` and `minimap2` are the other alternatives) |
+| [MEGAHIT](https://github.com/voutcn/megahit), [Unicycler](https://github.com/rrwick/Unicycler) | `assemble --method megahit` / `unicycler` |
+| [NOVOPlasty](https://github.com/ndierckx/NOVOPlasty) | `mito` (mitochondrial genome) |
+| [NCBI FCS-adaptor](https://github.com/ncbi/fcs) (with singularity/apptainer or docker) | `fcs_screen` |
+| [NCBI FCS-GX](https://github.com/ncbi/fcs-gx) ([paper](https://pubmed.ncbi.nlm.nih.gov/38409096/)) | `fcs_gx_purge` (needs a large-memory machine or a fast SSD) |
+| [Polypolish](https://github.com/rrwick/Polypolish); [pypolca](https://github.com/replikation/pypolca) + freebayes; [NextPolish2](https://github.com/Nextomics/NextPolish2) + yak; [Racon](https://github.com/lbcb-sci/racon) | `polish` |
+| [mosdepth](https://github.com/brentp/mosdepth) | `depth` |
+| pigz | faster read counting (falls back to gzip) |
 
 # Install
 With conda, from a checkout of this repository:
@@ -68,50 +56,78 @@ $ pixi shell -e complete
 ```
 
 `default` has only the default-pipeline tools, `complete` adds every optional tool, and `dev` adds
-the test and lint tools. `AAFTF dependency` reports what an environment is missing. See
+the test and lint tools. The conda bowtie2 cannot use AVX2; for AVX2 speed rebuild it once with
+`pixi run -e complete install-bowtie2` (`AAFTF dependency` tells you when this applies). See
 `docs/installation.rst` for details, including the Docker and Singularity images.
 
+## Reference databases
 AAFTF caches its reference databases in `~/.cache/aaftf` unless `AAFTF_DB` is set. Some are several GB,
-so point `AAFTF_DB` at a folder with plenty of space (it can list several folders separated by `:`, like
-`$PATH`; databases are read from the first folder that has them and downloaded into the first writable one):
+so point `AAFTF_DB` at a folder with plenty of space. It can list several folders separated by `:`,
+like `$PATH`; databases are read from the first folder that has them and downloaded into the first
+writable one. The steps only read databases; download them once with `AAFTF database`:
 ```
 $ export AAFTF_DB=/path/with/space/aaftf_db   # or a shared, system-wide location
 $ AAFTF database                                        # list databases and where they are stored
-$ AAFTF database phix univec euks proks mitodb sm_gbk   # download by short name (or file name, or 'all')
+$ AAFTF database phix univec euks proks mitodb sm_gbk   # what the default pipeline needs
 ```
 
-To run ncbi-fcs or ncbi-fcs-gx in AAFTF through singularity will need to have that installed in system or environment.
-The fcs gx database will need to be downloaded and requires large memory machines.
-More instructions coming for simplicity of install/testing.
+`fcs_screen` also needs the FCS-adaptor script and container image (`AAFTF database fcs_script fcs_image`,
+or pass `--fcs_script`/`--image`). `fcs_gx_purge` needs an FCS-GX database set up separately
+(see the [FCS-GX wiki](https://github.com/ncbi/fcs/wiki/FCS-GX)) and passed with `-d/--db`.
 
-## Notes
-This is partially a python re-write of [JAAWS](https://github.com/nextgenusfs/jaaws) which was a unix shell based cleanup and assembly tool written by Jon.
+# Commands
+`AAFTF -h` lists the subcommands in three groups.
 
-## Steps / Procedures
-Setup: `dependency` (check installed tools) and `database` (list/download reference databases).
+**Setup**
+- `dependency` - check that the external tools and Python packages are installed
+- `database` - list or download the reference databases
 
-1. trim                Trim FASTQ input reads - with bbduk (default), Trimmomatic or fastp
-2. mito                (Optional) De novo assemble mitochondrial genome - with NOVOPlasty
-3. filter              Filter contaminanting reads - with bbduk (default), bowtie2, bwa or minimap2
-4. assemble            Assemble reads - with SPAdes (default), MEGAHIT or Unicycler
-5. vecscreen           Vector and Contaminant Screening of assembled contigs - with BlastN based method to replicate NCBI screening
-6a. sourpurge          Purge contigs based on sourmash results - with sourmash
-6b. fcs_screen         (Optional) NCBI FCS-adaptor vector screening
-6c. fcs_gx_purge       (Optional) Purge contigs based on NCBI fcs-gx tool. Note this runs MUCH faster with large memory.
-7. rmdup               Remove duplicate contigs - using minimap2 to find duplicates
-8. polish              (Optional) Polish contig sequences - uses Polypolish (default), pypolca, NextPolish2, or Racon; recommended only with long reads
-9. sort                Sort contigs by length and rename FASTA headers
-10. assess             Assess completeness of genome assembly
-11. depth              (Optional) Calculate read depth of coverage across assembled contigs
-12. pipeline           Run trim, filter, assemble, vecscreen, sourpurge, rmdup, sort and assess in one go
+**Assembly pipeline** (in the order they are usually run)
 
-Annotation: `fix_tbl` fixes .tbl feature-table offsets after contigs were trimmed.
+| Step | Subcommand | What it does | Output |
+|---|---|---|---|
+| 1 | `trim` | Trim adaptors and low-quality reads - BBDuk (default), Trimmomatic or fastp | `<prefix>_1P.fastq.gz`, `<prefix>_2P.fastq.gz` |
+| - | `mito` | (Optional) Assemble the mitochondrial genome with NOVOPlasty, to screen its reads out in `filter` | mitochondrial FASTA |
+| 2 | `filter` | Remove PhiX, vector and other contaminant reads - BBDuk (default), bowtie2, bwa or minimap2 | `<prefix>_filtered_1.fastq.gz`, `<prefix>_filtered_2.fastq.gz` |
+| 3 | `assemble` | Assemble - SPAdes (default), MEGAHIT or Unicycler | assembly FASTA |
+| 4 | `vecscreen` | BLAST-based vector/contaminant screen of contigs, following NCBI VecScreen | cleaned FASTA (and `.mitochondria.fasta`) |
+| 5 | `sourpurge` | Drop contigs of other phyla (sourmash) and low-coverage contigs | purged FASTA |
+| - | `fcs_screen` | (Optional) NCBI FCS-adaptor vector screen | cleaned FASTA |
+| - | `fcs_gx_purge` | (Optional) Drop the contigs NCBI FCS-GX marks EXCLUDE | purged FASTA |
+| 6 | `rmdup` | Remove duplicate and contained contigs (minimap2) | deduplicated FASTA |
+| - | `polish` | (Optional) Polish with Polypolish (default), pypolca, NextPolish2 or Racon; recommended only with long reads | polished FASTA |
+| 7 | `sort` | Sort contigs by length and rename them | final FASTA |
+| 8 | `assess` | Assembly statistics (N50/L50, GC, gaps, soft-masking, telomeres) | printed (and a `-r` file) |
+| - | `depth` | (Optional) Per-contig read depth (mosdepth), flagging outliers such as organelles or contaminants | coverage report and plots |
+|   | `pipeline` | Run steps 1-8 in one command | `<prefix>.final.fasta` |
 
+**Annotation**
+- `fix_tbl` - fix an NCBI `.tbl` feature table after FCS trimmed or excluded contigs
+
+## Common options and output
+- Every subcommand has `-q/--quiet` (only warnings and errors) and `-v/--verbose` (debug messages,
+  tool stderr, keep temporary folders). Read options are `-1/--read1` and `-2/--read2`.
+- Each step ends by suggesting the next command ("Your next command might be: ..."), unless `-q`.
+- Steps with a working directory (`-w/--workdir`, or a temporary one) write their log to
+  `<workdir>/<step>.log`. It is kept whenever the working directory is: with your own `-w`, with `-v`,
+  or when the step fails. Steps without a working directory write `./<step>.log` only with `-v`.
+- Exit status: 0 success, 1 error, 2 missing input file, tool or database, 130 interrupted.
 
 # Typical runs
 
+## One command
+```
+AAFTF pipeline -1 reads/STRAINX_R1.fq.gz -2 reads/STRAINX_R2.fq.gz \
+    -o STRAINX -p Ascomycota -c 16 -m 64
+```
+This writes `STRAINX_1P/2P.fastq.gz`, `STRAINX_filtered_1/2.fastq.gz`, `STRAINX.spades.fasta`,
+`STRAINX.vecscreen.fasta`, `STRAINX.sourpurge.fasta`, `STRAINX.rmdup.fasta` and `STRAINX.final.fasta`,
+then prints the `assess` statistics. Each step uses its own defaults unless a pipeline option overrides
+it, and steps whose output already exists are skipped, so an interrupted run can simply be restarted.
 
-## Trimming and Filtering
+## Step by step
+
+### Trimming and filtering
 
 Trimming options spelled out:
 ```
@@ -185,25 +201,28 @@ Fastp options:
   --merge               Merge paired end reads
 ```
 
-Example usage:
 ```
-MEM=128 # 128gb
+MEM=64
+CPU=16
 BASE=STRAINX
 READSDIR=reads
 TRIMREAD=reads_trimmed
-CPU=8
+mkdir -p $TRIMREAD
 AAFTF trim --method bbduk --memory $MEM -c $CPU \
- --read1 $READSDIR/${BASE}_R1.fq.gz --read2 $READSDIR/${BASE}_R2.fq.gz \
-  -o $TRIMREAD/${BASE}
-# this step make take a lot of memory depending on how many filtering libraries you use
+    --read1 $READSDIR/${BASE}_R1.fq.gz --read2 $READSDIR/${BASE}_R2.fq.gz \
+    -o $TRIMREAD/${BASE}
+# optional: assemble the mitochondrial genome first, then screen its reads out in filter with -s
+AAFTF mito --read1 $TRIMREAD/${BASE}_1P.fastq.gz --read2 $TRIMREAD/${BASE}_2P.fastq.gz \
+    -o $TRIMREAD/${BASE}.mito.fasta
+# this step may take a lot of memory depending on how many filtering libraries you use
 AAFTF filter -c $CPU --memory $MEM --aligner bbduk \
-	  -o $TRIMREAD/${BASE} --read1 $TRIMREAD/${BASE}_1P.fastq.gz --read2 $TRIMREAD/${BASE}_2P.fastq.gz
+    --read1 $TRIMREAD/${BASE}_1P.fastq.gz --read2 $TRIMREAD/${BASE}_2P.fastq.gz \
+    -s $TRIMREAD/${BASE}.mito.fasta -o $TRIMREAD/${BASE}
 ```
 
-## Assembly
+### Assembly
 
-The specified assembler can be made through the `--method` option.
-The full set of options are below.
+The assembler is chosen with `--method`. The full set of options:
 
 ```
 usage: AAFTF assemble [-h] -1 FASTQ -o FASTA [-2 FASTQ] [--merged MERGED]
@@ -255,39 +274,51 @@ Unicycler options:
 ```
 
 ```
-CPU=24
-MEM=96
 READ1=$TRIMREAD/${BASE}_filtered_1.fastq.gz
 READ2=$TRIMREAD/${BASE}_filtered_2.fastq.gz
 WORKDIR=working_AAFTF
 OUTDIR=genomes
-ASMFILE=$OUTDIR/${BASE}.spades.fasta
 mkdir -p $WORKDIR $OUTDIR
-AAFTF assemble -c $CPU --memory $MEM \
-	  --read1 $READ1 --read2 $READ2  \
-	   -o $ASMFILE -w $WORKDIR/spades_$BASE
+AAFTF assemble -c $CPU --memory $MEM --read1 $READ1 --read2 $READ2 \
+    -o $OUTDIR/${BASE}.spades.fasta -w $WORKDIR/spades_${BASE}
 ```
 
-## vectrim
+### Screening, cleanup and assessment
 
 ```
-CPU=16
-MEM=16
-READ1=$TRIMREAD/${BASE}_filtered_1.fastq.gz
-READ2=$TRIMREAD/${BASE}_filtered_2.fastq.gz
-WORKDIR=working_AAFTF
-OUTDIR=genomes
-ASMFILE=$OUTDIR/${BASE}.spades.fasta
-VECTRIM=$OUTDIR/${BASE}.vecscreen.fasta
-mkdir -p $WORKDIR $OUTDIR
-AAFTF vecscreen -c $CPU -i $ASMFILE -o $VECTRIM
+# vector/contaminant screen (also writes $OUTDIR/${BASE}.vecscreen.mitochondria.fasta)
+AAFTF vecscreen -c $CPU -i $OUTDIR/${BASE}.spades.fasta -o $OUTDIR/${BASE}.vecscreen.fasta
+
+# keep contigs classified to your phylum; with reads, also drop low-coverage contigs
+AAFTF sourpurge -c $CPU -i $OUTDIR/${BASE}.vecscreen.fasta -o $OUTDIR/${BASE}.sourpurge.fasta \
+    -p Ascomycota --read1 $READ1 --read2 $READ2
+
+# remove duplicate contigs
+AAFTF rmdup -c $CPU -i $OUTDIR/${BASE}.sourpurge.fasta -o $OUTDIR/${BASE}.rmdup.fasta
+
+# sort by length and rename, then report statistics
+AAFTF sort -i $OUTDIR/${BASE}.rmdup.fasta -o $OUTDIR/${BASE}.final.fasta -n ${BASE}
+AAFTF assess -i $OUTDIR/${BASE}.final.fasta -r $OUTDIR/${BASE}.stats.txt
 ```
 
-## Depth of Coverage
+Optional steps, run between the ones above:
+```
+# NCBI FCS-adaptor vector screen (needs a container engine and `AAFTF database fcs_script fcs_image`)
+AAFTF fcs_screen -i $OUTDIR/${BASE}.vecscreen.fasta -o $OUTDIR/${BASE}.fcs_screen.fasta
 
-The `depth` subtool maps reads to the final assembly and
-computes per-contig depth statistics using mosdepth.  It requires `samtools` and `mosdepth`
-plus at least one of `minimap2` (default for both Illumina and long reads) or `bwa`.
+# NCBI FCS-GX contaminant purge (FCS-GX database set up separately; -t is the NCBI taxonomy ID)
+AAFTF fcs_gx_purge -i $OUTDIR/${BASE}.fcs_screen.fasta -o $OUTDIR/${BASE}.fcs_gx.fasta \
+    -d /path/to/gxdb/all -t 4890
+
+# polish before sorting, when you have long reads (or hybrid data)
+AAFTF polish -c $CPU --method racon -i $OUTDIR/${BASE}.rmdup.fasta \
+    -lr nanopore.fastq.gz -o $OUTDIR/${BASE}.polish.fasta
+```
+
+## Depth of coverage
+
+The `depth` subcommand maps reads to the final assembly and computes per-contig depth statistics with
+mosdepth. It requires `samtools` and `mosdepth` plus `minimap2` (default) or `bwa`.
 
 ```
 AAFTF depth -i genome.final.fasta \
@@ -295,12 +326,12 @@ AAFTF depth -i genome.final.fasta \
     -c $CPU -o coverage_report.txt
 ```
 
-Long reads can be added alongside or instead of Illumina reads:
+Long reads can be added alongside or instead of Illumina reads; `--longread_preset` is then required:
 
 ```
 AAFTF depth -i genome.final.fasta \
     --read1 reads_1P.fastq.gz --read2 reads_2P.fastq.gz \
-    --longreads nanopore.fastq.gz \
+    --longreads nanopore.fastq.gz --longread_preset map-ont \
     -c $CPU -o coverage_report.txt
 ```
 
@@ -315,4 +346,17 @@ The report (`coverage_stats.txt` by default) contains three sections:
    - `** OUTLIER` — mean depth > assembly mean + 3 SD (likely contaminant or organelle)
    - `ELEVATED`  — mean depth between 2 SD and 3 SD above mean (worth inspecting)
 
-When matplotlib is available, three coverage plots are also produced alongside the report.
+When matplotlib is available, coverage plots are also produced alongside the report (turn them off
+with `--no-plot`; choose the format with `--plot-format`).
+
+# Notes
+This is partially a Python rewrite of [JAAWS](https://github.com/nextgenusfs/jaaws), a Unix shell based
+cleanup and assembly tool written by Jon. Full documentation of every subcommand is in `docs/`.
+
+# Authors
+* Jason Stajich [@hyphaltip](https://github.com/hyphaltip) - http://lab.stajich.org, [@hyphaltip.bsky](https://bsky.app/profile/hyphaltip.bsky.social)
+* Jon Palmer [@nextgenusfs](https://github.com/nextgenusfs) - [@jonpalmer.bsky](https://bsky.app/profile/jonpalmer.bsky.social)
+* Cheng-Hung Tsai
+
+# Citation
+Palmer JM and Stajich JE. (2023). Automatic assembly for the fungi (AAFTF): genome assembly pipeline (v0.5.0). Zenodo. doi: 10.5281/zenodo.1620526
