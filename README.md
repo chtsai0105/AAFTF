@@ -93,7 +93,7 @@ This is partially a python re-write of [JAAWS](https://github.com/nextgenusfs/ja
 6a. sourpurge          Purge contigs based on sourmash results - with sourmash
 6b. fcs_gx_purge       Purge contigs based on NCBI fcs-gx tool. Note this runs MUCH faster with large memory.
 7. rmdup               Remove duplicate contigs - using minimap2 to find duplicates
-8. polish              Polish contig sequences - uses pypolca, Polypolish, NextPolish2, or Racon
+8. polish              (Optional) Polish contig sequences - uses pypolca, Polypolish, NextPolish2, or Racon; recommended only with long reads
 9. sort                Sort contigs by length and rename FASTA headers
 10. assess             Assess completeness of genome assembly
 11. depth              Calculate read depth of coverage across assembled contigs

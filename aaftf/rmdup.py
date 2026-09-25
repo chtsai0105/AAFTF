@@ -100,10 +100,10 @@ def run(
 
     num_seqs, assembly_size = filter_fasta(input, out, lambda seq_id: seq_id not in ignore)
     logger.info(f"Cleaned assembly is {num_seqs:,} contigs and {assembly_size:,} bp")
-    next_out = next_step_name(out, ".polish.fasta")
+    next_out = next_step_name(out, ".final.fasta")
 
     if not pipe:
-        logger.info(f"Your next command might be:\nAAFTF polish -i {out} -1 PE_R1.fastq.gz -2 PE_R2.fastq.gz -o {next_out}")
+        logger.info(f"Your next command might be:\nAAFTF sort -i {out} -o {next_out}")
 
     cleanup_workdir(workdir, debug, custom_workdir)
 

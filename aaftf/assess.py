@@ -23,8 +23,6 @@ logger = logging.getLogger(__name__)
 def run(input: str, report: str | None = None, telomere_monomer: str = "TAAC{3,5}", telomere_n_repeat: int = 2, telomere_window: int = 200, **kwargs: Any) -> None:
     """Print assembly statistics, including telomere counts, and optionally save them.
 
-    A missing ``input`` is only logged; the subsequent read then fails.
-
     Args:
         input: Assembly FASTA (optionally gzipped).
         report: File to also write the report to.
@@ -32,15 +30,17 @@ def run(input: str, report: str | None = None, telomere_monomer: str = "TAAC{3,5
         telomere_n_repeat: Minimum monomer matches at a contig end to call a telomere.
         telomere_window: Number of bp scanned at each contig end.
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
+
+    Raises:
+        FileNotFoundError: If ``input`` does not exist.
     """
-    if not Path(input).exists():
-        logger.info(f"Inputfile {input} was not readable, check parameters")
-
-    output_handle = None
-
+    if not Path(input).is_file():
+        raise FileNotFoundError(f"assembly file not found: {input}")
     if report:
-        output_handle = open(report, "w")
-    genome_asm_stats(input, output_handle, telomere_monomer, telomere_n_repeat, telomere_window)
+        with open(report, "w") as output_handle:
+            genome_asm_stats(input, output_handle, telomere_monomer, telomere_n_repeat, telomere_window)
+    else:
+        genome_asm_stats(input, None, telomere_monomer, telomere_n_repeat, telomere_window)
 
 
 def genome_asm_stats(fasta_file: str, output_handle: TextIO | None, telomere_repeat: str, n_minimum: int, telomere_window: int = 200) -> None:
@@ -55,6 +55,9 @@ def genome_asm_stats(fasta_file: str, output_handle: TextIO | None, telomere_rep
         telomere_repeat: Telomere monomer regex.
         n_minimum: Minimum monomer matches at a contig end to call a telomere.
         telomere_window: Number of bp scanned at each contig end.
+
+    Raises:
+        ValueError: If the assembly has no sequences, or only empty ones.
     """
     lengths = []
     gc_bases = 0
@@ -82,6 +85,8 @@ def genome_asm_stats(fasta_file: str, output_handle: TextIO | None, telomere_rep
 
     lengths.sort()
     total_len = sum(lengths)
+    if total_len == 0:
+        raise ValueError(f"{fasta_file} contains no sequence")
     gc = 100.0 * (gc_bases / total_len)
     n50, l50 = calc_nx(lengths, 0.5)
     n90, l90 = calc_nx(lengths, 0.9)

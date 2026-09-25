@@ -5,6 +5,10 @@ polish
 Error-corrects (polishes) the assembly by mapping reads back to it and calling/correcting base
 errors, small indels, and local misassemblies.
 
+``polish`` is **optional** and not part of :doc:`pipeline`. It is recommended for assemblies built
+from (or supplemented with) long reads; polishing a short-read-only assembly with the same short
+reads it was assembled from rarely improves it and can introduce errors.
+
 Algorithm
 =========
 

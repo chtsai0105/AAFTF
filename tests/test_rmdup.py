@@ -1,5 +1,6 @@
 """Unit tests for AAFTF/rmdup.py (minimap2 is stubbed; no external tools needed)."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -19,8 +20,8 @@ class TestWriteQueryAndReference:
         # ctg1 is a substring of ctg10; only ctg10 may go to the query file
         seqs = {"ctg1": "AAAA", "ctg10": "CCCC", "ctg2": "GGGG"}
         query, reference = _write_query_and_reference(seqs, "ctg10", ["ctg1", "ctg2"], str(tmp_path), "p")
-        assert open(query).read() == ">ctg10\nCCCC\n"
-        assert open(reference).read() == ">ctg1\nAAAA\n>ctg2\nGGGG\n"
+        assert Path(query).read_text() == ">ctg10\nCCCC\n"
+        assert Path(reference).read_text() == ">ctg1\nAAAA\n>ctg2\nGGGG\n"
 
 
 class TestIsDuplicate:

@@ -62,7 +62,7 @@ def run(
     tax = "--euk"
     if prok:
         tax = "--prok"
-    workdir, custom_workdir = make_workdir(workdir, "fcsscreen")
+    workdir, custom_workdir = make_workdir(workdir, "fcs_screen")
 
     # the wrapper script and singularity image come from `AAFTF database` unless given/found on PATH
     fcsexe = fcs_script or shutil.which("run_fcsadaptor.sh")

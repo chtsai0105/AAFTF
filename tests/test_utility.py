@@ -190,7 +190,8 @@ class TestFilterFasta:
         out = tmp_path / "out.fa"
         expected = tmp_path / "expected.fa"
         filter_fasta(str(src), str(out), lambda seq_id: True)
-        SeqIO.write(SeqIO.parse(str(src), "fasta"), str(expected), "fasta")
+        with open(src) as fh:
+            SeqIO.write(SeqIO.parse(fh, "fasta"), str(expected), "fasta")
         assert out.read_text() == expected.read_text()
 
     def test_keep_none(self, tmp_path):

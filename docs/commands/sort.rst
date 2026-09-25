@@ -43,6 +43,6 @@ Example
 
 .. code-block:: bash
 
-    AAFTF sort -i genomes/STRAINX.polish.fasta -o genomes/STRAINX.final.fasta -n STRAINX
+    AAFTF sort -i genomes/STRAINX.rmdup.fasta -o genomes/STRAINX.final.fasta -n STRAINX
 
 Next step: :doc:`assess` (and, optionally, :doc:`depth`).

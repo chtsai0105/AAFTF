@@ -38,8 +38,8 @@ Pipeline diagram
     [6] rmdup ------------------------------ minimap2 self-alignment removes redundant contigs
         |
         v
-    [7] polish ------------------------------ Polypolish / pypolca / NextPolish2 / Racon short/long-read
-        |                                      error correction
+   ([7] polish) ---------------------------- optional: Polypolish / pypolca / NextPolish2 / Racon error
+        |                                      correction; recommended only with long reads
         v
     [8] sort -------------------------------- rank contigs longest->shortest, rename headers
         |
@@ -81,11 +81,11 @@ Expected inputs/outputs per step
    * - rmdup
      - sourpurge FASTA
      - ``{base}.rmdup.fasta``
-   * - polish
+   * - polish (optional)
      - rmdup FASTA
      - ``{base}.polish.fasta``
    * - sort
-     - polished FASTA
+     - rmdup (or polished) FASTA
      - ``{base}.final.fasta``
    * - assess
      - sorted FASTA
@@ -97,8 +97,9 @@ Expected inputs/outputs per step
 Running the whole thing end-to-end
 =====================================
 
-The :doc:`commands/pipeline` subcommand runs trim -> mito (if paired) -> filter -> assemble ->
-vecscreen -> sourpurge -> rmdup -> polish -> sort -> assess automatically, skipping any step whose
+The :doc:`commands/pipeline` subcommand runs trim -> filter -> assemble -> vecscreen ->
+sourpurge -> rmdup -> sort -> assess automatically (mito, fcs_screen, fcs_gx_purge, polish and
+depth are optional and run separately), skipping any step whose
 output file already exists (so an interrupted run can simply be re-launched):
 
 .. code-block:: bash
@@ -142,10 +143,9 @@ Running step-by-step
 
     AAFTF rmdup -c $CPU -i $OUTDIR/${BASE}.sourpurge.fasta -o $OUTDIR/${BASE}.rmdup.fasta
 
-    AAFTF polish -c $CPU --memory $MEM -i $OUTDIR/${BASE}.rmdup.fasta -o $OUTDIR/${BASE}.polish.fasta \
-        --read1 $TRIMREAD/${BASE}_filtered_1.fastq.gz --read2 $TRIMREAD/${BASE}_filtered_2.fastq.gz
-
-    AAFTF sort -i $OUTDIR/${BASE}.polish.fasta -o $OUTDIR/${BASE}.final.fasta
+    # optional, recommended only with long reads: AAFTF polish ... -o $OUTDIR/${BASE}.polish.fasta,
+    # then sort that file instead
+    AAFTF sort -i $OUTDIR/${BASE}.rmdup.fasta -o $OUTDIR/${BASE}.final.fasta
 
     AAFTF assess -i $OUTDIR/${BASE}.final.fasta -r $OUTDIR/${BASE}.stats.txt
 

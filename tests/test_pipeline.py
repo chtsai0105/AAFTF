@@ -11,10 +11,10 @@ from aaftf._menu import register_subcommands
 
 pytestmark = pytest.mark.unit
 
-STEPS = ["trim", "filter", "assemble", "vecscreen", "sourpurge", "rmdup", "polish", "sort", "assess"]
+STEPS = ["trim", "filter", "assemble", "vecscreen", "sourpurge", "rmdup", "sort", "assess"]
 _MODULE = {"filter": "aaftf_filter", "sort": "aaftf_sort"}
 # the kwarg that names each step's output file (trim and filter derive theirs from basename)
-_OUTPUT = {"assemble": "out", "vecscreen": "outfile", "sourpurge": "outfile", "rmdup": "out", "polish": "outfile", "sort": "out"}
+_OUTPUT = {"assemble": "out", "vecscreen": "outfile", "sourpurge": "outfile", "rmdup": "out", "sort": "out"}
 
 
 def _cli_defaults(step):
@@ -89,7 +89,6 @@ class TestDefaults:
             ("sourpurge", "sourdb_type"),
             ("rmdup", "percent_id"),
             ("rmdup", "percent_cov"),
-            ("polish", "method"),
             ("sort", "name"),
             ("assess", "telomere_monomer"),
             ("assess", "report"),
@@ -98,7 +97,7 @@ class TestDefaults:
     def test_step_default_kept(self, tmp_path, step, option):
         assert _run_pipeline(tmp_path)[step][option] == _cli_defaults(step)[option]
 
-    @pytest.mark.parametrize("step", ["trim", "filter", "assemble", "polish"])
+    @pytest.mark.parametrize("step", ["trim", "filter", "assemble"])
     def test_memory_default_kept_without_pipeline_memory(self, tmp_path, step):
         assert _run_pipeline(tmp_path)[step]["memory"] == _cli_defaults(step)["memory"]
 
@@ -108,13 +107,13 @@ class TestPipelineOptions:
 
     def test_memory_passed_to_each_step(self, tmp_path):
         calls = _run_pipeline(tmp_path, memory=12)
-        assert [calls[s]["memory"] for s in ("trim", "filter", "assemble", "polish")] == [12, 12, 12, 12]
+        assert [calls[s]["memory"] for s in ("trim", "filter", "assemble")] == [12, 12, 12]
 
-    @pytest.mark.parametrize("step", ["trim", "filter", "assemble", "vecscreen", "sourpurge", "rmdup", "polish"])
+    @pytest.mark.parametrize("step", ["trim", "filter", "assemble", "vecscreen", "sourpurge", "rmdup"])
     def test_cpus_passed(self, tmp_path, step):
         assert _run_pipeline(tmp_path, cpus=6)[step]["cpus"] == 6
 
-    @pytest.mark.parametrize("step", ["filter", "assemble", "vecscreen", "sourpurge", "rmdup", "polish"])
+    @pytest.mark.parametrize("step", ["filter", "assemble", "vecscreen", "sourpurge", "rmdup"])
     def test_workdir_passed(self, tmp_path, step):
         assert _run_pipeline(tmp_path, workdir="wd")[step]["workdir"] == "wd"
 
@@ -133,7 +132,6 @@ class TestPipelineOptions:
     def test_pipeline_method_is_only_the_assembler(self, tmp_path):
         calls = _run_pipeline(tmp_path, method="megahit")
         assert calls["trim"]["method"] == _cli_defaults("trim")["method"]
-        assert calls["polish"]["method"] == _cli_defaults("polish")["method"]
 
 
 class TestFileChaining:
@@ -145,10 +143,9 @@ class TestFileChaining:
         assert calls["vecscreen"]["infile"] == f"{base}.spades.fasta"
         assert calls["sourpurge"]["input"] == f"{base}.vecscreen.fasta"
         assert calls["rmdup"]["input"] == f"{base}.sourpurge.fasta"
-        assert calls["polish"]["infile"] == f"{base}.rmdup.fasta"
-        assert calls["sort"]["input"] == f"{base}.polish.fasta"
+        assert calls["sort"]["input"] == f"{base}.rmdup.fasta"  # polish is optional and not run
         assert calls["assess"]["input"] == f"{base}.final.fasta"
 
     def test_single_end_reads_have_no_read2(self, tmp_path):
         calls = _run_pipeline(tmp_path, read2=False)
-        assert all(calls[s]["read2"] is None for s in ("trim", "filter", "assemble", "sourpurge", "polish"))
+        assert all(calls[s]["read2"] is None for s in ("trim", "filter", "assemble", "sourpurge"))

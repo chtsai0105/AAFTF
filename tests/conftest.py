@@ -27,6 +27,10 @@ def _isolated_db_cache(monkeypatch, tmp_path_factory):
 def _reset_aaftf_logger():
     """Undo setup_logging() (called by every CLI test via main()) so caplog keeps working in later tests."""
     yield
+    import aaftf.utility as utility
+
+    utility.finish_logging(None, False)  # close any step log file a failed run left open
+    utility._log_buffer, utility._step_log, utility._step_log_used, utility._last_step_log = None, None, False, None
     aaftf_logger = logging.getLogger("aaftf")
     aaftf_logger.handlers.clear()
     aaftf_logger.setLevel(logging.NOTSET)

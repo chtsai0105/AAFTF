@@ -162,7 +162,7 @@ class TestAssessRun:
         run(**vars(assess_args))
         report_path = assess_args.report
         assert Path(report_path).exists()
-        content = open(report_path).read()
+        content = Path(report_path).read_text()
         assert "CONTIG COUNT" in content
         assert "TOTAL LENGTH" in content
 
@@ -179,3 +179,18 @@ class TestAssessRun:
         run(**vars(args))  # should not raise
         out = capsys.readouterr().out
         assert "CONTIG COUNT" in out
+
+
+class TestAssessRunErrors:
+    def test_missing_input_raises_before_writing_report(self, tmp_path):
+        report = tmp_path / "report.txt"
+        with pytest.raises(FileNotFoundError, match="assembly file not found"):
+            run(input=str(tmp_path / "missing.fasta"), report=str(report))
+        assert not report.exists()
+
+    @pytest.mark.parametrize("content", ["", ">empty\n"])
+    def test_empty_assembly_raises(self, tmp_path, content):
+        fasta = tmp_path / "empty.fasta"
+        fasta.write_text(content)
+        with pytest.raises(ValueError, match="contains no sequence"):
+            run(input=str(fasta))

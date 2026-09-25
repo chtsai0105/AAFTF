@@ -1,6 +1,7 @@
 """Support pipelining of AAFTF to simplify all-in-one runs.
 
-Runs trim → filter → assemble → vecscreen → sourpurge → rmdup → polish → sort → assess.
+Runs trim → filter → assemble → vecscreen → sourpurge → rmdup → sort → assess (polish is optional
+and not run: it is not recommended for short-read-only assemblies).
 Every step runs with its own ``AAFTF <step>`` defaults; only the options given to
 ``AAFTF pipeline`` (and the file names that chain the steps together) override them.
 """
@@ -14,7 +15,6 @@ from typing import Any
 import aaftf.assemble as assemble
 import aaftf.assess as assess
 import aaftf.filter as aaftf_filter
-import aaftf.polish as polish
 import aaftf.rmdup as rmdup
 import aaftf.sort as aaftf_sort
 import aaftf.sourpurge as sourpurge
@@ -107,11 +107,8 @@ def run(
     rmdup_file = basename + ".rmdup.fasta"
     _run_step(rmdup, "rmdup", rmdup_file, shared, input=sourpurge_file, out=rmdup_file, minlen=mincontiglen)
 
-    polish_file = basename + ".polish.fasta"
-    _run_step(polish, "polish", polish_file, shared, infile=rmdup_file, outfile=polish_file, read1=filtered_1, read2=filtered_2)
-
     final_file = basename + ".final.fasta"
-    _run_step(aaftf_sort, "sort", final_file, shared, input=polish_file, out=final_file, minlen=mincontiglen)
+    _run_step(aaftf_sort, "sort", final_file, shared, input=rmdup_file, out=final_file, minlen=mincontiglen)
 
     assess.run(**_step_kwargs("assess", shared, input=final_file))
 

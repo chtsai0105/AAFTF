@@ -68,4 +68,4 @@ Example
     # more thorough (checks every contig, not just those <= N75)
     AAFTF rmdup -c 16 --exhaustive -i genomes/STRAINX.sourpurge.fasta -o genomes/STRAINX.rmdup.fasta
 
-Next step: :doc:`polish`.
+Next step: :doc:`sort` (or the optional :doc:`polish` first, if you have long reads).

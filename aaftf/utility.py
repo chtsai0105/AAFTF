@@ -61,6 +61,7 @@ __all__ = [
     "open_url",
     "safe_remove",
     "setup_logging",
+    "finish_logging",
     "make_workdir",
     "cleanup_workdir",
 ]
@@ -72,6 +73,11 @@ COMPLEMENT = str.maketrans("ACGTURYKMSWBDHVNXacgturykmswbdhvnx", "TGCAAYRMKSWVBD
 logger = logging.getLogger(__name__)
 
 _home_cache_warned = False
+# per-step log file state (see setup_logging / make_workdir / cleanup_workdir / finish_logging)
+_log_buffer: "_BufferHandler | None" = None
+_step_log: logging.FileHandler | None = None
+_step_log_used = False
+_last_step_log: Path | None = None
 
 
 class CustomHelpFormatter(ap.HelpFormatter):
@@ -855,22 +861,63 @@ def safe_remove(path: str | Path) -> None:
 
 
 def setup_logging(debug: bool = False, quiet: bool = False) -> None:
-    """Send AAFTF log messages to stderr.
+    """Send AAFTF log messages to stderr, and hold them until a step log file is opened.
+
+    The terminal shows INFO and above (only warnings and errors with ``quiet``; DEBUG too with
+    ``debug``). Every message at INFO and above (DEBUG too with ``debug``) is also kept in
+    memory so ``make_workdir`` can write the whole run, from its first line, to the step's log.
 
     Args:
-        debug: Also show debug messages (``-v/--verbose``).
+        debug: Also show debug messages and tracebacks (``-v/--verbose``).
         quiet: Show only warnings and errors (``-q/--quiet``); ``debug`` wins if both are set.
     """
-    handler = logging.StreamHandler()
-    handler.setFormatter(_StatusFormatter(color=handler.stream.isatty()))
+    global _log_buffer, _step_log, _step_log_used, _last_step_log
+    file_level = logging.DEBUG if debug else logging.INFO
+    console = logging.StreamHandler()
+    console.setLevel(logging.DEBUG if debug else logging.WARNING if quiet else logging.INFO)
+    console.setFormatter(_StatusFormatter(color=console.stream.isatty(), traceback=debug))
+    _log_buffer = _BufferHandler(file_level)
+    _step_log, _step_log_used, _last_step_log = None, False, None
     package_logger = logging.getLogger("aaftf")
-    package_logger.handlers[:] = [handler]
-    package_logger.setLevel(logging.DEBUG if debug else logging.WARNING if quiet else logging.INFO)
+    package_logger.handlers[:] = [console, _log_buffer]
+    package_logger.setLevel(file_level)
     package_logger.propagate = False
 
 
+def finish_logging(command: str | None, debug: bool) -> None:
+    """Close the step log, if one is still open, and write out the messages still held.
+
+    Messages logged after ``cleanup_workdir`` (e.g. the "next command" hint) are appended to the
+    last step log if it still exists (the work directory was kept). A run whose subcommand never
+    opened a step log (it has no work directory, e.g. ``trim``, ``sort``, ``assess``) writes the
+    held messages to ``./<command>.log`` when ``debug`` is set.
+
+    Args:
+        command: Subcommand name, used for the fallback log file name.
+        debug: Whether ``-v/--verbose`` was given.
+    """
+    _close_step_log(restore_buffer=False)
+    target = None
+    if _log_buffer is not None and _log_buffer.records:
+        if _step_log_used:
+            target = _last_step_log if _last_step_log is not None and _last_step_log.exists() else None
+        elif debug and command:
+            target = Path(f"{command}.log")
+    if target is not None and _log_buffer is not None:
+        handler = _plain_file_handler(target, _log_buffer.level)
+        for record in _log_buffer.records:
+            handler.handle(record)
+        handler.close()
+    if _log_buffer is not None:
+        _log_buffer.records.clear()
+
+
 def make_workdir(workdir: str | None, prefix: str) -> tuple[str, bool]:
-    """Create a subcommand's working directory.
+    """Create a subcommand's working directory and start its log file there.
+
+    When logging was set up by ``setup_logging`` (i.e. running from the CLI), the messages so far
+    and everything logged until ``cleanup_workdir`` go to ``<workdir>/<prefix>.log`` (appended to,
+    so steps sharing a ``--workdir`` each keep their own file across reruns).
 
     Args:
         workdir: User-supplied ``--workdir``, or None to auto-name it
@@ -883,11 +930,14 @@ def make_workdir(workdir: str | None, prefix: str) -> tuple[str, bool]:
     custom_workdir = bool(workdir)
     folder = workdir or f"aaftf-{prefix}_{uuid.uuid4().hex[:8]}"
     Path(folder).mkdir(parents=True, exist_ok=True)
+    _open_step_log(Path(folder, f"{prefix}.log"))
     return folder, custom_workdir
 
 
 def cleanup_workdir(workdir: str | Path, debug: bool, custom_workdir: bool) -> None:
-    """Remove an auto-generated workdir, unless debugging or the user supplied it.
+    """Close the step log, then remove an auto-generated workdir unless debugging or the user supplied it.
+
+    The step log lives in the workdir, so it is kept exactly when the workdir is.
 
     A user-supplied ``--workdir`` (which may be shared, e.g. by ``pipeline``, or
     even the current directory) is never deleted.
@@ -897,6 +947,7 @@ def cleanup_workdir(workdir: str | Path, debug: bool, custom_workdir: bool) -> N
         debug: Keep the directory for inspection.
         custom_workdir: Whether the user supplied ``workdir``.
     """
+    _close_step_log()
     if not debug and not custom_workdir:
         safe_remove(workdir)
 
@@ -946,14 +997,16 @@ class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
 class _StatusFormatter(logging.Formatter):
     """Format records as ``[Mon DD HH:MM AM] message``; warnings and errors get a level prefix."""
 
-    def __init__(self, color: bool) -> None:
-        """Set the date format and whether to colour the timestamp.
+    def __init__(self, color: bool, traceback: bool = True) -> None:
+        """Set the date format, whether to colour the timestamp, and whether to show tracebacks.
 
         Args:
             color: Colour the timestamp green (for terminals).
+            traceback: Append the traceback of records logged with ``exc_info``.
         """
         super().__init__(datefmt="%b %d %I:%M %p")
         self.color = color
+        self.traceback = traceback
 
     def format(self, record: logging.LogRecord) -> str:
         """Format one log record.
@@ -970,7 +1023,85 @@ class _StatusFormatter(logging.Formatter):
         message = record.getMessage()
         if record.levelno >= logging.WARNING:
             message = f"{record.levelname}: {message}"
+        if self.traceback and record.exc_info:
+            message = f"{message}\n{self.formatException(record.exc_info)}"
         return f"{stamp} {message}"
+
+
+class _BufferHandler(logging.Handler):
+    """Keep log records in memory until a step log file is opened to receive them."""
+
+    def __init__(self, level: int) -> None:
+        """Start with an empty buffer.
+
+        Args:
+            level: Lowest level to keep.
+        """
+        super().__init__(level)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Keep ``record``.
+
+        Args:
+            record: The log record.
+        """
+        self.records.append(record)
+
+
+def _plain_file_handler(path: Path, level: int) -> logging.FileHandler:
+    """Return an appending log file handler without colour, including tracebacks.
+
+    Args:
+        path: Log file path.
+        level: Lowest level written.
+
+    Returns:
+        The file handler.
+    """
+    handler = logging.FileHandler(path, mode="a")
+    handler.setLevel(level)
+    handler.setFormatter(_StatusFormatter(color=False, traceback=True))
+    return handler
+
+
+def _open_step_log(path: Path) -> None:
+    """Write the held messages to ``path`` and send further messages there too.
+
+    Does nothing unless ``setup_logging`` ran (e.g. when a ``run()`` is called directly from Python).
+
+    Args:
+        path: The step log file, inside the work directory.
+    """
+    global _step_log, _step_log_used, _last_step_log
+    if _log_buffer is None:
+        return
+    _close_step_log(restore_buffer=False)
+    handler = _plain_file_handler(path, _log_buffer.level)
+    for record in _log_buffer.records:
+        handler.handle(record)
+    _log_buffer.records.clear()
+    package_logger = logging.getLogger("aaftf")
+    package_logger.removeHandler(_log_buffer)
+    package_logger.addHandler(handler)
+    _step_log, _step_log_used, _last_step_log = handler, True, path
+
+
+def _close_step_log(restore_buffer: bool = True) -> None:
+    """Close the open step log, if any, and go back to holding messages in memory.
+
+    Args:
+        restore_buffer: Re-attach the memory buffer so messages before the next step's log (e.g.
+            the next ``pipeline`` step) are not lost.
+    """
+    global _step_log
+    package_logger = logging.getLogger("aaftf")
+    if _step_log is not None:
+        package_logger.removeHandler(_step_log)
+        _step_log.close()
+        _step_log = None
+    if restore_buffer and _log_buffer is not None and _log_buffer not in package_logger.handlers:
+        package_logger.addHandler(_log_buffer)
 
 
 def _count_lines(fh: BinaryIO | IO[bytes]) -> int:

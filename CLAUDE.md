@@ -15,6 +15,7 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 
 - Every subcommand parser must have `-v/--verbose` (argparse dest `debug`, so code and `run()` parameters still use `debug`) and `-q/--quiet` flags — enforced by test suite (`TestAssessParser`, `TestSortParser`, `TestFixTblParser`)
 - A step that suggests the next command logs it with `logger.info("Your next command might be: ...")` inside `if not pipe:`. `pipe: bool = False` is a `run()`-only parameter (there is no `--pipe` CLI option — the one exception to "`run()` parameters are the CLI dest names"): the CLI never sets it, so hints show unless `-q/--quiet`; `pipeline._step_kwargs()` sets `pipe=True` so pipeline runs skip them.
+- Log files: `setup_logging()` (called by `main()`) holds log messages in memory; `make_workdir(workdir, prefix)` writes them to `<workdir>/<prefix>.log` (append mode; `prefix` is the subcommand name) and keeps logging there, and `cleanup_workdir()` closes it before deciding whether to delete the workdir — so the log is kept exactly when the workdir is (own `-w`, `-v`, or a failed run). `main()` calls `finish_logging()` at the end: leftover messages (e.g. the next-command hint) are appended to that log if it still exists, and subcommands without a workdir write `./<command>.log` only with `-v`. The file gets INFO and above even with `-q` (DEBUG with `-v`) and always includes tracebacks; errors are logged once with `exc_info=True`, and the terminal shows the traceback only with `-v`. Always create workdirs with `make_workdir`/`cleanup_workdir` so steps get a log.
 - `add_verbosity_args(target)` (in `aaftf/_menu.py`) adds exactly two arguments — `-q/--quiet` and `-v/--verbose` (dest `debug`) — to whatever `target` is passed. Every `<name>_menu()` function calls it **last**, passing its own `optional = parser_x.add_argument_group("optional arguments")` group (not the parser itself), so these two common flags render as the final entries of that subcommand's "optional arguments" section rather than in a separate leading group. Do not pass the raw parser to `add_verbosity_args()` — always pass the `optional` group, and call it after all of that subcommand's own optional args have been added.
 - All other args a subcommand needs (`-c/--cpus`, `-w/--workdir/--tmpdir`, `-1/--read1`/`-2/--read2`, etc.) are implemented locally within that subcommand's own `<name>_menu()` in `_menu.py` — there is no shared parent-parser mechanism for them (an earlier version used `argparse` `parents=[...]` for these, but that shared the underlying `Action` objects across every subcommand and any per-subcommand override via `conflict_handler="resolve"` silently corrupted other subcommands; it was removed for this reason). When adding a `-c/--cpus`/`-w/--workdir`/`-1/--read1`,`-2/--read2` block to a new menu function, copy it verbatim from a similar existing one (e.g. `vecscreen_menu`, `sourpurge_menu`) to keep help text/defaults consistent.
 - Path-like arguments (inputs, outputs, reads, databases, work dirs, basenames/prefixes) use `type=str`, never `argparse.FileType` or `pathlib.Path`: `run()` receives plain path strings and opens files itself (with `with open(...)`), using `Path` internally only where path operations help. `FileType` opens (and for outputs truncates) files at parse time and never closes them, which is why `fix_tbl` moved off it.
@@ -67,7 +68,7 @@ Key `args` attributes accessed by each `run()` function:
 
 ## Pipeline step defaults
 
-`pipeline.py` runs trim → filter → assemble → vecscreen → sourpurge → rmdup → polish → sort → assess (mito, fcs_screen, fcs_gx_purge and depth are optional and not run). Each step is called with `_step_kwargs(name, shared, **step_options)`:
+`pipeline.py` runs trim → filter → assemble → vecscreen → sourpurge → rmdup → sort → assess (mito, fcs_screen, fcs_gx_purge, polish and depth are optional and not run; polish is not recommended for short-read-only assemblies). Each step is called with `_step_kwargs(name, shared, **step_options)`:
 - it starts from that step's CLI defaults, read from its `_menu.py` parser (`_subcommand_defaults()`), so every `run()` parameter is present and the pipeline never drifts from `AAFTF <step>` defaults — do not hard-code step settings in `pipeline.py`
 - `shared` pipeline options (`cpus`, `memory`, `workdir`, `debug`, `quiet`) go only to steps that have that option; a `None` value (e.g. no `--memory`) keeps the step default
 - `step_options` are the pipeline options specific to that step plus the file names chaining the steps
@@ -80,7 +81,7 @@ Recommended order for full assembly QC:
 ```
 trim → [mito optional, PE only] → filter → assemble → vecscreen
   → [fcs_screen / fcs_gx_purge optional] → sourpurge → rmdup
-  → polish → sort → assess → [depth optional]
+  → [polish optional, long reads] → sort → assess → [depth optional]
 ```
 
 Expected inputs/outputs per step:
@@ -93,8 +94,8 @@ Expected inputs/outputs per step:
 | vecscreen | assembled FASTA | `{base}.vecscreen.fasta` |
 | sourpurge | vecscreen FASTA | `{base}.sourpurge.fasta` |
 | rmdup | sourpurge FASTA | `{base}.rmdup.fasta` |
-| polish | rmdup FASTA | `{base}.polish.fasta` |
-| sort | polished FASTA | `{base}.final.fasta` |
+| polish (optional) | rmdup FASTA | `{base}.polish.fasta` |
+| sort | rmdup (or polished) FASTA | `{base}.final.fasta` |
 | assess | sorted FASTA | printed stats (optional report file) |
 | depth | final FASTA + reads | `coverage_stats.txt` |
 

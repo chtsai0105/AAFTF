@@ -11,7 +11,7 @@ import sys
 # AAFTF imports
 from aaftf import __version__
 from aaftf._menu import register_subcommands
-from aaftf.utility import CustomHelpFormatter, available_cpus, get_ram, setup_logging
+from aaftf.utility import CustomHelpFormatter, available_cpus, finish_logging, get_ram, setup_logging
 
 __all__ = ["main"]
 
@@ -63,13 +63,13 @@ def main() -> int:
     except BrokenPipeError:  # output piped into e.g. `head`, which closed early
         return 0
     except FileNotFoundError as e:
-        logger.error("An error occurred: %s", e)
-        logger.debug("Traceback details:", exc_info=True)
+        logger.error("An error occurred: %s", e, exc_info=True)  # traceback shown with -v, always in the log file
         return 2
     except Exception as e:
-        logger.error("An error occurred: %s", e)
-        logger.debug("Traceback details:", exc_info=True)
+        logger.error("An error occurred: %s", e, exc_info=True)
         return 1
+    finally:
+        finish_logging(args.command, getattr(args, "debug", False))
     return 0
 
 

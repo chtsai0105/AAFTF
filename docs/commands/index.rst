@@ -81,3 +81,10 @@ Command Reference
 Every subcommand accepts ``-v/--verbose`` (verbose logging; also usually retains temp working
 directories) and ``-q/--quiet`` (only warnings and errors, which also hides the "your next
 command might be" hint printed at the end of a step).
+
+Each step with a working directory also writes its log to ``<workdir>/<subcommand>.log`` (everything
+at INFO and above, even with ``-q``, plus full tracebacks on errors). The log is kept whenever the
+working directory is: when you pass your own ``-w/--workdir``, with ``-v``, or when the step fails;
+an auto-created working directory and its log are removed after a successful run. Subcommands
+without a working directory (e.g. ``trim``, ``sort``, ``assess``) write ``./<subcommand>.log`` only
+with ``-v``.

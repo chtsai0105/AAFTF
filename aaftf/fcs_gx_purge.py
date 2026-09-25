@@ -47,7 +47,7 @@ def run(
         FileNotFoundError: If ``{db}.gxi`` does not exist.
         RuntimeError: If ``run_gx.py`` fails or writes no report.
     """
-    workdir, custom_workdir = make_workdir(workdir, "fcsgx")
+    workdir, custom_workdir = make_workdir(workdir, "fcs_gx_purge")
 
     # parse database locations
     if not db or not Path(f"{db}.gxi").is_file():

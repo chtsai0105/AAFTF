@@ -2,7 +2,7 @@
 pipeline
 ========
 
-Runs the entire raw-reads-to-clean-assembly workflow in a single command: trim -> filter -> assemble -> vecscreen -> sourpurge -> rmdup -> polish -> sort -> assess. See
+Runs the entire raw-reads-to-clean-assembly workflow in a single command: trim -> filter -> assemble -> vecscreen -> sourpurge -> rmdup -> sort -> assess. See
 :doc:`../workflow` for the full diagram and per-step input/output description.
 
 Algorithm
@@ -23,7 +23,8 @@ aborts with an error if the expected output was not produced.
 Steps intentionally **not** included in ``pipeline`` (marked "(Optional)" in ``AAFTF -h``) -- run
 these manually if needed: :doc:`mito` (to screen mitochondrial reads out, run it before
 :doc:`filter` and pass its output to ``filter --screen_local``), :doc:`fcs_screen`, :doc:`fcs_gx_purge` (alternatives/complements to :doc:`vecscreen` /
-:doc:`sourpurge`), :doc:`depth` (coverage QC of the final assembly), :doc:`fix_tbl` (post-FCS
+:doc:`sourpurge`), :doc:`polish` (recommended only with long reads; polishing a short-read-only
+assembly with the same reads rarely helps), :doc:`depth` (coverage QC of the final assembly), :doc:`fix_tbl` (post-FCS
 annotation coordinate fixups), and :doc:`database` (run once, ahead of time, to populate
 ``$AAFTF_DB``).
 
@@ -31,7 +32,7 @@ Cutoffs / defaults
 ===================
 
 ``pipeline`` uses each step's own defaults (:doc:`trim`, :doc:`filter`,
-:doc:`assemble`, :doc:`vecscreen`, :doc:`sourpurge`, :doc:`rmdup`, :doc:`polish`, :doc:`sort`,
+:doc:`assemble`, :doc:`vecscreen`, :doc:`sourpurge`, :doc:`rmdup`, :doc:`sort`,
 :doc:`assess`) except where noted:
 
 .. list-table::
@@ -43,7 +44,7 @@ Cutoffs / defaults
      - Meaning
    * - ``-m/--memory``
      - each step's own default
-     - Passed to every step that has ``-m/--memory`` (trim, filter, assemble, polish)
+     - Passed to every step that has ``-m/--memory`` (trim, filter, assemble)
    * - ``-c/--cpus``, ``-w/--workdir``, ``-v/--verbose``
      - each step's own default
      - Passed to every step that has the option
@@ -89,6 +90,6 @@ Example
 This produces, in sequence: ``STRAINX_1P.fastq.gz``/``STRAINX_2P.fastq.gz`` (trim),
 ``STRAINX_filtered_1.fastq.gz``/``_2.fastq.gz``
 (filter), ``STRAINX.spades.fasta`` (assemble), ``STRAINX.vecscreen.fasta`` (vecscreen),
-``STRAINX.sourpurge.fasta`` (sourpurge), ``STRAINX.rmdup.fasta`` (rmdup),
-``STRAINX.polish.fasta`` (polish), and finally ``STRAINX.final.fasta`` with printed/``assess``
+``STRAINX.sourpurge.fasta`` (sourpurge), ``STRAINX.rmdup.fasta`` (rmdup), and finally
+``STRAINX.final.fasta`` (sort) with printed/``assess``
 summary statistics.

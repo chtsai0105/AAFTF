@@ -639,8 +639,8 @@ def polish_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     """
     parser_polish = subparsers.add_parser(
         "polish",
-        description="Polish contig sequences with pypolca, Polypolish, or NextPolish2",
-        help="Polish contig sequences with short and/or long reads",
+        description="Polish contig sequences with Polypolish, pypolca, NextPolish2 or Racon. Recommended for assemblies with long reads (or hybrid data); polishing a short-read-only assembly with the same short reads rarely helps and can introduce errors, so it is not part of AAFTF pipeline.",
+        help="(Optional) Polish contig sequences with short and/or long reads",
         formatter_class=CustomHelpFormatter,
     )
 
@@ -872,7 +872,7 @@ def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     """
     parser_pipeline = subparsers.add_parser(
         "pipeline",
-        description="Run the AAFTF pipeline: trim, filter, assemble, vecscreen, sourpurge, rmdup, polish, sort and assess. Each step uses its own defaults (see AAFTF <step> -h); only the options below override them.",
+        description="Run the AAFTF pipeline: trim, filter, assemble, vecscreen, sourpurge, rmdup, sort and assess. Each step uses its own defaults (see AAFTF <step> -h); only the options below override them.",
         help="Run AAFTF pipeline",
         formatter_class=CustomHelpFormatter,
     )
@@ -894,7 +894,7 @@ def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
 
-    optional.add_argument("-m", "--memory", type=int, dest="memory", help="Max memory in GB, passed to every step that has -m/--memory (trim, filter, assemble, polish); default: each step's own default", metavar="GB")
+    optional.add_argument("-m", "--memory", type=int, dest="memory", help="Max memory in GB, passed to every step that has -m/--memory (trim, filter, assemble); default: each step's own default", metavar="GB")
 
     optional.add_argument("-ml", "--minlen", type=int, default=75, help="Minimum read length to keep after trimming", metavar="BP")
 
