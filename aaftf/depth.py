@@ -950,8 +950,7 @@ def _plot_depth_histogram(contig_rows: list[dict[str, Any]], mean_depth: float, 
     # Boxplot with log y-axis
     ax2 = axes[1]
     ax2.boxplot(
-        depths,
-        vert=True,
+        depths,  # vertical is the default orientation (vert= is deprecated in matplotlib >= 3.10)
         patch_artist=True,
         boxprops=dict(facecolor="#2166ac", alpha=0.7),
         medianprops=dict(color="red", linewidth=1.5),
