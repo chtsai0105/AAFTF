@@ -13,15 +13,15 @@ Option 1: conda environment
 
 .. code-block:: bash
 
-    conda create -n aaftf -c bioconda -c conda-forge "python>=3.10,<3.15" \
-        bbmap trimmomatic bowtie2 bwa freebayes yak sourmash blast minimap2 \
-        spades megahit novoplasty "biopython>=1.88" fastp pypolca polypolish \
-        nextpolish2 racon unicycler mosdepth "matplotlib>=3" "samtools>=1.24"
-
+    # only what the default pipeline needs (same as the pixi "default" environment);
+    # installs AAFTF from PyPI
+    conda env create -f environment.yml
     conda activate aaftf
-    pip install AAFTF
-    # or track the latest from GitHub:
-    python -m pip install git+https://github.com/stajichlab/AAFTF.git
+
+    # or everything AAFTF can use (same as the pixi "complete" environment), with AAFTF
+    # installed from this checkout in editable mode
+    conda env create -f environment.dev.yml
+    conda activate aaftf-dev
 
 .. warning::
    AAFTF requires samtools >= 1.0 (ideally >= 1.24 for best performance -- newer samtools
@@ -40,19 +40,43 @@ Docker and Singularity images are built from). From a checkout of the repository
 
     curl -fsSL https://pixi.sh/install.sh | bash   # install pixi, if needed
     cd AAFTF
-    pixi install                       # creates the "default" (editable, dev) environment
-    pixi run install-bowtie2           # rebuild bowtie2 from source (fixes an AVX2/x86-64-v3
-                                        # runtime fallback bug in the conda binary)
-    pixi shell                         # activate the environment
+    pixi install -e complete               # every tool AAFTF can use
+    pixi shell -e complete                 # activate the environment
     AAFTF --version
 
-To install a specific tagged release instead of an editable checkout, use the ``release``
-environment (tracks the ``aaftf`` package pinned in ``pyproject.toml`` (``[tool.pixi.*]`` tables)):
+Three environments are defined, each installing AAFTF from the checkout in editable mode:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 25 60
+
+   * - Environment
+     - Features
+     - Contents
+   * - ``default``
+     - default
+     - Only what ``AAFTF pipeline`` needs with its default settings (BBTools, SPAdes, BLAST+,
+       sourmash, bwa, samtools, minimap2). ``pixi install`` alone creates this one.
+   * - ``complete``
+     - default, optional
+     - Plus every tool used by optional steps (``polish``, ``depth``, ``mito``, ``fcs_screen``,
+       ``fcs_gx_purge``) and non-default options (fastp, Trimmomatic, MEGAHIT, Unicycler, ...).
+       The Docker and Singularity images use this environment.
+   * - ``dev``
+     - default, optional, dev
+     - Plus pytest, pytest-cov and pre-commit, for working on AAFTF itself.
+
+``AAFTF dependency`` reports what an environment is missing.
+
+The ``complete`` and ``dev`` environments include bowtie2 (used by ``filter --aligner bowtie2``) from
+conda. That build cannot use AVX2 instructions (it falls back from its x86-64-v3 version at
+runtime), so it runs slower than it could. If you use bowtie2 and want AVX2 support, rebuild it from
+source into the environment once (this replaces the conda binaries; the Docker and Singularity
+images already do this):
 
 .. code-block:: bash
 
-    pixi install --environment release
-    pixi run --environment release AAFTF --version
+    pixi run -e complete install-bowtie2   # or: pixi run -e dev install-bowtie2
 
 Option 3: Docker / Singularity / Apptainer
 ============================================
@@ -104,6 +128,20 @@ The database directory defaults to ``/opt/aaftf_db`` inside the container (overr
 ``AAFTF_DB``). Both the Docker entrypoint and the Singularity ``%environment``/``/etc/profile.d``
 hook ensure the pixi-managed tool PATH survives both interactive (``singularity exec``) and login
 shells (``bash -l``, as used by SLURM/Nextflow task scripts).
+
+Checking the installation
+=========================
+
+``AAFTF dependency`` lists every external tool and Python package AAFTF uses, in two groups: those
+``AAFTF pipeline`` needs with its default settings (BBTools and Java, SPAdes, BLAST+, sourmash,
+bwa, samtools, minimap2; biopython, psutil), and those only needed by optional steps
+(``polish``, ``depth``, ``mito``, ``fcs_screen``, ``fcs_gx_purge``) or non-default options
+(e.g. ``filter --aligner bowtie2``, ``assemble --method megahit``). It exits with an error only
+when something from the first group is missing; ``-q`` prints just the OK/MISSING status.
+
+.. code-block:: bash
+
+    AAFTF dependency
 
 Setting up the reference database (``AAFTF_DB``)
 =====================================================

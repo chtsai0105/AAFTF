@@ -3,93 +3,106 @@
 import importlib
 import logging
 import shutil
+from pathlib import Path
 from typing import Any
 
-__all__ = ["REQUIRED_TOOLS", "OPTIONAL_TOOLS", "REQUIRED_PYTHON_PACKAGES", "run"]
+__all__ = ["REQUIRED_TOOLS", "OPTIONAL_TOOLS", "REQUIRED_PYTHON_PACKAGES", "OPTIONAL_PYTHON_PACKAGES", "run"]
 
 
-# external binaries used via subprocess across the AAFTF modules
+# external tools needed to run ``AAFTF pipeline`` with its default settings (tool -> where it is used)
 REQUIRED_TOOLS = {
-    "samtools": "filter, sourpurge, rmdup, polish, depth",
-    "bwa": "filter, sourpurge, polish, depth",
-    "minimap2": "mito, rmdup, depth, polish (nextpolish2, racon)",
-    "racon": "polish (racon)",
-    "bowtie2": "filter",
-    "bowtie2-build": "filter",
+    "bbduk.sh": "trim, filter",
+    "shuffle.sh": "trim, filter (paired reads)",
+    "reformat.sh": "trim, filter (paired reads), mito (--subsample)",
+    "java": "BBTools (bbduk.sh, shuffle.sh, reformat.sh), trim (--method trimmomatic)",
+    "spades.py": "assemble",
     "blastn": "vecscreen",
     "makeblastdb": "vecscreen",
     "sourmash": "sourpurge",
-    "mosdepth": "depth",
-    "spades.py": "assemble",
-    "megahit": "assemble",
-    "unicycler": "assemble",
-    "fastp": "trim",
-    "trimmomatic": "trim",
-    "java": "trim (trimmomatic)",
-    "bbduk.sh": "trim, filter",
-    "reformat.sh": "trim, filter, mito (--subsample)",
-    "shuffle.sh": "trim, filter",
-    "pypolca": "polish (pypolca)",
-    "freebayes": "polish (pypolca)",
-    "polypolish": "polish (polypolish)",
-    "nextPolish2": "polish (nextpolish2)",
-    "yak": "polish (nextpolish2)",
-    "NOVOPlasty.pl": "mito",
+    "bwa": "sourpurge, filter (--aligner bwa), polish, depth (--aligner bwa)",
+    "samtools": "sourpurge, filter (--aligner bowtie2/bwa/minimap2), polish, depth",
+    "minimap2": "rmdup, mito, depth, polish (nextpolish2, racon)",
 }
 
-# optional tools only needed for specific, opt-in subcommands/container backends
+# tools only needed by optional steps or non-default options
 OPTIONAL_TOOLS = {
+    "pigz": "faster read counting (falls back to gzip)",
+    "fastp": "trim (--method fastp)",
+    "trimmomatic": "trim (--method trimmomatic)",
+    "bowtie2": "filter (--aligner bowtie2)",
+    "bowtie2-build": "filter (--aligner bowtie2)",
+    "megahit": "assemble (--method megahit)",
+    "unicycler": "assemble (--method unicycler)",
+    "polypolish": "polish (--method polypolish)",
+    "pypolca": "polish (--method pypolca)",
+    "freebayes": "polish (--method pypolca)",
+    "nextPolish2": "polish (--method nextpolish2)",
+    "yak": "polish (--method nextpolish2)",
+    "racon": "polish (--method racon)",
+    "mosdepth": "depth",
+    "NOVOPlasty.pl": "mito",
+    "run_fcsadaptor.sh": "fcs_screen (or download it with: AAFTF database fcs_script)",
     "singularity": "fcs_screen (--container_engine singularity)",
     "apptainer": "fcs_screen (--container_engine singularity)",
     "docker": "fcs_screen (--container_engine docker)",
-    "run_fcsadaptor.sh": "fcs_screen",
     "run_gx.py": "fcs_gx_purge",
 }
 
+# import name -> distribution name
 REQUIRED_PYTHON_PACKAGES = {
     "Bio": "biopython",
+    "psutil": "psutil",
+}
+
+OPTIONAL_PYTHON_PACKAGES = {
+    "matplotlib": "matplotlib",  # depth plots
 }
 
 logger = logging.getLogger(__name__)
 
 
 def run(quiet: bool = False, **kwargs: Any) -> None:
-    """Check whether AAFTF's external tool and Python package dependencies are installed.
+    """Check whether AAFTF's external tools and Python packages are installed.
 
-    Prints an OK/MISSING line for every required and optional tool and required package, with
-    each tool's location (or the subcommands that need a missing one).
+    Tools and packages are checked in two groups: those needed to run ``AAFTF pipeline`` with its
+    default settings, and those only needed by optional steps (e.g. ``polish``, ``depth``,
+    ``mito``) or non-default options (e.g. ``--aligner bowtie2``). An OK/MISSING line is printed
+    for each, with its location (or where a missing one is used). Only missing required items
+    are an error.
 
     Args:
-        quiet: Print only the OK/MISSING status and tool name, without locations or the
-            subcommands that use each tool.
+        quiet: Print only the OK/MISSING status and name, without locations or where each is used.
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``debug``, ...); ignored.
 
     Raises:
-        FileNotFoundError: If any required tool or Python package is missing.
+        FileNotFoundError: If a tool or Python package needed by the default pipeline is missing.
     """
-    missing_required = _print_tool_table("Checking required external tools...", _check_tools(REQUIRED_TOOLS), quiet)
+    missing_required = _print_tool_table("Checking tools needed by the default pipeline...", _check_tools(REQUIRED_TOOLS), quiet)
     print()
-    missing_optional = _print_tool_table("Checking optional external tools...", _check_tools(OPTIONAL_TOOLS), quiet)
+    missing_optional = _print_tool_table("Checking tools for optional steps and non-default options...", _check_tools(OPTIONAL_TOOLS), quiet)
+    print()
+    missing_packages = _print_package_table("Checking required Python packages...", REQUIRED_PYTHON_PACKAGES)
+    missing_optional += _print_package_table("Checking optional Python packages...", OPTIONAL_PYTHON_PACKAGES)
+    print()
 
-    print()
-    logger.info("Checking required Python packages...")
-    missing_packages = []
-    for dist_name, found in _check_python_packages(REQUIRED_PYTHON_PACKAGES):
-        if found:
-            print(f"  [OK]      {dist_name}")
-        else:
-            print(f"  [MISSING] {dist_name}")
-            missing_packages.append(dist_name)
-
-    print()
+    _suggest_bowtie2_avx2()
+    if missing_optional:
+        logger.info(f"NOTE: {len(missing_optional)} optional tool(s)/package(s) missing (only needed for optional steps or non-default options): {', '.join(missing_optional)}")
     if missing_required or missing_packages:
-        if missing_optional:
-            logger.info(f"NOTE: {len(missing_optional)} optional tool(s) also missing (only needed for specific subcommands).")
-        raise FileNotFoundError(f"{len(missing_required)} required tool(s) and {len(missing_packages)} required package(s) missing.")
-    else:
-        logger.info("All required dependencies are installed.")
-        if missing_optional:
-            logger.info(f"NOTE: {len(missing_optional)} optional tool(s) missing (only needed for specific subcommands).")
+        raise FileNotFoundError(f"missing what the default pipeline needs: {', '.join(missing_required + missing_packages)}")
+    logger.info("Everything the default pipeline needs is installed.")
+
+
+def _suggest_bowtie2_avx2() -> None:
+    """Suggest rebuilding bowtie2 for AVX2 when the installed one is the conda build.
+
+    The conda bowtie2 package cannot use AVX2 (it falls back from its x86-64-v3 build at runtime);
+    a source build (``install_scripts/pixi_install_bowtie2.sh``) also installs the AVX2
+    ``bowtie2-align-s-v256`` binary next to ``bowtie2``, which is how the two are told apart.
+    """
+    bowtie2 = shutil.which("bowtie2")
+    if bowtie2 and not (Path(bowtie2).parent / "bowtie2-align-s-v256").exists():
+        logger.info("NOTE: bowtie2 is the conda build, which cannot use AVX2. For AVX2 speed, rebuild it from source: pixi run install-bowtie2 (pixi), or bash install_scripts/pixi_install_bowtie2.sh (conda)")
 
 
 def _print_tool_table(title: str, results: list[tuple[str, str | None, str]], quiet: bool = False) -> list[str]:
@@ -109,8 +122,27 @@ def _print_tool_table(title: str, results: list[tuple[str, str | None, str]], qu
         if path:
             print(f"  [OK]      {tool}" if quiet else f"  [OK]      {tool:<20} {path}")
         else:
-            print(f"  [MISSING] {tool}" if quiet else f"  [MISSING] {tool:<20} required by: {used_by}")
+            print(f"  [MISSING] {tool}" if quiet else f"  [MISSING] {tool:<20} used by: {used_by}")
             missing.append(tool)
+    return missing
+
+
+def _print_package_table(title: str, packages: dict[str, str]) -> list[str]:
+    """Log ``title`` and print an OK/MISSING line for each Python package.
+
+    Args:
+        title: Heading logged before the table.
+        packages: Mapping of import name to distribution name.
+
+    Returns:
+        Distribution names of the packages that could not be imported.
+    """
+    logger.info(title)
+    missing = []
+    for dist_name, found in _check_python_packages(packages):
+        print(f"  [OK]      {dist_name}" if found else f"  [MISSING] {dist_name}")
+        if not found:
+            missing.append(dist_name)
     return missing
 
 
@@ -121,10 +153,10 @@ def _check_tools(tools: dict[str, str]) -> list[tuple[str, str | None, str]]:
         tools: Mapping of executable name to the subcommands that use it.
 
     Returns:
-        ``(tool, path, used_by)`` tuples sorted by tool name; ``path`` is None if not on ``PATH``.
+        ``(tool, path, used_by)`` tuples in the order ``tools`` lists them; ``path`` is None if not on ``PATH``.
     """
     results = []
-    for tool, used_by in sorted(tools.items()):
+    for tool, used_by in tools.items():
         path = shutil.which(tool)
         results.append((tool, path, used_by))
     return results
@@ -137,10 +169,10 @@ def _check_python_packages(packages: dict[str, str]) -> list[tuple[str, bool]]:
         packages: Mapping of import name to distribution name.
 
     Returns:
-        ``(distribution name, importable)`` tuples sorted by import name.
+        ``(distribution name, importable)`` tuples in the order ``packages`` lists them.
     """
     results = []
-    for module_name, dist_name in sorted(packages.items()):
+    for module_name, dist_name in packages.items():
         try:
             importlib.import_module(module_name)
             results.append((dist_name, True))

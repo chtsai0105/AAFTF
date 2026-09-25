@@ -6,10 +6,10 @@ Tests live in `tests/` and use pytest. Run from the repo root.
 
 ```bash
 # Unit tests only — no external bioinformatics tools required
-python -m pytest tests/ -m unit -v
+pixi run -e dev pytest tests/ -m unit -v
 
 # All tests — integration tests require the full tool environment
-python -m pytest tests/ -v
+pixi run -e dev pytest tests/ -v
 ```
 
 ## Compile Check

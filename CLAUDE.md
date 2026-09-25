@@ -161,10 +161,10 @@ Expected inputs/outputs per step:
 
 ```bash
 # Unit tests only (no external tools required)
-conda run -n base python -m pytest tests/ -m unit -v
+pixi run -e dev pytest tests/ -m unit -v
 
 # All tests (integration tests require external tool environment)
-conda run -n base python -m pytest tests/ -v
+pixi run -e dev pytest tests/ -v
 
 # Compile-check all modules
 python -m py_compile aaftf/filter.py aaftf/polish.py aaftf/trim.py \

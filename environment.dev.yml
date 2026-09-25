@@ -1,39 +1,42 @@
+# Everything AAFTF can use: the default-pipeline tools plus every optional tool (same as
+# the pixi "complete" environment in pyproject.toml), with AAFTF installed from this
+# checkout in editable mode. The conda bowtie2 cannot use AVX2; for AVX2 speed, rebuild it
+# from source into this environment with: bash install_scripts/pixi_install_bowtie2.sh
+# (the pixi equivalent is: pixi run -e complete install-bowtie2).
 name: aaftf-dev
 channels:
   - conda-forge
   - bioconda
-  - defaults
 dependencies:
-  - python=3.10
-  - samtools>=1.24,<2
-  - biopython
-  - bwa
-  - minimap2
-  - freebayes
-  - yak
-  - polypolish
-  - nextpolish2
-  - blast
-  - diamond
-  - sourmash
-  - bowtie2
-  - trimmomatic
+  - python>=3.10,<3.15
+  # default pipeline
+  - bbmap>=39.80,<40        # bbduk.sh, shuffle.sh, reformat.sh (brings java)
   - spades
+  - blast
+  - sourmash
+  - bwa
+  - samtools>=1.24,<2
+  - minimap2
+  - biopython>=1.88
+  - psutil>=5
+  - matplotlib-base>=3
+  - packaging
+  # optional steps and non-default options
+  - pigz
   - fastp
-  - flye
+  - trimmomatic
+  - bowtie2
+  - megahit
+  - unicycler
+  - polypolish>=0.7.1,<0.8
+  - pypolca>=0.5.0,<0.6
+  - freebayes
+  - nextpolish2>=0.2.2,<0.3
+  - yak
   - racon
-  - fastqc
-  - hifiasm
-  - kraken2
-  - gfatools
+  - mosdepth>=0.3.10
   - novoplasty
   - ncbi-fcs-gx
-  - mosdepth
-  - matplotlib
-  - bbmap>=39.80,<40
-  - pypolca>=0.5.0,<0.6
-  - pytest>=7.0
   - pip
   - pip:
     - -e .
-    - pytest-cov

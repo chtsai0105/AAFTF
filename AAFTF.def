@@ -79,7 +79,7 @@ From: debian:bookworm-slim
     # -------------------------------------------------------------------------
     export PIXI_HOME=/opt/pixi
     curl -fsSL https://pixi.sh/install.sh | bash
-    export PATH="${PIXI_HOME}/bin:/opt/build/AAFTF/.pixi/envs/default/bin:${PATH}"
+    export PATH="${PIXI_HOME}/bin:/opt/build/AAFTF/.pixi/envs/complete/bin:${PATH}"
 
     # -------------------------------------------------------------------------
     # 3. Clone AAFTF repository from GitHub at the requested ref (branch or tag)
@@ -91,8 +91,9 @@ From: debian:bookworm-slim
     # 4. Resolve & install conda + PyPI dependencies via pixi
     # -------------------------------------------------------------------------
     cd /opt/build/AAFTF
-    pixi install --locked --frozen
-    pixi shell-hook --shell bash | grep '^export ' > /opt/aaftf_activate.sh
+    # "complete" = default-pipeline tools + every optional tool (see [tool.pixi.environments])
+    pixi install --environment complete --locked --frozen
+    pixi shell-hook --environment complete --shell bash | grep '^export ' > /opt/aaftf_activate.sh
     chmod +x /opt/aaftf_activate.sh
     pixi clean cache --yes
     # -------------------------------------------------------------------------

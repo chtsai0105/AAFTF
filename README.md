@@ -45,28 +45,26 @@ Most of these can be installed via conda packages. Noting that some tools have d
 Palmer JM and Stajich JE. (2023). Automatic assembly for the fungi (AAFTF): genome assembly pipeline (v0.5.0). Zenodo. doi: 10.5281/zenodo.1620526
 
 # Install
-We are working on simplifying the install, ie getting on Pypi and bioconda.
-Currently you could create conda environment and install like this:
+With conda, from a checkout of this repository:
 
 ```
-conda create -n aaftf -c bioconda "python>=3.6" bbmap trimmomatic bowtie2 bwa sourmash \
-    blast minimap2 spades megahit novoplasty biopython fastp pypolca polypolish nextpolish2 unicycler
+# only what `AAFTF pipeline` needs with its default settings; installs AAFTF from PyPI
+$ conda env create -f environment.yml && conda activate aaftf
+
+# or every tool AAFTF can use, with AAFTF installed from this checkout (editable)
+$ conda env create -f environment.dev.yml && conda activate aaftf-dev
 ```
-A challenge has been older version of samtools tied to some of the dependencies while AAFTF prefers samtool >= 1.0.
-If you can install samtools >1.22.1 for example after installing these depenendicies or via a separate env that can help
-ensure the markduplicates step can still be run. However this is relatively minor.
 
-There is a slight performance improvement if you can run the later samtools as it does not require writing temp unsorted
-BAM files to disk.
-
-And then install this repo with git/pip:
+Or with [pixi](https://pixi.sh), which uses the locked versions in `pixi.lock`:
 
 ```
-$ conda activate aaftf
-$ pip install AAFTF
-# or install latest from github
-$ python -m pip install git+https://github.com/stajichlab/AAFTF.git
+$ pixi install -e complete        # environments: default, complete, dev
+$ pixi shell -e complete
 ```
+
+`default` has only the default-pipeline tools, `complete` adds every optional tool, and `dev` adds
+the test and lint tools. `AAFTF dependency` reports what an environment is missing. See
+`docs/installation.rst` for details, including the Docker and Singularity images.
 
 AAFTF caches its reference databases in `~/.cache/aaftf` unless `AAFTF_DB` is set. Some are several GB,
 so point `AAFTF_DB` at a folder with plenty of space (it can list several folders separated by `:`, like

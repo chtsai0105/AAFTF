@@ -13,9 +13,9 @@
 #
 # Without this arg the image will report v0.0.0+unknown.
 #
-# Build for a specific tagged release (uses the "release" pixi environment):
-#   docker build --build-arg PIXI_ENV=release --build-arg AAFTF_VERSION=0.6.2 \
-#       -t aaftf:v0.6.2 .
+# The image uses the pixi "complete" environment (every tool AAFTF can use). For a smaller
+# image with only what the default pipeline needs:
+#   docker build --build-arg PIXI_ENV=default --build-arg AAFTF_VERSION=... -t aaftf:slim .
 #
 # Run:
 #   docker run --rm aaftf:latest AAFTF --help
@@ -31,9 +31,9 @@ FROM ubuntu:noble
 
 LABEL org.opencontainers.image.description="Automatic Assembly For The Fungi"
 
-# Which pixi environment to activate (default = editable local install).
-# Pass --build-arg PIXI_ENV=release to install from the pinned git tag instead.
-ARG PIXI_ENV=default
+# Which pixi environment to install: "complete" (default-pipeline tools + every optional
+# tool) or "default" (only what `AAFTF pipeline` needs with its default settings).
+ARG PIXI_ENV=complete
 
 # hatch-vcs can't see git history inside the build context (.git is excluded
 # via .dockerignore), so the version must be supplied explicitly; it is used
@@ -160,7 +160,7 @@ RUN printf '#!/bin/bash\nset -e\nsource /opt/aaftf_activate.sh\nexec "$@"\n' \
 #     Hardcode the same value aaftf_activate.sh exports so bowtie2/AAFTF are
 #     found in all execution modes.
 # ---------------------------------------------------------------------------
-ENV PATH="/opt/AAFTF/.pixi/envs/default/bin:/opt/pixi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ENV PATH="/opt/AAFTF/.pixi/envs/${PIXI_ENV}/bin:/opt/pixi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Default AAFTF_DB location (override at runtime with -e or -v).
 ENV AAFTF_DB="/opt/aaftf_db"

@@ -41,10 +41,10 @@ pre-commit run --all-files
 ### Testing
 ```bash
 # Unit tests (no external tools needed)
-python -m pytest tests/ -m unit -v
+pixi run -e dev pytest tests/ -m unit -v
 
 # All tests (integration tests need the external tools, e.g. from the pixi environment)
-python -m pytest tests/ -v
+pixi run -e dev pytest tests/ -v
 ```
 
 ## Code Style Guidelines

@@ -75,70 +75,71 @@ markers = [
 channels = ["conda-forge", "bioconda"]
 platforms = ["linux-64"]
 
+# ---------------------------------------------------------------------------
+# "default" feature (the top-level tables, included in every environment): what
+# `AAFTF pipeline` needs with its default settings -- see REQUIRED_TOOLS /
+# REQUIRED_PYTHON_PACKAGES in aaftf/dependency.py -- plus AAFTF itself.
+# Mirrored by environment.yml.
+# ---------------------------------------------------------------------------
 [tool.pixi.dependencies]
 python = ">=3.10,<3.15"
+bbmap = ">=39.80,<40"     # bbduk.sh, shuffle.sh, reformat.sh (brings java)
+spades = "*"
+blast = "*"
+sourmash = "*"
+bwa = "*"
+samtools = ">=1.24,<2"
+minimap2 = "*"
+biopython = ">=1.88"
+psutil = ">=5"
+matplotlib-base = ">=3"
+packaging = "*"
+bowtie2 = ">=2.5.5,<3"
+
+[tool.pixi.pypi-dependencies]
+aaftf = { path = ".", editable = true }
 
 # ---------------------------------------------------------------------------
-# Conda toolchain shared by every environment. Kept in an explicit "common"
-# feature (rather than the top-level/implicit default feature) so it can be
-# combined with either pypi source below without pixi's always-on default
-# feature dragging in both aaftf sources into the same solve at once.
+# "optional" feature: tools only used by optional steps (polish, depth, mito,
+# fcs_screen, fcs_gx_purge) or non-default options (trim --method fastp /
+# trimmomatic, assemble --method megahit / unicycler, filter --aligner bowtie2)
+# -- OPTIONAL_TOOLS in aaftf/dependency.py.
+# The complete environment (default + optional) is mirrored by environment.dev.yml.
 # ---------------------------------------------------------------------------
-[tool.pixi.feature.common.dependencies]
-samtools = ">=1.24,<2"
-taxonkit = "*"
-bwa = "*"
-minimap2 = "*"
-freebayes = "*"
-yak = "*"
-blast = "*"
-diamond = "*"
-sourmash = "*"
-trimmomatic = "*"
-spades = "*"
+[tool.pixi.feature.optional.dependencies]
+pigz = "*"
+bowtie2 = "*"
 fastp = "*"
-novoplasty = "*"
+trimmomatic = "*"
 megahit = "*"
 unicycler = "*"
-fastqc = "*"
-flye = "*"
-pypolca = ">=0.5.0,<0.6"
 polypolish = ">=0.7.1,<0.8"
+pypolca = ">=0.5.0,<0.6"
+freebayes = "*"
 nextpolish2 = ">=0.2.2,<0.3"
+yak = "*"
 racon = "*"
-hifiasm = "*"
-kraken2 = "*"
-gfatools = "*"
-ncbi-fcs-gx = "*"
 mosdepth = ">=0.3.10"
-bbmap = ">=39.80,<40"
+novoplasty = "*"
+ncbi-fcs-gx = "*"
 
-[tool.pixi.feature.dev.pypi-dependencies]
-aaftf = { path = ".", editable = true, extras = ["dev"] }
-
-# ---------------------------------------------------------------------------
-# "release" environment — installs AAFTF from PyPI/GitHub.
-# Used by:  pixi install --environment release
-#            docker build --build-arg PIXI_ENV=release ...
-#
-# Release workflow:
-#   1. git tag v0.X.Y && git push origin v0.X.Y
-#   2. Update this file: change branch="main" to tag="v0.X.Y"
-#   3. pixi install --environment release  (regenerates pixi.lock)
-#   4. git add pixi.lock && git commit -m "Bump aaftf to v0.X.Y" && git push
-#
-# Until step 2 is done, this tracks the main branch (development builds).
-# ---------------------------------------------------------------------------
-[tool.pixi.feature.release.pypi-dependencies]
-aaftf = { git = "https://github.com/stajichlab/AAFTF", branch = "main" }
-
-[tool.pixi.tasks]
-# Build bowtie2 from source into the active env to fix AVX2 (x86-64-v3)
-# runtime fallback in the conda binary. Run once after `pixi install`:
-#   pixi run install-bowtie2
+[tool.pixi.feature.optional.tasks]
+# The conda bowtie2 above works but cannot use AVX2 (it falls back from its
+# x86-64-v3 build at runtime). For AVX2 speed, rebuild it from source into the
+# environment once after installing (this replaces the conda binaries):
+#   pixi run -e complete install-bowtie2
 # Mirrors the approach used in funannotate.
 install-bowtie2 = { cmd = "bash install_scripts/pixi_install_bowtie2.sh", description = "Build bowtie2 from source to fix AVX2 runtime fallback issues" }
 
+# ---------------------------------------------------------------------------
+# "dev" feature: test and lint tools.
+# ---------------------------------------------------------------------------
+[tool.pixi.feature.dev.dependencies]
+pytest = ">=8.0.0"
+pytest-cov = ">=5.0.0"
+pre-commit = ">=4"
+
 [tool.pixi.environments]
-default = { features = ["common", "dev"] }
-release = { features = ["common", "release"] }
+default = { solve-group = "aaftf" }                                      # default pipeline
+complete = { features = ["optional"], solve-group = "aaftf" }           # + every optional tool
+dev = { features = ["optional", "dev"], solve-group = "aaftf" }         # + test/lint tools
