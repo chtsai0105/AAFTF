@@ -206,10 +206,11 @@ The specified assembler can be made through the `--method` option.
 The full set of options are below.
 
 ```
-usage: AAFTF assemble [-h] -1 FASTQ -o FASTA [-2 FASTQ] [-w DIR]
-                      [--method {spades,megahit,unicycler}] [--merged MERGED]
-                      [--tmpdir DIR] [--assembler_args ARG] [-c INT] [-m GB]
-                      [-q] [-v] [--no-careful] [--no-isolate] [-lr FASTQ]
+usage: AAFTF assemble [-h] -1 FASTQ -o FASTA [-2 FASTQ] [--merged MERGED]
+                      [-w DIR] [--tmpdir DIR]
+                      [--method {spades,megahit,unicycler}]
+                      [--assembler_args ARG] [-c INT] [-m GB] [-q] [-v]
+                      [--no-careful] [--no-isolate] [-lr FASTQ]
 
 Run assembler on cleaned reads
 
@@ -225,15 +226,15 @@ required arguments:
 optional arguments:
   -2 FASTQ, --read2 FASTQ
                         Read 2 (reverse) FASTQ for paired-end data
+  --merged MERGED       Merged reads from flash or fastp or just single end
+                        reads
   -w DIR, --workdir DIR
                         Working directory for intermediate files; a temporary
                         one is created and removed afterwards (kept with -v)
                         when not given
+  --tmpdir DIR          Temporary directory for the assembler
   --method {spades,megahit,unicycler}
                         Assembly method (default: spades)
-  --merged MERGED       Merged reads from flash or fastp or just single end
-                        reads
-  --tmpdir DIR          Temporary directory for the assembler
   --assembler_args ARG  Extra argument passed to the assembler (repeat for
                         several)
   -c INT, --cpus INT    Number of CPUs/threads to use (default: 1)

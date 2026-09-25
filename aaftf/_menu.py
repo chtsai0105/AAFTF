@@ -260,14 +260,6 @@ def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     required.add_argument("-2", "--read2", metavar="FASTQ", type=str, required=True, help="Read 2 (reverse) FASTQ for paired-end data")
 
-    optional.add_argument("-o", "--out", type=str, default="mito.fasta", help="Output mitochondrial genome FASTA", metavar="FASTA")
-
-    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
-
-    optional.add_argument("--minlen", default=10000, type=int, help="Minimum expected genome size", metavar="BP")
-
-    optional.add_argument("--maxlen", default=100000, type=int, help="Maximum expected genome size", metavar="BP")
-
     optional.add_argument(
         "-s",
         "--seed",
@@ -275,6 +267,14 @@ def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         metavar="FASTA",
         help="Seed for NOVOPlasty: a mitochondrial sequence (e.g. a gene, or a related species' mitochondrial genome) the assembly is extended from. Default: the bundled Aspergillus nidulans cob fragment",
     )
+
+    optional.add_argument("-o", "--out", type=str, default="mito.fasta", help="Output mitochondrial genome FASTA", metavar="FASTA")
+
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
+
+    optional.add_argument("--minlen", default=10000, type=int, help="Minimum expected genome size", metavar="BP")
+
+    optional.add_argument("--maxlen", default=100000, type=int, help="Maximum expected genome size", metavar="BP")
 
     optional.add_argument(
         "--subsample",
@@ -369,14 +369,18 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
 
+    optional.add_argument("--merged", type=str, dest="merged", help="Merged reads from flash or fastp or just single end reads")
+
     optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
+
+    optional.add_argument("--tmpdir", type=str, help="Temporary directory for the assembler", metavar="DIR")
 
     optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler"], default="spades", help="Assembly method")
 
-    optional.add_argument("--merged", type=str, dest="merged", help="Merged reads from flash or fastp or just single end reads")
-    optional.add_argument("--tmpdir", type=str, help="Temporary directory for the assembler", metavar="DIR")
     optional.add_argument("--assembler_args", action="append", help="Extra argument passed to the assembler (repeat for several)", metavar="ARG", type=str)
+
     optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
+
     optional.add_argument("-m", "--memory", type=int, dest="memory", default=32, help="Max memory in GB for the assembler", metavar="GB")
 
     add_verbosity_args(optional)
@@ -555,11 +559,11 @@ def sourpurge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or phyla whose contigs are kept, e.g. Ascomycota", metavar="PHYLUM", type=str)
 
-    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
-
     optional.add_argument("-1", "--read1", metavar="FASTQ", type=str, help="Read 1 (forward) FASTQ, or single-end FASTQ")
 
     optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
+
+    optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
     optional.add_argument("--sourdb", type=str, help="sourmash LCA (k-31) taxonomy database; default: the one from 'AAFTF database'", metavar="FILE")
 
@@ -575,6 +579,7 @@ def sourpurge_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     )
 
     optional.add_argument("--just-show-taxonomy", dest="taxonomy", action="store_true", help="Show taxonomy information and exit")
+
     optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
     add_verbosity_args(optional)
@@ -606,8 +611,6 @@ def rmdup_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     required.add_argument("-o", "--out", type=str, required=True, help="Output assembly FASTA with duplicate contigs removed", metavar="FASTA")
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
-
     optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
     optional.add_argument("-pid", "--percent_id", type=int, dest="percent_id", default=95, help="Minimum percent identity for a contig to count as a duplicate", metavar="PCT")
@@ -621,6 +624,8 @@ def rmdup_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         action="store_true",
         help="Compute overlaps for every contig, otherwise only process contigs for L75 and below",
     )
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
     add_verbosity_args(optional)
 
@@ -887,15 +892,15 @@ def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or phyla whose contigs are kept, e.g. Ascomycota", metavar="PHYLUM", type=str)
 
-    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
-
-    optional.add_argument("--tmpdir", type=str, help="Temporary directory for the assembler", metavar="DIR")
-    optional.add_argument("--assembler_args", action="append", help="Extra argument passed to the assembler (repeat for several)", metavar="ARG", type=str)
-    optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler"], default="spades", help="Assembly method")
-
     optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
 
-    optional.add_argument("-m", "--memory", type=int, dest="memory", help="Max memory in GB, passed to every step that has -m/--memory (trim, filter, assemble); default: each step's own default", metavar="GB")
+    optional.add_argument("-w", "--workdir", type=str, help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
+
+    optional.add_argument("--tmpdir", type=str, help="Temporary directory for the assembler", metavar="DIR")
+
+    optional.add_argument("--assembler_args", action="append", help="Extra argument passed to the assembler (repeat for several)", metavar="ARG", type=str)
+
+    optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler"], default="spades", help="Assembly method")
 
     optional.add_argument("-ml", "--minlen", type=int, default=75, help="Minimum read length to keep after trimming", metavar="BP")
 
@@ -903,13 +908,15 @@ def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URL(s) of FASTA files whose sequences are screened out of the reads", metavar="URL")
 
-    optional.add_argument("-mc", "--mincontiglen", type=int, default=500, help="Minimum length of contigs to keep")
-
-    optional.add_argument("-w", "--workdir", type=str, help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
+    optional.add_argument("-mc", "--mincontiglen", type=int, default=500, help="Minimum length of contigs to keep", metavar="BP")
 
     optional.add_argument("--sourdb", type=str, help="sourmash LCA (k-31) taxonomy database; default: the one from 'AAFTF database'", metavar="FILE")
 
     optional.add_argument("--mincovpct", default=5, type=int, help="Remove contigs whose coverage is below this percent of the N50 contigs' average coverage", metavar="PCT")
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
+
+    optional.add_argument("-m", "--memory", type=int, dest="memory", help="Max memory in GB, passed to every step that has -m/--memory (trim, filter, assemble); default: each step's own default", metavar="GB")
 
     add_verbosity_args(optional)
 
