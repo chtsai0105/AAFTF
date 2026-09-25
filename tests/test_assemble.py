@@ -1,8 +1,8 @@
-"""Unit tests for AAFTF/assemble.py.
+"""Unit tests for aaftf/assemble.py.
 
 Covers:
   - CLI parser defaults and flag presence for the 'assemble' subcommand
-  - run() guard: no read1 reads → sys.exit(1) for each assembler
+  - run() guard: no read1 reads → ValueError for each assembler
   - spades command construction for PE, SE, and merged reads
   - spades success path: scaffolds.fasta copied to outfile
   - spades graceful handling of missing scaffolds.fasta
@@ -227,8 +227,14 @@ class TestAssembleRunSpades:
         read2 = str(tmp_path / "filtered_2.fastq.gz")
         merged = str(tmp_path / "merged.fastq.gz")
         cmds, _ = _run_spades(tmp_path, read1, read2, merged=merged)
-        cmd_str = " ".join(cmds[0])
-        assert "--s1" in cmd_str
+        assert cmds[0][cmds[0].index("--s1") + 1] == merged
+
+    def test_merged_adds_s2_for_se(self, tmp_path):
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        merged = str(tmp_path / "merged.fastq.gz")
+        cmds, _ = _run_spades(tmp_path, read1, merged=merged)
+        assert cmds[0][cmds[0].index("--s1") + 1] == read1
+        assert cmds[0][cmds[0].index("--s2") + 1] == merged
 
     def test_command_includes_threads(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")
@@ -279,9 +285,23 @@ class TestAssembleRunSpades:
         read1 = str(tmp_path / "filtered_1.fastq.gz")
         read2 = str(tmp_path / "filtered_2.fastq.gz")
         cmds, _ = _run_spades(tmp_path, read1, read2)
-        cmd_str = " ".join(cmds[0])
-        assert "--cov-cutoff" in cmd_str
-        assert "auto" in cmd_str
+        assert cmds[0][cmds[0].index("--cov-cutoff") + 1] == "auto"
+
+    def test_meta_suppresses_cov_cutoff(self, tmp_path):
+        cmds, _ = _run_spades(tmp_path, str(tmp_path / "filtered_1.fastq.gz"), assembler_args=["--meta"])
+        assert "--meta" in cmds[0]
+        assert "--cov-cutoff" not in cmds[0]
+
+    def test_tmpdir_and_assembler_args_passed(self, tmp_path):
+        tmpdir = str(tmp_path / "tmp")
+        cmds, _ = _run_spades(tmp_path, str(tmp_path / "filtered_1.fastq.gz"), tmpdir=tmpdir, assembler_args=["-k", "21,33"])
+        assert cmds[0][cmds[0].index("--tmp-dir") + 1] == tmpdir
+        assert cmds[0][cmds[0].index("-k") + 1] == "21,33"
+
+    def test_out_derived_from_read1(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        _run_spades(tmp_path, str(tmp_path / "x.fastq.gz"), out=None)
+        assert (tmp_path / "x.spades.fasta").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +367,17 @@ class TestAssembleRunMegahit:
         read1 = str(tmp_path / "filtered_1.fastq.gz")
         cmds, _ = _run_megahit(tmp_path, read1)
         assert cmds[0][0] == "megahit"
+
+    def test_tmpdir_and_assembler_args_passed(self, tmp_path):
+        tmpdir = str(tmp_path / "tmp")
+        cmds, _ = _run_megahit(tmp_path, str(tmp_path / "filtered_1.fastq.gz"), tmpdir=tmpdir, assembler_args=["--k-list", "21,41"])
+        assert cmds[0][cmds[0].index("--tmp-dir") + 1] == tmpdir
+        assert cmds[0][cmds[0].index("--k-list") + 1] == "21,41"
+
+    def test_out_derived_from_read1(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        _run_megahit(tmp_path, str(tmp_path / "x.fq"), out=None)
+        assert (tmp_path / "x.megahit.fasta").exists()
 
 
 # ---------------------------------------------------------------------------

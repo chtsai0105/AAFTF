@@ -46,7 +46,7 @@ def main() -> int:
     args = parser.parse_args()
 
     # each subcommand parser binds its own subtool's run() via
-    # parser_x.set_defaults(func=<module>.run) in AAFTF/_menu.py; a bare
+    # parser_x.set_defaults(func=<module>.run) in aaftf/_menu.py; a bare
     # "AAFTF" invocation with unrecognized/no subcommand leaves func unset.
     if not hasattr(args, "func"):
         parser.print_help(sys.stderr)

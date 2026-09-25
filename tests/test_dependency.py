@@ -41,11 +41,27 @@ class TestRun:
         with patch("aaftf.dependency.shutil.which", side_effect=_which), patch("aaftf.dependency.importlib.import_module", side_effect=_import):
             dependency.run()
 
-    def test_everything_installed(self):
-        self._run()
+    def test_everything_installed(self, caplog, capsys):
+        import logging
 
-    def test_missing_optional_tool_and_package_are_not_errors(self):
-        self._run(missing_tools={"bowtie2", "megahit", "mosdepth"}, missing_imports={"matplotlib"})
+        with caplog.at_level(logging.INFO, logger="aaftf.dependency"):
+            self._run()
+        assert "Everything the default pipeline needs is installed" in caplog.text
+        assert "optional tool(s)/package(s) missing" not in caplog.text
+        assert "[MISSING]" not in capsys.readouterr().out
+
+    def test_missing_optional_tool_and_package_are_not_errors(self, caplog, capsys):
+        import logging
+
+        with caplog.at_level(logging.INFO, logger="aaftf.dependency"):
+            self._run(missing_tools={"bowtie2", "megahit", "mosdepth"}, missing_imports={"matplotlib"})
+        assert "Everything the default pipeline needs is installed" in caplog.text
+        (note,) = (r.getMessage() for r in caplog.records if "optional tool(s)/package(s) missing" in r.getMessage())
+        assert note.startswith("NOTE: 4 ")
+        for name in ("bowtie2", "megahit", "mosdepth", "matplotlib"):
+            assert name in note
+        out = capsys.readouterr().out
+        assert "[MISSING] bowtie2" in out and "[MISSING] matplotlib" in out
 
     @pytest.mark.parametrize("tool", ["spades.py", "bbduk.sh", "sourmash"])
     def test_missing_pipeline_tool_is_an_error(self, tool):
@@ -57,7 +73,7 @@ class TestRun:
             self._run(missing_imports={"psutil"})
 
 
-def test_every_tool_is_listed_once():
+def test_required_and_optional_tools_disjoint():
     from aaftf.dependency import OPTIONAL_TOOLS, REQUIRED_TOOLS
 
     assert not set(REQUIRED_TOOLS) & set(OPTIONAL_TOOLS)

@@ -217,33 +217,17 @@ def run(
     # ------------------------------------------------------------------
     # Statistics for outlier detection
     # ------------------------------------------------------------------
-    analysis_rows = [c for c in contig_rows if c.get("length", 0) >= min_contig_len]
-    # mosdepth global mean: bases covered / assembly length (length-weighted)
-    mosdepth_mean_depth = total_row["mean"] if total_row else None
-    if analysis_rows:
-        depths = [c["mean"] for c in analysis_rows]
-        # Per-contig arithmetic mean (unweighted)
-        contig_arith_mean = sum(depths) / len(depths)
-        # Use mosdepth global mean for outlier threshold when available; it is
-        # the more accurate estimate because it weights by contig length.
-        mean_depth = mosdepth_mean_depth if mosdepth_mean_depth is not None else contig_arith_mean
-        # Population SD is intentional: the contigs ARE the full assembly
-        # (not a sample). Sample SD would systematically push the threshold
-        # above any single outlier, defeating outlier detection on small sets.
-        sd_depth = math.sqrt(sum((d - mean_depth) ** 2 for d in depths) / len(depths))
-        threshold_2sd = mean_depth + 2.0 * sd_depth
-        threshold_3sd = mean_depth + 3.0 * sd_depth
-    else:
-        contig_arith_mean = mosdepth_mean_depth if mosdepth_mean_depth is not None else 0.0
-        mean_depth = contig_arith_mean
-        sd_depth = 0.0
-        threshold_2sd = 0.0
-        threshold_3sd = 0.0
-
+    stats = _depth_outliers(contig_rows, total_row, min_contig_len)
+    mosdepth_mean_depth = stats["mosdepth_mean_depth"]
+    contig_arith_mean = stats["contig_arith_mean"]
+    mean_depth = stats["mean_depth"]
+    sd_depth = stats["sd_depth"]
+    threshold_2sd = stats["threshold_2sd"]
+    threshold_3sd = stats["threshold_3sd"]
+    n_outliers_2sd = stats["n_outliers_2sd"]
+    n_outliers_3sd = stats["n_outliers_3sd"]
     contig_depth_sorted = sorted(contig_rows, key=lambda x: x["mean"], reverse=True)
     contig_length_sorted = sorted(contig_rows, key=lambda x: x["length"], reverse=True)
-    n_outliers_2sd = sum(1 for c in contig_rows if threshold_2sd < c["mean"] <= threshold_3sd)
-    n_outliers_3sd = sum(1 for c in contig_rows if c["mean"] > threshold_3sd)
 
     # ------------------------------------------------------------------
     # Write report
@@ -535,6 +519,59 @@ def parse_mosdepth_summary(
             else:
                 contigs.append(row)
     return total, contigs
+
+
+def _depth_outliers(contig_rows: list[dict[str, Any]], total_row: dict[str, Any] | None, min_contig_len: int) -> dict[str, Any]:
+    """Compute assembly depth statistics and outlier counts.
+
+    Args:
+        contig_rows: Per-contig mosdepth rows with ``length`` and ``mean`` keys.
+        total_row: The mosdepth ``total`` row, or None when absent.
+        min_contig_len: Contigs shorter than this are excluded from the
+            mean/SD statistics (but still counted as outliers).
+
+    Returns:
+        Dict with ``mosdepth_mean_depth`` (float or None), ``contig_arith_mean``,
+        ``mean_depth``, ``sd_depth`` (population SD), ``threshold_2sd``,
+        ``threshold_3sd``, ``n_outliers_2sd`` (contigs in (2SD, 3SD]) and
+        ``n_outliers_3sd`` (contigs above 3SD).
+    """
+    analysis_rows = [c for c in contig_rows if c.get("length", 0) >= min_contig_len]
+    # mosdepth global mean: bases covered / assembly length (length-weighted)
+    mosdepth_mean_depth = total_row["mean"] if total_row else None
+    if analysis_rows:
+        depths = [c["mean"] for c in analysis_rows]
+        # Per-contig arithmetic mean (unweighted)
+        contig_arith_mean = sum(depths) / len(depths)
+        # Use mosdepth global mean for outlier threshold when available; it is
+        # the more accurate estimate because it weights by contig length.
+        mean_depth = mosdepth_mean_depth if mosdepth_mean_depth is not None else contig_arith_mean
+        # Population SD is intentional: the contigs ARE the full assembly
+        # (not a sample). Sample SD would systematically push the threshold
+        # above any single outlier, defeating outlier detection on small sets.
+        sd_depth = math.sqrt(sum((d - mean_depth) ** 2 for d in depths) / len(depths))
+        threshold_2sd = mean_depth + 2.0 * sd_depth
+        threshold_3sd = mean_depth + 3.0 * sd_depth
+    else:
+        contig_arith_mean = mosdepth_mean_depth if mosdepth_mean_depth is not None else 0.0
+        mean_depth = contig_arith_mean
+        sd_depth = 0.0
+        threshold_2sd = 0.0
+        threshold_3sd = 0.0
+
+    n_outliers_2sd = sum(1 for c in contig_rows if threshold_2sd < c["mean"] <= threshold_3sd)
+    n_outliers_3sd = sum(1 for c in contig_rows if c["mean"] > threshold_3sd)
+
+    return {
+        "mosdepth_mean_depth": mosdepth_mean_depth,
+        "contig_arith_mean": contig_arith_mean,
+        "mean_depth": mean_depth,
+        "sd_depth": sd_depth,
+        "threshold_2sd": threshold_2sd,
+        "threshold_3sd": threshold_3sd,
+        "n_outliers_2sd": n_outliers_2sd,
+        "n_outliers_3sd": n_outliers_3sd,
+    }
 
 
 def _parse_quantize_bins() -> tuple[list[str], dict[str, str]]:

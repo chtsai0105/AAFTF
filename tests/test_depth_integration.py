@@ -1,4 +1,4 @@
-"""Integration tests for AAFTF/depth.py.
+"""Integration tests for aaftf/depth.py.
 
 These tests invoke the *real* external tools (minimap2, bwa, samtools and
 mosdepth) on a small synthetic genome with reads sampled directly from it.

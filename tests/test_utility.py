@@ -1,4 +1,4 @@
-"""Unit tests for AAFTF/utility.py.
+"""Unit tests for aaftf/utility.py.
 
 All tests are pure Python — no external bioinformatics tools required.
 """
@@ -595,9 +595,78 @@ class TestAvailableCpus:
         monkeypatch.setenv("SLURM_CPUS_PER_TASK", "3")
         assert available_cpus() == 3
 
-    def test_invalid_slurm_value_ignored(self, monkeypatch):
-        monkeypatch.setenv("SLURM_CPUS_PER_TASK", "0")
-        assert available_cpus() >= 1
+    @pytest.mark.parametrize("value", ["0", "four", "-2"])
+    def test_invalid_slurm_value_ignored(self, monkeypatch, value):
+        monkeypatch.setenv("SLURM_CPUS_PER_TASK", value)
+        monkeypatch.setattr("aaftf.utility.os.sched_getaffinity", lambda pid: {0, 1, 2}, raising=False)
+        assert available_cpus() == 3
+
+
+class TestGetRam:
+    """get_ram() rounds available RAM down (to a multiple of 10 above 10 GB, else 1 decimal minus 0.1)."""
+
+    @staticmethod
+    def _ram(monkeypatch, avail_gb, max_lim=0):
+        from types import SimpleNamespace
+
+        from aaftf.utility import get_ram
+
+        monkeypatch.setattr("aaftf.utility.psutil.virtual_memory", lambda: SimpleNamespace(available=avail_gb * 1024**3))
+        return get_ram(max_lim)
+
+    @pytest.mark.parametrize("avail, expected", [(25.7, 20.0), (10.5, 10.0), (3.05, 2.9), (0.04, 0.0)])
+    def test_rounds_down(self, monkeypatch, avail, expected):
+        result = self._ram(monkeypatch, avail)
+        assert result == pytest.approx(expected)
+        assert result <= avail
+
+    def test_max_lim_caps(self, monkeypatch):
+        assert self._ram(monkeypatch, 25.7, max_lim=8) == 8
+
+    def test_max_lim_above_available_does_not_raise_it(self, monkeypatch):
+        assert self._ram(monkeypatch, 25.7, max_lim=64) == 20.0
+
+
+class TestDbDirs:
+    def test_empty_entries_fall_back_to_home_cache(self, monkeypatch):
+        from aaftf.utility import db_dirs, home_db_cache
+
+        monkeypatch.setenv("AAFTF_DB", os.pathsep)
+        assert db_dirs() == [home_db_cache()]
+
+    def test_tilde_expanded(self, monkeypatch, tmp_path):
+        from aaftf.utility import db_dirs
+
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("AAFTF_DB", f"~/dbs{os.pathsep}{os.pathsep}")
+        assert db_dirs() == [(tmp_path / "dbs").resolve()]
+
+    def test_write_dir_skips_folder_that_cannot_be_created(self, monkeypatch, tmp_path):
+        from pathlib import Path
+
+        from aaftf.utility import db_write_dir
+
+        bad, good = (tmp_path / "bad").resolve(), (tmp_path / "good").resolve()
+        monkeypatch.setenv("AAFTF_DB", f"{bad}{os.pathsep}{good}")
+        real_mkdir = Path.mkdir
+
+        def _mkdir(self, *args, **kwargs):
+            if self == bad:
+                raise PermissionError(str(self))
+            return real_mkdir(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "mkdir", _mkdir)
+        assert db_write_dir() == good
+        assert good.is_dir() and not bad.exists()
+
+
+def test_make_workdir_without_setup_logging_writes_no_log(tmp_path):
+    from aaftf.utility import cleanup_workdir, make_workdir
+
+    folder, custom = make_workdir(str(tmp_path / "wd"), "step")
+    assert custom and (tmp_path / "wd").is_dir()
+    cleanup_workdir(folder, False, custom)
+    assert not (tmp_path / "wd" / "step.log").exists()
 
     def test_uses_affinity_without_slurm(self, monkeypatch):
         monkeypatch.delenv("SLURM_CPUS_PER_TASK", raising=False)

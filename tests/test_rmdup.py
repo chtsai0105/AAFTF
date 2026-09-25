@@ -1,4 +1,4 @@
-"""Unit tests for AAFTF/rmdup.py (minimap2 is stubbed; no external tools needed)."""
+"""Unit tests for aaftf/rmdup.py (minimap2 is stubbed; no external tools needed)."""
 
 from pathlib import Path
 from unittest.mock import patch

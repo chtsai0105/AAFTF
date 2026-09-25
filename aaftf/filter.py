@@ -58,8 +58,10 @@ def run(
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
 
     Raises:
-        ValueError: If ``read1`` is not given.
+        ValueError: If ``read1`` is not given or ``aligner`` is unknown.
     """
+    if aligner not in ("bbduk", "bowtie2", "bwa", "minimap2"):
+        raise ValueError(f"Unknown aligner {aligner}; use bbduk, bowtie2, bwa or minimap2")
     workdir, custom_workdir = make_workdir(workdir, "filter")
     bamthreads = min(cpus, 4)
 
@@ -189,8 +191,6 @@ def run(
                 minimap2_cmd.append(reverse_reads)
 
             align_to_sorted_bam(minimap2_cmd, align_bam, bamthreads, cwd=workdir, debug=debug)
-    else:
-        logger.info("Must specify bowtie2, bwa, or minimap2 for filtering")
 
     if Path(align_bam).is_file():
         # display mapping stats in terminal

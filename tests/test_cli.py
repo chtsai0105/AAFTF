@@ -2,7 +2,7 @@
 
 Covers subcommand registration, argparse defaults, and required-argument
 enforcement. Each subcommand parser binds its own subtool's run() function
-directly via parser.set_defaults(func=<module>.run) in AAFTF/_menu.py, and
+directly via parser.set_defaults(func=<module>.run) in aaftf/_menu.py, and
 main() invokes it as args.func(**vars(args)); these tests intercept that by
 patching the relevant module's run() before it fires.
 
@@ -46,7 +46,7 @@ def _parse_with_main(argv):
     module = _COMMAND_MODULE[argv[1]]
     with patch.object(sys, "argv", argv):
         with patch(f"{module}.run", side_effect=_capture):
-            main()
+            assert main() == 0
     return captured.get("args")
 
 
@@ -313,15 +313,37 @@ class TestMainExitCodes:
     def test_success_returns_0(self):
         assert self._run(None) == 0
 
-    def test_missing_file_returns_2(self):
+    def test_missing_file_returns_2(self, capsys):
         assert self._run(FileNotFoundError("no such file")) == 2
+        assert "ERROR: An error occurred: no such file" in capsys.readouterr().err
+
+    def test_broken_pipe_returns_0(self):
+        assert self._run(BrokenPipeError()) == 0
 
     def test_other_error_returns_1(self, capsys):
         assert self._run(RuntimeError("tool failed")) == 1
         assert "tool failed" in capsys.readouterr().err
 
-    def test_keyboard_interrupt_returns_130(self):
+    def test_keyboard_interrupt_returns_130(self, capsys):
         assert self._run(KeyboardInterrupt()) == 130
+        assert "WARNING: Terminated by user." in capsys.readouterr().err
+
+    @pytest.mark.parametrize("verbose", [False, True])
+    def test_traceback_on_terminal_only_with_verbose(self, capsys, verbose):
+        argv = ["AAFTF", "sort", "-i", "in.fa", "-o", "out.fa"] + (["-v"] if verbose else [])
+        with patch.object(sys, "argv", argv), patch("aaftf.sort.run", side_effect=RuntimeError("boom")):
+            assert main() == 1
+        err = capsys.readouterr().err
+        assert "ERROR: An error occurred: boom" in err
+        assert ("Traceback (most recent call last)" in err) is verbose
+
+    def test_parsed_args_without_subcommand_returns_1(self, capsys):
+        """Defensive branch: parse_args() yielding no subcommand prints help instead of crashing."""
+        from argparse import ArgumentParser
+
+        with patch.object(sys, "argv", ["AAFTF", "--"]), patch.object(ArgumentParser, "parse_args", return_value=Namespace()):
+            assert main() == 1
+        assert "usage: AAFTF" in capsys.readouterr().err
 
     def test_no_arguments_returns_1(self):
         with patch.object(sys, "argv", ["AAFTF"]):

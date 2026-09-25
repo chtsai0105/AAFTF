@@ -1,4 +1,4 @@
-"""Unit tests for AAFTF/sort.py.
+"""Unit tests for aaftf/sort.py.
 
 sort.run() is pure Python (BioPython only) — no external tools required.
 """

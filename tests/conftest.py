@@ -9,8 +9,20 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _run_in_tmp_dir(monkeypatch, tmp_path):
+    """Run every test from its own temporary directory.
+
+    Commands without a work directory write ./<command>.log with -v, and some steps write output
+    next to the current directory; this keeps all of that out of the repository.
+    """
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture(autouse=True)
 def _ample_resources(monkeypatch):
     """Keep main()'s -c/-m capping from depending on the test machine; capping tests patch these themselves."""
+    # Relies on aaftf.main importing available_cpus/get_ram by name (from aaftf.utility import ...).
+    monkeypatch.delenv("SLURM_CPUS_PER_TASK", raising=False)
     monkeypatch.setattr("aaftf.main.available_cpus", lambda: 1024)
     monkeypatch.setattr("aaftf.main.get_ram", lambda max_lim=0: 1024.0)
 
@@ -26,7 +38,12 @@ def _isolated_db_cache(monkeypatch, tmp_path_factory):
 @pytest.fixture(autouse=True)
 def _reset_aaftf_logger():
     """Undo setup_logging() (called by every CLI test via main()) so caplog keeps working in later tests."""
+    _reset_logging()
     yield
+    _reset_logging()
+
+
+def _reset_logging():
     import aaftf.utility as utility
 
     utility.finish_logging(None, False)  # close any step log file a failed run left open

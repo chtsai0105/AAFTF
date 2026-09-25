@@ -1,10 +1,11 @@
-"""Unit tests for AAFTF/trim.py.
+"""Unit tests for aaftf/trim.py.
 
 Covers:
   - CLI parser defaults and flag presence for the 'trim' subcommand
   - bbduk command construction for paired-end and single-end reads
   - fastp command construction including merge, dedup, and cut flags
-  - trimmomatic guard: exits when no jar is found
+  - trimmomatic: FileNotFoundError when no jar is found, ValueError without reads,
+    PE/SE command construction and _find_trimmomatic jar lookup
   - basename auto-derivation from the read1-reads filename
 """
 
@@ -406,6 +407,65 @@ class TestTrimRunTrimmomatic:
         # trimmomatic writes gzipped output directly (by the .gz extension)
         assert any(a.endswith("_1P.fastq.gz") for a in cmds[0])
         assert any(a.endswith("_2P.fastq.gz") for a in cmds[0])
+
+    def test_jar_found_builds_se_command(self, tmp_path):
+        read1 = str(tmp_path / "s_R1.fastq.gz")
+        fake_jar = str(tmp_path / "trimmomatic.jar")
+        fake_adaptor = str(tmp_path / "TruSeq3-SE.fa")
+        (tmp_path / "TruSeq3-SE.fa").write_text(">adapt\nATCG\n")
+        args = _make_trim_args(tmp_path, method="trimmomatic", read1=read1, read2=None, basename="s", trimmomatic_adaptors=fake_adaptor)
+        cmds = []
+        with patch("aaftf.trim._find_trimmomatic", return_value=fake_jar):
+            with patch("aaftf.trim.count_fastq", return_value=100):
+                with patch("aaftf.utility.subprocess.run", side_effect=lambda cmd, **kw: cmds.append(cmd)):
+                    from aaftf.trim import run
+
+                    run(**vars(args))
+        cmd = cmds[0]
+        assert cmd[3] == "SE"
+        assert "PE" not in cmd
+        assert cmd[cmd.index(read1) + 1] == "s_1U.fastq.gz"
+
+    def test_no_reads_raises(self, tmp_path):
+        from aaftf.trim import run_trimmomatic
+
+        adaptor = tmp_path / "TruSeq3-PE.fa"
+        adaptor.write_text(">adapt\nATCG\n")
+        with patch("aaftf.trim._find_trimmomatic", return_value=str(tmp_path / "trimmomatic.jar")) as find_jar:
+            with patch("aaftf.trim.run_cmd") as run_cmd:
+                with pytest.raises(ValueError, match="Must provide read1"):
+                    run_trimmomatic(None, None, "s", 1, 75, str(adaptor), "2:30:10", 3, 3, "4:15", "phred33", False, False)
+        find_jar.assert_not_called()  # checked before looking up the jar/adaptors
+        run_cmd.assert_not_called()
+
+
+class TestFindTrimmomatic:
+    def _find(self, tmp_path, content):
+        script = tmp_path / "bin" / "trimmomatic"
+        script.parent.mkdir()
+        script.write_text(content)
+        from aaftf.trim import _find_trimmomatic
+
+        with patch("aaftf.trim.shutil.which", return_value=str(script)):
+            return _find_trimmomatic(), script
+
+    def test_bash_wrapper_returns_jar_from_exec_line(self, tmp_path):
+        found, _ = self._find(tmp_path, '#!/bin/bash\nset -e\nexec java -Xmx1g -jar /x/trimmomatic.jar "$@"\n')
+        assert found == "/x/trimmomatic.jar"
+
+    def test_python_wrapper_returns_jar_next_to_script(self, tmp_path):
+        found, script = self._find(tmp_path, "#!/usr/bin/env python\nprint('hi')\n")
+        assert found == str(script.resolve().parent / "trimmomatic.jar")
+
+    def test_unknown_shebang_returns_none(self, tmp_path):
+        found, _ = self._find(tmp_path, "#!/bin/sh\nexec java -jar /x/trimmomatic.jar\n")
+        assert found is None
+
+    def test_not_on_path_returns_none(self):
+        from aaftf.trim import _find_trimmomatic
+
+        with patch("aaftf.trim.shutil.which", return_value=None):
+            assert _find_trimmomatic() is None
 
 
 class TestTrimmomaticAdaptorLookup:

@@ -1,14 +1,17 @@
-"""Unit tests for AAFTF/assess.py.
+"""Unit tests for aaftf/assess.py.
 
 Tests cover the pure-Python helper functions (make_regex_revcomp, find_telomere)
 and the full genome_asm_stats / run() pipeline against known small
 FASTA files.  No external tools are required.
 """
 
+import inspect
 import io
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+from Bio.Seq import Seq
 
 from aaftf.assess import find_telomere, genome_asm_stats, make_regex_revcomp, run
 from tests.conftest import (
@@ -194,3 +197,53 @@ class TestAssessRunErrors:
         fasta.write_text(content)
         with pytest.raises(ValueError, match="contains no sequence"):
             run(input=str(fasta))
+
+
+# ---------------------------------------------------------------------------
+# find_telomere with the real CLI default monomer
+# ---------------------------------------------------------------------------
+
+
+class TestFindTelomereDefaultMonomer:
+    """Telomere calls with run()'s default monomer and repeat count."""
+
+    MONOMER = inspect.signature(run).parameters["telomere_monomer"].default
+    N = inspect.signature(run).parameters["telomere_n_repeat"].default
+    FILLER = "GATTGCATGCAGTCAGTGCA" * 30  # 600 bp, no TAAC
+
+    def test_default_repeat_count(self):
+        assert self.N == 2
+
+    def test_forward_telomere(self):
+        seq = "TAACCC" * 4 + self.FILLER
+        assert find_telomere(Seq(seq), self.MONOMER, self.N) == (True, False)
+
+    def test_reverse_telomere(self):
+        seq = str(Seq("TAACCC" * 4 + self.FILLER).reverse_complement())
+        assert find_telomere(Seq(seq), self.MONOMER, self.N) == (False, True)
+
+    def test_single_copy_not_called(self):
+        seq = "TAACCC" + self.FILLER
+        assert find_telomere(Seq(seq), self.MONOMER, self.N) == (False, False)
+
+    def test_taac_with_one_c_not_called(self):
+        seq = "TAAC" * 6 + self.FILLER
+        rc = str(Seq(seq).reverse_complement())
+        assert find_telomere(Seq(seq), self.MONOMER, self.N) == (False, False)
+        assert find_telomere(Seq(rc), self.MONOMER, self.N) == (False, False)
+
+
+class TestAssessRunReportHandle:
+    def test_report_closed_when_stats_raise(self, fasta_file, tmp_path):
+        report = tmp_path / "report.txt"
+        handles = []
+
+        def boom(fasta, handle, *args):
+            handles.append(handle)
+            raise RuntimeError("fail")
+
+        with patch("aaftf.assess.genome_asm_stats", side_effect=boom):
+            with pytest.raises(RuntimeError):
+                run(input=str(fasta_file), report=str(report))
+        assert handles[0].closed
+        assert report.read_text() == ""

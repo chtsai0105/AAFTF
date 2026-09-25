@@ -106,7 +106,7 @@ def run(
                 continue
             line = line.strip()
             cols = line.split(",")
-            if "found" in cols[1]:
+            if cols[1].strip() == "found":
                 idx = 1
                 contig_taxonomy[cols[0]] = cols[idx + 1 :]
                 tax_clean = [x for x in cols[idx + 1 :] if x]

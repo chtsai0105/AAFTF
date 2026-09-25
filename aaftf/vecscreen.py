@@ -442,8 +442,8 @@ def _write_trimmed_and_split(fastafile: str, vec_hits: dict[str, list[tuple[str,
         vec_hits: Vector hits per contig id, from ``_classify_vector_hits``.
         cleaned: Output FASTA path.
     """
-    with open(cleaned, "w") as output_handle:
-        for record in SeqIO.parse(fastafile, "fasta"):
+    with open(cleaned, "w") as output_handle, open(fastafile) as fastain:
+        for record in SeqIO.parse(fastain, "fasta"):
             seq_str = str(record.seq)
             if record.id not in vec_hits:
                 if len(record.seq) >= 200:
@@ -513,8 +513,8 @@ def _write_final_outputs(outfile_vec: str, contigs_to_remove: dict[str, tuple[st
         mitochondria: Output mitochondrial-contigs FASTA.
     """
     n_clean = n_mito = 0
-    with open(outfile, "w") as oh, open(mitochondria, "w") as mh:
-        for record in SeqIO.parse(outfile_vec, "fasta"):
+    with open(outfile, "w") as oh, open(mitochondria, "w") as mh, open(outfile_vec) as vec_in:
+        for record in SeqIO.parse(vec_in, "fasta"):
             if record.id not in contigs_to_remove:
                 write_fasta(oh, record.description, str(record.seq))
                 n_clean += 1

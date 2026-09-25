@@ -220,7 +220,10 @@ def run_trimmomatic(
 
     Raises:
         FileNotFoundError: If the Trimmomatic jar or the adaptors file cannot be located.
+        ValueError: If ``read1`` is not given.
     """
+    if not read1:
+        raise ValueError("Must provide read1 and read2 pairs or a single read set")
     trimmomatic_path = _find_trimmomatic()
     if trimmomatic_path:
         jarfile = trimmomatic_path
@@ -272,7 +275,7 @@ def run_trimmomatic(
             slidingwindow,
             f"MINLEN:{minlen}",
         ]
-    elif read1 and not read2:
+    else:
         cmd = [
             "java",
             "-jar",
@@ -289,9 +292,6 @@ def run_trimmomatic(
             slidingwindow,
             f"MINLEN:{minlen}",
         ]
-    else:
-        logger.info("Must provide read1 and read2 pairs or a single read set")
-        return
 
     logger.info("Running trimmomatic adapter and quality trimming")
     run_cmd(cmd, debug)

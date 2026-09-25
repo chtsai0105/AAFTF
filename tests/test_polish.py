@@ -1,4 +1,4 @@
-"""Unit tests for AAFTF/polish.py.
+"""Unit tests for aaftf/polish.py.
 
 Covers:
   - CLI parser defaults and flag presence

@@ -84,3 +84,32 @@ class TestNoWorkdirLog:
     def test_no_log_without_verbose(self, tmp_path, monkeypatch):
         self._sort(tmp_path, monkeypatch)
         assert not (tmp_path / "sort.log").exists()
+
+
+def test_two_steps_like_pipeline(tmp_path, monkeypatch):
+    """Each step log holds its own messages; between-step lines go to the next step, the final hint to the last."""
+    import logging
+
+    from aaftf import utility
+
+    monkeypatch.chdir(tmp_path)
+    log = logging.getLogger("aaftf.pipeline")
+    utility.setup_logging()
+    dir_a, custom_a = utility.make_workdir(str(tmp_path / "a"), "stepa")
+    log.info("inside stepa")
+    utility.cleanup_workdir(dir_a, False, custom_a)
+    log.info("between steps")
+    dir_b, custom_b = utility.make_workdir(str(tmp_path / "b"), "stepb")
+    log.info("inside stepb")
+    utility.cleanup_workdir(dir_b, False, custom_b)
+    log.info("final hint")
+    utility.finish_logging("pipeline", False)
+
+    log_a = (tmp_path / "a" / "stepa.log").read_text()
+    log_b = (tmp_path / "b" / "stepb.log").read_text()
+    assert "inside stepa" in log_a
+    assert not any(msg in log_a for msg in ("between steps", "inside stepb", "final hint"))
+    assert "inside stepa" not in log_b
+    assert log_b.index("between steps") < log_b.index("inside stepb") < log_b.index("final hint")
+    assert log_b.count("final hint") == 1
+    assert not (tmp_path / "pipeline.log").exists()

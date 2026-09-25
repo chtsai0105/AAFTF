@@ -1,4 +1,4 @@
-"""Unit tests for AAFTF/mito.py helpers."""
+"""Unit tests for aaftf/mito.py helpers."""
 
 from pathlib import Path
 from unittest.mock import patch
@@ -37,9 +37,19 @@ class TestOrientToStart:
         seq = "AAAACCCCGGGGTTTT"
         assert self._orient(tmp_path, [], seq) == seq
 
+    def test_negative_offset_leaves_sequence_unrotated(self, tmp_path):
+        seq = "AAAACCCCGGGGTTTT"
+        # query_start 10 pushes ref_start to 4 - 10 = -6 (would wrap via negative slicing)
+        assert self._orient(tmp_path, [(10, "+", 4, 8)], seq) == seq
 
-class TestNovoplastyInputs:
-    """run() writes the NOVOPlasty config from the bundled template and the bundled seed (package data)."""
+    def test_offset_past_end_leaves_sequence_unrotated(self, tmp_path):
+        seq = "AAAACCCCGGGGTTTA"
+        # minus strand: ref_start = 12 + 10 = 22 > len(seq); no rotation or reverse complement
+        assert self._orient(tmp_path, [(10, "-", 8, 12)], seq) == seq
+
+    def test_two_hits_leave_sequence_unrotated(self, tmp_path):
+        seq = "AAAACCCCGGGGTTTT"
+        assert self._orient(tmp_path, [(0, "+", 4, 8), (0, "+", 8, 12)], seq) == seq
 
     def _run(self, tmp_path, **kwargs):
         from aaftf.mito import run

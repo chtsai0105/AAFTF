@@ -1,4 +1,4 @@
-"""Unit tests for AAFTF/database.py (no network access)."""
+"""Unit tests for aaftf/database.py (no network access)."""
 
 import os
 import stat

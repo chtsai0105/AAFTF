@@ -1,8 +1,8 @@
-"""Unit tests for AAFTF/filter.py.
+"""Unit tests for aaftf/filter.py.
 
 Covers:
   - CLI parser defaults and flag presence for the 'filter' subcommand
-  - run() guard: no read1 reads → sys.exit(1)
+  - run() guard: no read1 reads → ValueError
   - bbduk command construction for paired-end and single-end reads
   - bwa/bowtie2/minimap2 command construction
   - contamdb FASTA is created from source files
@@ -15,7 +15,7 @@ import gzip
 import sys
 from argparse import Namespace
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -324,74 +324,109 @@ class TestFilterRunBbduk:
 
 
 # ---------------------------------------------------------------------------
-# bwa command construction
+# Aligner-based filtering (bwa / bowtie2 / minimap2)
 # ---------------------------------------------------------------------------
 
 
-def _run_filter_bwa(tmp_path, read1, read2=None, **extra):
-    """Run filter.run() with aligner=bwa; return captured subprocess commands."""
-    args = _make_filter_args(tmp_path, read1=read1, read2=read2, aligner="bwa", **extra)
-    workdir = Path(args.workdir)
-    workdir.mkdir(parents=True, exist_ok=True)
+def _run_filter_aligner(tmp_path, aligner, read1, read2=None, **extra):
+    """Run filter.run() with an aligner; return (run_cmd commands, aligner commands, args).
+
+    ``align_to_sorted_bam`` is faked: it records the aligner command and touches
+    the BAM path so the post-alignment ``samtools fastq`` block runs.
+    """
+    args = _make_filter_args(tmp_path, read1=read1, read2=read2, aligner=aligner, **extra)
+    Path(args.workdir).mkdir(parents=True, exist_ok=True)
     cmds = []
-    popen_cmds = []
+    align_cmds = []
 
-    mock_proc = MagicMock()
-    mock_proc.stdout = MagicMock()
-    mock_proc.communicate.return_value = (b"", b"")
-    mock_proc.wait.return_value = 0
-    mock_proc.returncode = 0
-
-    def _fake_run(cmd, **kw):
-        cmds.append(cmd)
-        # When samtools sort is called, create the alignBAM so post-processing triggers
-        if cmd and len(cmd) > 1 and "samtools" in str(cmd[0]):
-            # find the output BAM argument (samtools sort -o <out>)
-            for i, tok in enumerate(cmd):
-                if tok == "-o" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).touch()
-                    break
-            # fallback: touch any .bam in workdir
-            for f in workdir.glob("*.bam"):
-                pass  # already exists via above
-            else:
-                # create a stub alignBAM so isfile check passes
-                (workdir / "_stub.bam").touch()
+    def _fake_align(cmd, bam, *a, **kw):
+        align_cmds.append(cmd)
+        Path(bam).touch()
 
     from aaftf.filter import run
 
     with patch("aaftf.filter.download_file", side_effect=_mock_download):
         with patch("aaftf.filter.count_fastq", return_value=100):
-            with patch("aaftf.utility.subprocess.run", side_effect=_fake_run):
-                with patch("aaftf.utility.subprocess.Popen", side_effect=lambda cmd, **kw: (popen_cmds.append(cmd), mock_proc)[1]):
+            with patch("aaftf.filter.run_cmd", side_effect=lambda cmd, *a, **kw: cmds.append(cmd)):
+                with patch("aaftf.filter.align_to_sorted_bam", side_effect=_fake_align):
                     with patch("aaftf.filter.bam_read_count", return_value=(50, 50)):
-                        with patch("aaftf.utility.safe_remove"):
-                            run(**vars(args))
-    return cmds, popen_cmds, args
+                        run(**vars(args))
+    return cmds, align_cmds, args
 
 
-class TestFilterRunBwa:
-    def test_bwa_index_called(self, tmp_path):
+_ALIGNERS = ["bwa", "bowtie2", "minimap2"]
+_INDEX_CMD = {"bwa": ["bwa", "index"], "bowtie2": ["bowtie2-build"]}
+
+
+class TestFilterRunAligners:
+    @pytest.mark.parametrize("aligner", _ALIGNERS)
+    def test_pe_samtools_fastq_extracts_unmapped_pairs(self, tmp_path, aligner):
         read1 = str(tmp_path / "sample_R1.fastq.gz")
         read2 = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, popen_cmds, _ = _run_filter_bwa(tmp_path, read1, read2)
-        all_cmds = cmds + popen_cmds
-        assert any(c and c[0] == "bwa" and "index" in c for c in all_cmds)
+        cmds, _, args = _run_filter_aligner(tmp_path, aligner, read1, read2)
+        bam = str(Path(args.workdir, "sample_contam_db.bam"))
+        expected = ["samtools", "fastq", "-f", "12", "-1", "sample_filtered_1.fastq.gz", "-2", "sample_filtered_2.fastq.gz", bam]
+        assert expected in cmds
 
-    def test_bwa_mem_called(self, tmp_path):
+    @pytest.mark.parametrize("aligner", _ALIGNERS)
+    def test_se_samtools_fastq_extracts_unmapped_reads(self, tmp_path, aligner):
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        cmds, _, args = _run_filter_aligner(tmp_path, aligner, read1)
+        bam = str(Path(args.workdir, "sample_contam_db.bam"))
+        assert ["samtools", "fastq", "-f", "4", "-1", "sample_filtered.fastq.gz", bam] in cmds
+
+    @pytest.mark.parametrize("aligner", ["bwa", "bowtie2"])
+    def test_index_built(self, tmp_path, aligner):
+        cmds, _, args = _run_filter_aligner(tmp_path, aligner, str(tmp_path / "sample_R1.fastq.gz"))
+        contamdb = str(Path(args.workdir, "contamdb.fa"))
+        idx = _INDEX_CMD[aligner]
+        assert any(c[: len(idx)] == idx and contamdb in c for c in cmds)
+
+    def test_bwa_command(self, tmp_path):
         read1 = str(tmp_path / "sample_R1.fastq.gz")
         read2 = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, popen_cmds, _ = _run_filter_bwa(tmp_path, read1, read2)
-        all_cmds = cmds + popen_cmds
-        assert any(c and c[0] == "bwa" and "mem" in c for c in all_cmds)
+        _, align_cmds, _ = _run_filter_aligner(tmp_path, "bwa", read1, read2)
+        assert align_cmds == [["bwa", "mem", "-t", "1", "contamdb.fa", read1, read2]]
 
-    def test_bwa_mem_includes_reads(self, tmp_path):
+    def test_bwa_se_command(self, tmp_path):
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        _, align_cmds, _ = _run_filter_aligner(tmp_path, "bwa", read1)
+        assert align_cmds == [["bwa", "mem", "-t", "1", "contamdb.fa", read1]]
+
+    def test_bowtie2_pe_command(self, tmp_path):
         read1 = str(tmp_path / "sample_R1.fastq.gz")
         read2 = str(tmp_path / "sample_R2.fastq.gz")
-        cmds, popen_cmds, _ = _run_filter_bwa(tmp_path, read1, read2)
-        mem_cmds = [c for c in popen_cmds if c and c[0] == "bwa" and "mem" in c]
-        assert len(mem_cmds) > 0
-        assert read1 in mem_cmds[0]
+        _, align_cmds, _ = _run_filter_aligner(tmp_path, "bowtie2", read1, read2)
+        cmd = align_cmds[0]
+        assert cmd[:3] == ["bowtie2", "-x", "contamdb.fa"]
+        assert cmd[-4:] == ["-1", read1, "-2", read2]
+        assert "-U" not in cmd
+
+    def test_bowtie2_se_command(self, tmp_path):
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        _, align_cmds, _ = _run_filter_aligner(tmp_path, "bowtie2", read1)
+        cmd = align_cmds[0]
+        assert cmd[-2:] == ["-U", read1]
+        assert "-1" not in cmd
+
+    def test_minimap2_pe_command(self, tmp_path):
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        read2 = str(tmp_path / "sample_R2.fastq.gz")
+        _, align_cmds, _ = _run_filter_aligner(tmp_path, "minimap2", read1, read2)
+        assert align_cmds == [["minimap2", "-ax", "sr", "-t", "1", "contamdb.fa", read1, read2]]
+
+    def test_minimap2_se_command(self, tmp_path):
+        read1 = str(tmp_path / "sample_R1.fastq.gz")
+        _, align_cmds, _ = _run_filter_aligner(tmp_path, "minimap2", read1)
+        assert align_cmds == [["minimap2", "-ax", "sr", "-t", "1", "contamdb.fa", read1]]
+
+    def test_existing_bam_skips_alignment(self, tmp_path):
+        workdir = tmp_path / "workdir"
+        workdir.mkdir()
+        (workdir / "sample_contam_db.bam").touch()
+        cmds, align_cmds, _ = _run_filter_aligner(tmp_path, "bwa", str(tmp_path / "sample_R1.fastq.gz"))
+        assert align_cmds == []
+        assert any(c[:2] == ["samtools", "fastq"] for c in cmds)
 
 
 class TestFilterDatabases:
@@ -419,3 +454,13 @@ class TestFilterDatabases:
         calls = self._run(tmp_path, screen_accessions=["NC_001422"])
         assert calls == [SEQ_DBS["nucleotide"] % "NC_001422"]
         assert calls[0].startswith("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?")
+
+
+def test_unknown_aligner_raises_before_any_work(tmp_path, monkeypatch):
+    """An aligner outside the CLI choices is rejected up front (no work directory created)."""
+    from aaftf.filter import run
+
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="Unknown aligner"):
+        run(read1=str(tmp_path / "R1.fq"), aligner="novoalign")
+    assert not list(tmp_path.glob("aaftf-filter_*"))
