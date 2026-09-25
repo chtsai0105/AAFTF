@@ -58,20 +58,23 @@ FCSADAPTOR = {
 }
 
 # Databases `AAFTF database` can fetch, keyed by abbreviation. `used_by` lists the subcommands that
-# read each one; `executable` marks files that must be runnable after download.
+# read each one; `required` marks those `AAFTF pipeline` needs with its default settings (the rest are
+# only for non-default options or optional steps); `executable` marks files that must be runnable
+# after download.
 DATABASES = {
-    "phix": {"filename": CONTAMINANT_ACCESSIONS["phiX"][0].rsplit("/", 1)[-1], "url": CONTAMINANT_ACCESSIONS["phiX"][0], "used_by": "filter"},
-    "univec": {"filename": DB_LINKS["UniVec"][0].rsplit("/", 1)[-1], "url": DB_LINKS["UniVec"][0], "used_by": "filter, vecscreen"},
-    "euks": {"filename": DB_LINKS["CONTAM_EUKS"][0].rsplit("/", 1)[-1], "url": DB_LINKS["CONTAM_EUKS"][0], "used_by": "vecscreen"},
-    "proks": {"filename": DB_LINKS["CONTAM_PROKS"][0].rsplit("/", 1)[-1], "url": DB_LINKS["CONTAM_PROKS"][0], "used_by": "vecscreen"},
-    "mitodb": {"filename": DB_LINKS["MITO"][0].rsplit("/", 1)[-1], "url": DB_LINKS["MITO"][0], "used_by": "vecscreen"},
-    "sm_gbk": {**{k: DB_LINKS["sourmash_gbk"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gbk)"},
-    "sm_gtdbrep": {**{k: DB_LINKS["sourmash_gtdbrep"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdbrep)"},
-    "sm_gtdb": {**{k: DB_LINKS["sourmash_gtdb"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdb)"},
-    "fcs_script": {"filename": "run_fcsadaptor.sh", "url": FCSADAPTOR["EXEURL"] % FCSADAPTOR["VERSION"], "used_by": "fcs_screen", "executable": True},
+    "phix": {"filename": CONTAMINANT_ACCESSIONS["phiX"][0].rsplit("/", 1)[-1], "url": CONTAMINANT_ACCESSIONS["phiX"][0], "used_by": "filter", "required": True},
+    "univec": {"filename": DB_LINKS["UniVec"][0].rsplit("/", 1)[-1], "url": DB_LINKS["UniVec"][0], "used_by": "filter, vecscreen", "required": True},
+    "euks": {"filename": DB_LINKS["CONTAM_EUKS"][0].rsplit("/", 1)[-1], "url": DB_LINKS["CONTAM_EUKS"][0], "used_by": "vecscreen", "required": True},
+    "proks": {"filename": DB_LINKS["CONTAM_PROKS"][0].rsplit("/", 1)[-1], "url": DB_LINKS["CONTAM_PROKS"][0], "used_by": "vecscreen", "required": True},
+    "mitodb": {"filename": DB_LINKS["MITO"][0].rsplit("/", 1)[-1], "url": DB_LINKS["MITO"][0], "used_by": "vecscreen", "required": True},
+    "sm_gbk": {**{k: DB_LINKS["sourmash_gbk"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gbk)", "required": True},
+    "sm_gtdbrep": {**{k: DB_LINKS["sourmash_gtdbrep"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdbrep)", "required": False},
+    "sm_gtdb": {**{k: DB_LINKS["sourmash_gtdb"][0][k] for k in ("filename", "url")}, "used_by": "sourpurge (--sourdb_type gtdb)", "required": False},
+    "fcs_script": {"filename": "run_fcsadaptor.sh", "url": FCSADAPTOR["EXEURL"] % FCSADAPTOR["VERSION"], "used_by": "fcs_screen", "required": False, "executable": True},
     "fcs_image": {
         "filename": FCSADAPTOR["SIFLOCAL"] % FCSADAPTOR["VERSION"],
         "url": "/".join([FCSADAPTOR["SIFURL"].rstrip("/"), FCSADAPTOR["VERSION"], FCSADAPTOR["SIF"]]),
         "used_by": "fcs_screen (singularity)",
+        "required": False,
     },
 }

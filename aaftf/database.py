@@ -26,8 +26,9 @@ def run(databases: list[str] | None = None, force: bool = False, **kwargs: Any) 
     """Execute the ``database`` subcommand.
 
     Args:
-        databases: Database abbreviations or file names (case-insensitive), or
-            ``all``. When empty, list the databases instead of downloading.
+        databases: Database abbreviations or file names (case-insensitive), or ``required``
+            (what the default pipeline needs), ``optional`` (the rest) or ``all``. When empty,
+            list the databases instead of downloading.
         force: Re-download even if a copy already exists (into the first
             writable database folder).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``debug``, ...); ignored.
@@ -67,6 +68,8 @@ def run(databases: list[str] | None = None, force: bool = False, **kwargs: Any) 
 def _list_db() -> None:
     """List every database with its abbreviation, file, size, users and storage folder.
 
+    Databases are listed in two groups, like ``AAFTF dependency``: those ``AAFTF pipeline`` needs
+    with its default settings, and those only needed by non-default options or optional steps.
     Missing databases show their remote (estimated) size and "not downloaded".
     """
     folders = db_dirs()
@@ -74,28 +77,34 @@ def _list_db() -> None:
     for folder in folders:
         logger.info(f"{folder}{'' if folder.is_dir() else ' (does not exist yet)'}")
 
-    rows = []  # (name, file, size label, used by, location)
+    rows: list[tuple[str, str, str, str, str]] = []  # (name, file, size label, used by, location)
+    section_starts = {}  # row index -> heading printed before it
     downloaded_total = 0
     pending_total = 0
     pending_unknown = False
-    for abbr, entry in DATABASES.items():
-        local_path = find_db_file(entry["filename"])
-        size: int | None
-        if local_path:
-            size = Path(local_path).stat().st_size
-            downloaded_total += size
-            size_label, location = _human_size(size), str(Path(local_path).parent)
-        else:
-            size = _remote_size(entry["url"])
-            if size is None:
-                pending_unknown = True
+    for required, heading in ((True, "Needed by the default pipeline:"), (False, "Only for non-default options or optional steps:")):
+        section_starts[len(rows)] = heading
+        for abbr, entry in DATABASES.items():
+            if entry["required"] is not required:
+                continue
+            local_path = find_db_file(entry["filename"])
+            size: int | None
+            if local_path:
+                size = Path(local_path).stat().st_size
+                downloaded_total += size
+                size_label, location = _human_size(size), str(Path(local_path).parent)
             else:
-                pending_total += size
-            size_label, location = ("unknown" if size is None else _human_size(size)), "not downloaded"
-        rows.append((abbr, entry["filename"], size_label, entry["used_by"], location))
+                size = _remote_size(entry["url"])
+                if size is None:
+                    pending_unknown = True
+                else:
+                    pending_total += size
+                size_label, location = ("unknown" if size is None else _human_size(size)), "not downloaded"
+            rows.append((abbr, entry["filename"], size_label, entry["used_by"], location))
 
     # Any other files present that aren't databases (e.g. leftover reports)
     known_files = {entry["filename"] for entry in DATABASES.values()}
+    other_start = len(rows)
     for folder in folders:
         if not folder.is_dir():
             continue
@@ -104,16 +113,22 @@ def _list_db() -> None:
             downloaded_total += size
             rows.append(("-", str(f.relative_to(folder)), _human_size(size), "-", f"{folder} (other file)"))
 
+    if len(rows) > other_start:
+        section_starts[other_start] = "Other files in the database folders:"
+
     header = ("Name", "File", "Size", "Used by", "Location")
     name_w, file_w, size_w, used_w = (max(len(row[i]) for row in [header, *rows]) for i in range(4))
-    for name, filename, size_label, used_by, location in [header, *rows]:
+    print(f"  {header[0]:<{name_w}}  {header[1]:<{file_w}}  {header[2]:>{size_w}}  {header[3]:<{used_w}}  {header[4]}")
+    for i, (name, filename, size_label, used_by, location) in enumerate(rows):
+        if i in section_starts:
+            print(section_starts[i])
         print(f"  {name:<{name_w}}  {filename:<{file_w}}  {size_label:>{size_w}}  {used_by:<{used_w}}  {location}")
 
     pending_label = _human_size(pending_total) + ("+" if pending_unknown else "")
     print("-" * (name_w + file_w + size_w + used_w + 20))
     print(f"  {'Downloaded':<32} {_human_size(downloaded_total):>10}")
     print(f"  {'Not yet downloaded (estimated)':<32} {pending_label:>10}")
-    print("\nDownload with: AAFTF database NAME [NAME ...]   (abbreviation or file name, or 'all')")
+    print("\nDownload with: AAFTF database NAME [NAME ...]   (abbreviation or file name, or 'required', 'optional', 'all')")
 
 
 def _human_size(num_bytes: float) -> str:
@@ -152,10 +167,11 @@ def _remote_size(url: str) -> int | None:
 
 
 def _resolve(names: list[str]) -> list[str]:
-    """Map database abbreviations / file names (or ``all``) to abbreviations, in order, without duplicates.
+    """Map database abbreviations / file names (or a group keyword) to abbreviations, in order, without duplicates.
 
     Args:
-        names: Database abbreviations or file names (case-insensitive), or ``all``.
+        names: Database abbreviations or file names (case-insensitive), or ``required`` (what the
+            default pipeline needs), ``optional`` (the rest) or ``all``.
 
     Returns:
         Keys of ``DATABASES`` in the order first requested.
@@ -174,6 +190,8 @@ def _resolve(names: list[str]) -> list[str]:
         key = name.lower()
         if key == "all":
             matches = list(DATABASES)
+        elif key in ("required", "optional"):
+            matches = [abbr for abbr, entry in DATABASES.items() if entry["required"] is (key == "required")]
         elif key in lookup:
             matches = [lookup[key]]
         else:
@@ -182,6 +200,6 @@ def _resolve(names: list[str]) -> list[str]:
         selected.extend(abbr for abbr in matches if abbr not in selected)
 
     if unknown:
-        choices = f"Choose from: {', '.join(DATABASES)} (or their file names), or 'all'. Run 'AAFTF database' to list them."
+        choices = f"Choose from: {', '.join(DATABASES)} (or their file names), or 'required', 'optional', 'all'. Run 'AAFTF database' to list them."
         raise ValueError(f"unknown database(s): {', '.join(unknown)}\n{choices}")
     return selected

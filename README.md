@@ -68,7 +68,7 @@ writable one. The steps only read databases; download them once with `AAFTF data
 ```
 $ export AAFTF_DB=/path/with/space/aaftf_db   # or a shared, system-wide location
 $ AAFTF database                                        # list databases and where they are stored
-$ AAFTF database phix univec euks proks mitodb sm_gbk   # what the default pipeline needs
+$ AAFTF database required     # what the default pipeline needs: phix univec euks proks mitodb sm_gbk
 ```
 
 `fcs_screen` also needs the FCS-adaptor script and container image (`AAFTF database fcs_script fcs_image`,

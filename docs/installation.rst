@@ -159,7 +159,7 @@ by ``:``, like ``$PATH``):
 
     export AAFTF_DB=/path/with/space/aaftf_db
     AAFTF database                                        # list databases
-    AAFTF database phix univec euks proks mitodb sm_gbk   # download some
+    AAFTF database required   # what the default pipeline needs (phix univec euks proks mitodb sm_gbk)
 
 See :doc:`commands/database` for the list of databases and which subcommands use each (the
 sourmash indices are large, so fetch only the one you need).

@@ -31,7 +31,10 @@ Databases
 
 Run ``AAFTF database`` with no arguments to list every database: its short name, file, size,
 which subcommands use it, and the folder it is stored in (or ``not downloaded``, with the
-remote size):
+remote size). Like ``AAFTF dependency``, the list is split in two: the databases ``AAFTF pipeline``
+needs with its default settings (``phix``, ``univec``, ``euks``, ``proks``, ``mitodb``, ``sm_gbk``),
+then those only needed by non-default options or optional steps (``sm_gtdbrep``, ``sm_gtdb``,
+``fcs_script``, ``fcs_image``); any other files found in the database folders are listed last.
 
 .. list-table::
    :header-rows: 1
@@ -93,7 +96,8 @@ Invocation
      - Description
    * - ``DATABASE``
      - Databases to download, by short name (e.g. ``univec``) or file name (e.g. ``UniVec``), case
-       insensitive, or ``all``. With none, list the databases instead.
+       insensitive; or ``required`` (what the default pipeline needs), ``optional`` (the rest) or
+       ``all``. With none, list the databases instead.
    * - ``--force``
      - Re-download even if already present (into the first writable folder).
 
@@ -108,8 +112,11 @@ Example
     # See what is available, what is already downloaded, and where
     AAFTF database
 
-    # The databases filter/vecscreen/sourpurge need, with the GenBank sourmash index
-    AAFTF database phix univec euks proks mitodb sm_gbk
+    # Everything the default pipeline needs (phix univec euks proks mitodb sm_gbk)
+    AAFTF database required
+
+    # ... plus the FCS-adaptor files for fcs_screen
+    AAFTF database required fcs_script fcs_image
 
     # Names and file names can be mixed
     AAFTF database UniVec contam_in_prok.fa
