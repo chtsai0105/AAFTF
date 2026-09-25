@@ -3,9 +3,11 @@
 # Docker image built with conda-managed dependencies.
 #
 # Build (from source, editable install). AAFTF_VERSION must be supplied
-# explicitly via SETUPTOOLS_SCM_PRETEND_VERSION (the .git directory is excluded
-# from the build context by .dockerignore, so setuptools-scm cannot derive the
-# version inside the image):
+# explicitly (the .git directory is excluded from the build context by
+# .dockerignore, so hatch-vcs cannot derive the version inside the image). The
+# --build-arg (a tag like v0.7.0 or `git describe` output, converted to PEP 440 in
+# step 4) is given to hatch-vcs as SETUPTOOLS_SCM_PRETEND_VERSION and ends up in
+# the installed package metadata, which `AAFTF --version` reads:
 #   docker build --build-arg AAFTF_VERSION=$(git describe --tags --always) \
 #       -t aaftf:latest .
 #
@@ -26,7 +28,6 @@
 FROM debian:bookworm-slim
 
 ARG AAFTF_VERSION=0.0.0+unknown
-ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_AAFTF=${AAFTF_VERSION}
 
 ARG INSTALL_MODE=source
 ENV AAFTF_INSTALL_MODE=${INSTALL_MODE}
@@ -80,14 +81,17 @@ RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-${MINICONDA_VERSION}-
     rm Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
 
 # ---------------------------------------------------------------------------
-# 3. Configure conda + create environment
+# 3. Configure conda + install the tools into the base environment
+#    (${CONDA_PREFIX} is the Miniconda base, so install into it rather than
+#    `conda create` over it; version specs are quoted so bash does not treat
+#    ">" as a redirect)
 # ---------------------------------------------------------------------------
 RUN conda config --add channels conda-forge && \
     conda config --add channels bioconda && \
     conda config --set channel_priority strict && \
-    conda create -y -p "${CONDA_PREFIX}" \
-        python=3.10 \
-        samtools>=1.24 \
+    conda install -y -n base \
+        "python>=3.10,<3.15" \
+        "samtools>=1.24" \
         biopython \
         bwa \
         minimap2 \
@@ -111,9 +115,9 @@ RUN conda config --add channels conda-forge && \
         ncbi-fcs-gx \
         mosdepth \
         matplotlib \
-        bbmap>=39.80 \
-        pypolca>=0.5.0 \
-        pytest>=7.0 \
+        "bbmap>=39.80" \
+        "pypolca>=0.5.0" \
+        "pytest>=7.0" \
         pip \
         && \
     conda clean -afy
@@ -125,14 +129,18 @@ WORKDIR /opt/AAFTF
 
 COPY pyproject.toml ./
 COPY README.md ./
-COPY AAFTF/ AAFTF/
-COPY scripts/ scripts/
+COPY aaftf/ aaftf/
 
-RUN if [ "${AAFTF_INSTALL_MODE}" = "pypi" ]; then \
-        pip install aaftf==${AAFTF_VERSION}; \
+# hatch-vcs only honours the generic SETUPTOOLS_SCM_PRETEND_VERSION and needs a
+# PEP 440 version: drop a leading "v" and turn "-g<hash>" into "+g<hash>".
+RUN ver="${AAFTF_VERSION#v}" && \
+    export SETUPTOOLS_SCM_PRETEND_VERSION="${ver/-g/+g}" && \
+    if [ "${AAFTF_INSTALL_MODE}" = "pypi" ]; then \
+        pip install "aaftf==${SETUPTOOLS_SCM_PRETEND_VERSION}"; \
     else \
         pip install --no-deps -e .; \
-    fi
+    fi && \
+    python -c "import sys; from packaging.version import Version; from aaftf import __version__ as v; sys.exit(0 if Version(v) == Version(sys.argv[1]) else f'AAFTF reports {v}, expected {sys.argv[1]}')" "${SETUPTOOLS_SCM_PRETEND_VERSION}"
 
 # ---------------------------------------------------------------------------
 # 5. Smoke test

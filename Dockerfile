@@ -3,9 +3,11 @@
 # Docker image built with pixi-managed conda + PyPI dependencies.
 #
 # Build (from source, dev/editable install). AAFTF_VERSION must be supplied
-# explicitly: .dockerignore excludes .git from the build context, so
-# hatch-vcs/setuptools-scm cannot write AAFTF/_version.py inside the image.
-# Pass the host's git-derived version through the --build-arg:
+# explicitly: .dockerignore excludes .git from the build context, so hatch-vcs
+# cannot derive the version inside the image. The --build-arg (a tag like
+# v0.7.0 or `git describe` output like v0.7.0-beta.4-63-g7c3c423, converted to
+# PEP 440 in step 4) is given to hatch-vcs as SETUPTOOLS_SCM_PRETEND_VERSION, so
+# it ends up in the installed package metadata that `AAFTF --version` reads:
 #   docker build --build-arg AAFTF_VERSION=$(git describe --tags --always) \
 #       -t aaftf:latest .
 #
@@ -33,10 +35,10 @@ LABEL org.opencontainers.image.description="Automatic Assembly For The Fungi"
 # Pass --build-arg PIXI_ENV=release to install from the pinned git tag instead.
 ARG PIXI_ENV=default
 
-# setuptools-scm can't see git history inside the build context (.git is
-# excluded via .dockerignore), so the version must be supplied explicitly.
+# hatch-vcs can't see git history inside the build context (.git is excluded
+# via .dockerignore), so the version must be supplied explicitly; it is used
+# during `pixi install` (step 4) when aaftf is installed.
 ARG AAFTF_VERSION=0.0.0+unknown
-ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_AAFTF=${AAFTF_VERSION}
 
 LABEL org.opencontainers.image.title="AAFTF"
 LABEL org.opencontainers.image.description="Automatic Assembly For The Fungi"
@@ -99,43 +101,21 @@ COPY pyproject.toml pixi.lock ./
 COPY . .
 
 # ---------------------------------------------------------------------------
-# 3b. Bake the version into AAFTF/_version.py
-#    .git is excluded from the build context (see .dockerignore), so
-#    hatch-vcs/setuptools-scm cannot write this file during the pip editable
-#    install.  Write it here explicitly using the version supplied via
-#    --build-arg AAFTF_VERSION=<git describe output from the host>.
-# ---------------------------------------------------------------------------
-RUN python3 -c "\
-import os; \
-ver = os.environ.get('SETUPTOOLS_SCM_PRETEND_VERSION_FOR_AAFTF', '0.0.0+unknown'); \
-ver = ver.lstrip('v'); \
-os.makedirs('AAFTF', exist_ok=True); \
-open('AAFTF/_version.py', 'w').write(f'__version__ = version = \\\"{ver}\\\"\\n'); \
-print(f'Baked version {ver} into AAFTF/_version.py')"
-
-# ---------------------------------------------------------------------------
 # 4. Install conda + PyPI dependencies via pixi (locked / reproducible)
+#    hatch-vcs only honours the generic SETUPTOOLS_SCM_PRETEND_VERSION (not the
+#    _FOR_AAFTF form) and needs a PEP 440 version, so drop a leading "v" and
+#    turn `git describe`'s "-g<hash>" into a "+g<hash>" local version.
 # ---------------------------------------------------------------------------
-RUN pixi install --environment "${PIXI_ENV}" --locked && \
+RUN ver="${AAFTF_VERSION#v}" && \
+    export SETUPTOOLS_SCM_PRETEND_VERSION="${ver/-g/+g}" && \
+    pixi install --environment "${PIXI_ENV}" --locked && \
     # Export activation env-vars so every subsequent CMD can use them.
     pixi shell-hook --environment "${PIXI_ENV}" --shell bash \
         | grep '^export ' > /opt/aaftf_activate.sh && \
     chmod +x /opt/aaftf_activate.sh && \
+    source /opt/aaftf_activate.sh && \
+    python3 -c "import sys; from packaging.version import Version; from aaftf import __version__ as v; sys.exit(0 if Version(v) == Version(sys.argv[1]) else f'AAFTF reports {v}, expected {sys.argv[1]}')" "${SETUPTOOLS_SCM_PRETEND_VERSION}" && \
     pixi clean cache --yes
-
-# ---------------------------------------------------------------------------
-# 4b. Re-bake version into AAFTF/_version.py (after pixi install overwrites it)
-#    pixi installs aaftf as editable, which re-runs hatch-vcs/setuptools-scm.
-#    Without .git in the build context, hatch-vcs writes 0.0.0+unknown.
-#    Overwrite with the version we baked in step 3b.
-# ---------------------------------------------------------------------------
-RUN source /opt/aaftf_activate.sh && \
-    python3 -c "\
-import os; \
-ver = os.environ.get('SETUPTOOLS_SCM_PRETEND_VERSION_FOR_AAFTF', '0.0.0+unknown'); \
-ver = ver.lstrip('v'); \
-open('/opt/AAFTF/AAFTF/_version.py', 'w').write(f'__version__ = version = \\\"{ver}\\\"\\n'); \
-print(f'Baked version {ver} into AAFTF/_version.py')"
 
 # ---------------------------------------------------------------------------
 # 5. Build bowtie2 from source (fixes the conda binary's AVX2/x86-64-v3
