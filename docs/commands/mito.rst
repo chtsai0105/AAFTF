@@ -8,7 +8,12 @@ of the nuclear genome assembly, using NOVOPlasty's seed-and-extend organelle ass
 Algorithm
 =========
 
-1. Estimates read length from the input FASTQ (``estimate_read_length``).
+1. Subsamples the reads (``--subsample``, default 1,500,000 pairs; ``0`` keeps all reads): BBTools
+   ``reformat.sh`` keeps that many randomly chosen read pairs, with a fixed seed so reruns keep the
+   same pairs. Mitochondrial reads are usually at far higher coverage than nuclear ones, so this
+   saves time and memory without starving the assembly. (NOVOPlasty may also subsample on its
+   own to stay within ``-m``.)
+   Then estimates read length from the FASTQ (``estimate_read_length``).
 2. Selects the **seed**, the sequence NOVOPlasty starts assembling from and extends with matching
    reads: a user-supplied ``--seed`` FASTA (e.g. a gene, or the mitochondrial genome of a
    related species) or, by default, a bundled *Aspergillus nidulans* cytochrome-b (cob) fragment
@@ -18,9 +23,9 @@ Algorithm
    forward/reverse FASTQ paths) and runs ``NOVOPlasty.pl -c novo-config.txt``.
 4. Parses NOVOPlasty's output directory for (in priority order) a
    ``Circularized_assembly_*``, ``Contigs_1_*``, or ``Uncircularized_assemblies_*`` file.
-5. If circularized, rotates/reorients the genome to start at a chosen gene: aligns a start
-   sequence (``--starting``; by default a bundled spoa consensus of fungal cytochrome-b genes,
-   ``aaftf/data/mito-start-cob.fasta``) against the assembly with
+5. If circularized, rotates/reorients the genome to start at the cytochrome-b (cob) gene: aligns
+   a bundled spoa consensus of fungal cob genes (``aaftf/data/mito-start-cob.fasta``) against the
+   assembly with
    ``minimap2 -x map-ont``, and rotates the sequence to begin at that alignment's start
    coordinate (reverse-complementing if the hit is on the minus strand). Rotation is skipped
    (contig kept as-is, with a warning) if zero or multiple alignments are found, or if the
@@ -46,15 +51,15 @@ Cutoffs / defaults
    * - ``--maxlen``
      - 100000
      - Maximum expected mitochondrial genome size (NOVOPlasty search bound)
+   * - ``--subsample``
+     - 1500000
+     - Number of read pairs to keep before assembling; ``0`` keeps all reads
    * - ``-m/--memory``
      - 8 (GB)
      - NOVOPlasty max RAM, passed into the generated config
    * - ``--seed``
      - bundled *A. nidulans* cob fragment (``aaftf/data/mito-seed.fasta``)
      - Where NOVOPlasty starts assembling (the sequence it extends)
-   * - ``--starting``
-     - bundled consensus of fungal cob genes (``aaftf/data/mito-start-cob.fasta``)
-     - Start gene the finished circular genome is rotated to begin at (no effect on assembly)
 
 Invocation
 ==========
@@ -62,7 +67,7 @@ Invocation
 .. code-block:: text
 
     AAFTF mito -l LEFT -r RIGHT [-o OUT] [--minlen N] [--maxlen N]
-               [-s/--seed FASTA] [--starting FASTA] [-m MEMORY]
+               [-s/--seed FASTA] [--subsample PAIRS] [-m MEMORY]
                [-w WORKDIR] [-q] [-v] [--pipe]
 
 ``-l/--left`` and ``-r/--right`` are required (``mito`` only supports paired-end data); ``-o/--out``
@@ -76,9 +81,9 @@ Example
     AAFTF mito -l reads_trimmed/STRAINX_1P.fastq.gz -r reads_trimmed/STRAINX_2P.fastq.gz \
         -o STRAINX.mito.fasta
 
-    # Seed with a related species' mitogenome, and rotate the result to start at its nad1 gene
+    # Seed with a related species' mitogenome
     AAFTF mito -l STRAINX_1P.fastq.gz -r STRAINX_2P.fastq.gz -o STRAINX.mito.fasta \
-        --seed related_species_mito.fasta --starting related_species_nad1.fasta
+        --seed related_species_mito.fasta
 
 ``mito`` is not part of ``pipeline``. To keep mitochondrial reads out of the nuclear assembly,
 run it before :doc:`filter` and pass its output as ``filter --screen_local STRAINX.mito.fasta``.

@@ -291,10 +291,11 @@ def mito_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     )
 
     optional.add_argument(
-        "--starting",
-        type=str,
-        metavar="FASTA",
-        help="Start gene: a circular assembly is rotated (and reverse complemented if needed) to begin at this sequence. Default: the bundled consensus of fungal cob genes",
+        "--subsample",
+        type=int,
+        metavar="PAIRS",
+        default=1_500_000,
+        help="Randomly keep only this many read pairs (same pairs on every run) before assembling, since mitochondrial coverage is usually far higher than needed; 0 uses all reads",
     )
 
     optional.add_argument("-m", "--memory", type=int, dest="memory", default=8, help="Max Memory (in GB)")

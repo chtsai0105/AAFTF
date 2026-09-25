@@ -1,4 +1,4 @@
->COB1 cytochrome b (cob) spoa consensus of selected fungal cob genes; default mito --starting sequence
+>COB1 cytochrome b (cob) spoa consensus of selected fungal cob genes; mito rotates circular assemblies to start at this gene
 atgagaattttaaaaagtcatcctttattaaaattagttaatagttatattattgattca
 ccacaaccttctaatattagttatttatgaaattttggatctttattagctttatgttta
 gttatacaaattgtaactggtgttacattagctatgcactatacacctaatgttgattta

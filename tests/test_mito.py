@@ -50,7 +50,7 @@ class TestNovoplastyInputs:
                 popen.return_value.communicate.return_value = (b"", b"")
                 # no NOVOPlasty output is faked, so run() stops after writing its inputs
                 with pytest.raises(RuntimeError, match="did not produce an assembly"):
-                    run(left=str(tmp_path / "R1.fq"), right=str(tmp_path / "R2.fq"), out=str(tmp_path / "mt.fa"), workdir=str(workdir), **kwargs)
+                    run(left=str(tmp_path / "R1.fq"), right=str(tmp_path / "R2.fq"), out=str(tmp_path / "mt.fa"), workdir=str(workdir), subsample=0, **kwargs)
         return workdir
 
     def test_default_seed_copied_from_package_and_config_filled(self, tmp_path):
@@ -83,7 +83,7 @@ class TestNovoplastyOutputChoice:
         with patch("aaftf.mito.require_tools"), patch("aaftf.mito.estimate_read_length", return_value=150):
             with patch("aaftf.mito.subprocess.Popen", side_effect=_fake_popen):
                 with patch("aaftf.mito._orient_to_start", side_effect=lambda draft, out, **kw: orient.append(Path(draft).name)):
-                    run(left="R1.fq", right="R2.fq", out=str(out), workdir=str(tmp_path / "wd"))
+                    run(left="R1.fq", right="R2.fq", out=str(out), workdir=str(tmp_path / "wd"), subsample=0)
         return orient, out
 
     def test_circular_preferred(self, tmp_path):
@@ -99,9 +99,9 @@ class TestNovoplastyOutputChoice:
             self._run(tmp_path, {})
 
 
-class TestDefaultStartSequence:
-    def test_bundled_cob_consensus_is_aligned_by_default(self, tmp_path):
-        """With no --starting, minimap2 gets the bundled aaftf/data/mito-start-cob.fasta."""
+class TestStartSequence:
+    def test_bundled_cob_consensus_is_aligned(self, tmp_path):
+        """minimap2 aligns the bundled aaftf/data/mito-start-cob.fasta to the assembly."""
         from importlib.resources import files
 
         from aaftf.mito import _orient_to_start
@@ -119,14 +119,49 @@ class TestDefaultStartSequence:
         bundled = (files("aaftf") / "data" / "mito-start-cob.fasta").read_text()
         assert seen == [bundled] and bundled.startswith(">COB1")
 
-    def test_given_start_file_is_aligned_directly(self, tmp_path):
-        """A --starting FASTA is passed to minimap2 as-is, not copied."""
-        from aaftf.mito import _orient_to_start
 
-        fasta_in, start = tmp_path / "in.fa", tmp_path / "nad1.fa"
-        fasta_in.write_text(">mt\nACGT\n")
-        start.write_text(">nad1\nACGT\n")
+class TestSubsample:
+    """--subsample N keeps N read pairs with reformat.sh before NOVOPlasty runs."""
+
+    def _run(self, tmp_path, subsample, reformat_rc=0):
+        import subprocess
+
+        workdir = tmp_path / "wd"
         cmds = []
-        with patch("aaftf.mito.paf_hits", side_effect=lambda cmd: cmds.append(cmd) or iter([])):
-            _orient_to_start(str(fasta_in), str(tmp_path / "out.fa"), start_gene=str(start))
-        assert cmds[0][-1] == str(start)
+
+        def _fake_run_cmd(cmd, debug=False, **kwargs):
+            cmds.append(cmd)
+            return subprocess.CompletedProcess(cmd, reformat_rc)
+
+        with patch("aaftf.mito.require_tools"), patch("aaftf.mito.estimate_read_length", return_value=150), patch("aaftf.mito.run_cmd", side_effect=_fake_run_cmd):
+            with patch("aaftf.mito.subprocess.Popen") as popen:
+                popen.return_value.communicate.return_value = (b"", b"")
+                with pytest.raises(RuntimeError):  # no NOVOPlasty output faked (or reformat.sh fails)
+                    run(left=str(tmp_path / "R1.fq"), right=str(tmp_path / "R2.fq"), workdir=str(workdir), subsample=subsample)
+        config = workdir / "novo-config.txt"
+        return cmds, config.read_text() if config.exists() else None
+
+    def test_subsampled_pairs_go_to_novoplasty(self, tmp_path):
+        cmds, config = self._run(tmp_path, 2_000_000)
+        assert cmds[0][0] == "reformat.sh"
+        assert "samplereadstarget=2000000" in cmds[0] and any(a.startswith("sampleseed=") for a in cmds[0])
+        assert f"in={tmp_path / 'R1.fq'}" in cmds[0] and f"in2={tmp_path / 'R2.fq'}" in cmds[0]
+        assert "subsample_1.fastq.gz" in config and "subsample_2.fastq.gz" in config
+        assert str(tmp_path / "R1.fq") not in config
+
+    def test_default_keeps_1_5m_pairs(self):
+        import inspect
+
+        assert inspect.signature(run).parameters["subsample"].default == 1_500_000
+
+    def test_zero_uses_all_reads(self, tmp_path):
+        cmds, config = self._run(tmp_path, 0)
+        assert cmds == [] and str(tmp_path / "R1.fq") in config
+
+    def test_reformat_failure_raises(self, tmp_path):
+        cmds, config = self._run(tmp_path, 1000, reformat_rc=1)
+        assert len(cmds) == 1 and config is None  # stopped before writing the NOVOPlasty config
+
+    def test_negative_subsample_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="--subsample"):
+            run(left="R1.fq", right="R2.fq", workdir=str(tmp_path / "wd"), subsample=-1)

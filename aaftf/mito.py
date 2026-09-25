@@ -11,7 +11,7 @@ from typing import Any
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from aaftf.utility import COMPLEMENT, cleanup_workdir, estimate_read_length, make_workdir, paf_hits, print_cmd, require_tools, write_fasta
+from aaftf.utility import COMPLEMENT, cleanup_workdir, estimate_read_length, make_workdir, paf_hits, print_cmd, require_tools, run_cmd, write_fasta
 
 __all__ = ["run"]
 
@@ -19,6 +19,8 @@ __all__ = ["run"]
 logger = logging.getLogger(__name__)
 
 _PACKAGE_DATA = files("aaftf") / "data"
+# fixed reformat.sh seed so --subsample picks the same read pairs on every run
+_SUBSAMPLE_SEED = 42
 
 
 def run(
@@ -29,7 +31,7 @@ def run(
     minlen: int = 10000,
     maxlen: int = 100000,
     seed: str | None = None,
-    starting: str | None = None,
+    subsample: int = 1_500_000,
     memory: int = 8,
     debug: bool = False,
     pipe: bool = False,
@@ -42,8 +44,13 @@ def run(
     * the **seed** is where NOVOPlasty starts assembling; it extends the seed with matching
       reads until the genome is complete (bundled default: an *A. nidulans* cob fragment,
       ``aaftf/data/mito-seed.fasta``);
-    * the **start gene** only matters afterwards: a circular assembly is rotated to begin at it
-      (bundled default: a consensus of fungal cob genes, ``aaftf/data/mito-start-cob.fasta``).
+    * the **start gene** only matters afterwards: a circular assembly is rotated to begin at the
+      cob gene, found by aligning a bundled consensus of fungal cob genes
+      (``aaftf/data/mito-start-cob.fasta``).
+
+    Mitochondrial reads are usually at far higher coverage than nuclear ones, so by default the
+    input is capped at ``subsample`` randomly chosen read pairs (the same pairs on every run) to
+    save time and memory. NOVOPlasty may also subsample on its own to stay within ``memory``.
 
     A circularized assembly is written as a single rotated ``mt`` record; otherwise the contigs
     are written as ``contig_N``.
@@ -56,20 +63,26 @@ def run(
         minlen: Minimum expected genome size (NOVOPlasty genome range).
         maxlen: Maximum expected genome size (NOVOPlasty genome range).
         seed: FASTA of the NOVOPlasty seed; None uses the bundled *A. nidulans* cob fragment.
-        starting: FASTA of the start gene a circular genome is rotated to begin at; None uses
-            the bundled consensus of fungal cob genes.
-        memory: Max memory in GB for NOVOPlasty.
+        subsample: Keep only this many randomly chosen read pairs (BBTools ``reformat.sh``);
+            0 uses all reads.
+        memory: Max memory in GB for NOVOPlasty (and ``reformat.sh``).
         debug: Keep the work directory.
         pipe: Unused; accepted for pipeline consistency.
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
 
     Raises:
-        RuntimeError: If NOVOPlasty produces no assembly.
+        ValueError: If ``subsample`` is negative.
+        RuntimeError: If subsampling fails or NOVOPlasty produces no assembly.
     """
-    require_tools(["NOVOPlasty.pl", "minimap2"])
+    if subsample < 0:
+        raise ValueError(f"--subsample must be a number of read pairs, or 0 to use all reads; got {subsample}")
+    require_tools(["NOVOPlasty.pl", "minimap2"] + (["reformat.sh"] if subsample else []))
     # first we need to generate working directory
     unique_id = str(uuid.uuid4())[:8]
     workdir, custom_workdir = make_workdir(workdir, "mito")
+
+    if subsample:
+        left, right = _subsample_pairs(left, right, subsample, workdir, memory, debug)
 
     # now estimate read lengths of FASTQ
     read_len = estimate_read_length(left)
@@ -119,8 +132,8 @@ def run(
     circular = Path(draft_mito).name.startswith("Circularized_assembly_")
     if circular:
         logger.info("NOVOplasty assembled complete circular genome")
-        logger.info(f"Rotating assembly to start at the start gene in {starting or 'the bundled fungal cob consensus'}")
-        _orient_to_start(draft_mito, out, start_gene=starting)
+        logger.info("Rotating assembly to start at the cytochrome b (cob) gene")
+        _orient_to_start(draft_mito, out)
     else:
         num_contigs = 0
         contig_length = 0
@@ -137,18 +150,56 @@ def run(
     cleanup_workdir(workdir, debug, custom_workdir)
 
 
-def _orient_to_start(fasta_in: str, fasta_out: str, start_gene: str | None = None) -> None:
-    """Rotate a circular MT assembly to begin at the start gene and write it as ``mt``.
+def _subsample_pairs(left: str, right: str, pairs: int, workdir: str, memory: int, debug: bool) -> tuple[str, str]:
+    """Randomly keep ``pairs`` read pairs from ``left``/``right`` with BBTools ``reformat.sh``.
 
-    The start gene is aligned to the assembly with minimap2; with exactly one in-range hit
+    Both files are sampled together so mates stay paired, with a fixed seed so reruns keep the
+    same pairs. If there are fewer than ``pairs`` pairs, all of them are kept.
+
+    Args:
+        left: Forward reads FASTQ.
+        right: Reverse reads FASTQ.
+        pairs: Number of read pairs to keep.
+        workdir: Directory the subsampled FASTQ files are written to.
+        memory: Java heap size for ``reformat.sh``, in GB.
+        debug: Show ``reformat.sh`` output.
+
+    Returns:
+        The subsampled forward and reverse FASTQ paths.
+
+    Raises:
+        RuntimeError: If ``reformat.sh`` fails.
+    """
+    sub_left = str(Path(workdir, "subsample_1.fastq.gz"))
+    sub_right = str(Path(workdir, "subsample_2.fastq.gz"))
+    cmd = [
+        "reformat.sh",
+        f"-Xmx{memory}g",
+        f"in={left}",
+        f"in2={right}",
+        f"out={sub_left}",
+        f"out2={sub_right}",
+        f"samplereadstarget={pairs}",
+        f"sampleseed={_SUBSAMPLE_SEED}",
+        "overwrite=t",
+    ]
+    logger.info(f"Subsampling to {pairs:,} read pairs")
+    if run_cmd(cmd, debug).returncode != 0:
+        raise RuntimeError(f"reformat.sh failed to subsample {left} / {right}")
+    return sub_left, sub_right
+
+
+def _orient_to_start(fasta_in: str, fasta_out: str) -> None:
+    """Rotate a circular MT assembly to begin at the cob gene and write it as ``mt``.
+
+    The bundled consensus of fungal cob genes (``aaftf/data/mito-start-cob.fasta``) is aligned
+    to the assembly with minimap2; with exactly one in-range hit
     the sequence is rotated (and reverse complemented for a minus-strand hit). Otherwise the
     last sequence of ``fasta_in`` is written unrotated and an error is logged.
 
     Args:
         fasta_in: FASTA of the circular assembly.
         fasta_out: Output FASTA path.
-        start_gene: FASTA of the start gene; None uses the bundled consensus of fungal cob genes
-            (``aaftf/data/mito-start-cob.fasta``).
     """
     # load sequence into dictionary
     initial_seq = ""
@@ -158,11 +209,10 @@ def _orient_to_start(fasta_in: str, fasta_out: str, start_gene: str | None = Non
             initial_seq = seq
             # header = title
 
-    # without --starting, align the bundled spoa consensus of fungal cob genes; as_file gives it a
-    # real path (a temporary copy only when the package is installed zipped)
-    with as_file(_PACKAGE_DATA / "mito-start-cob.fasta") as default_start:
-        start_file = start_gene or str(default_start)
-        alignments = list(paf_hits(["minimap2", "-x", "map-ont", "-c", fasta_in, start_file]))
+    # align the bundled spoa consensus of fungal cob genes; as_file gives it a real path (a
+    # temporary copy only when the package is installed zipped)
+    with as_file(_PACKAGE_DATA / "mito-start-cob.fasta") as cob_fasta:
+        alignments = list(paf_hits(["minimap2", "-x", "map-ont", "-c", fasta_in, str(cob_fasta)]))
     if len(alignments) == 1:
         hit = alignments[0]
         ref_strand = hit.strand
@@ -188,7 +238,7 @@ def _orient_to_start(fasta_in: str, fasta_out: str, start_gene: str | None = Non
         with open(fasta_out, "w") as outfile:
             write_fasta(outfile, "mt", rotated)
     elif len(alignments) == 0:
-        logger.error("unable to rotate because the start gene was not found in the assembly")
+        logger.error("unable to rotate because the cob gene was not found in the assembly")
         with open(fasta_out, "w") as outfile:
             write_fasta(outfile, "mt", initial_seq)
     elif len(alignments) > 1:

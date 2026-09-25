@@ -27,7 +27,7 @@ REQUIRED_TOOLS = {
     "trimmomatic": "trim",
     "java": "trim (trimmomatic)",
     "bbduk.sh": "trim, filter",
-    "reformat.sh": "trim, filter",
+    "reformat.sh": "trim, filter, mito (--subsample)",
     "shuffle.sh": "trim, filter",
     "pypolca": "polish (pypolca)",
     "freebayes": "polish (pypolca)",
