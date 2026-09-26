@@ -74,7 +74,7 @@ def run(
         raise ValueError("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads")
     if method == "nextpolish2" and not longreads:
         raise ValueError("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads (nextpolish2 requires HiFi long reads)")
-    if method in ("pypolca", "masurca", "polypolish", "nextpolish2") and not forward_reads:
+    if method in ("pypolca", "polypolish", "nextpolish2") and not forward_reads:
         raise ValueError("Unable to locate FASTQ raw reads, pass via -1/--read1 and/or -2/--read2")
 
     workdir, custom_workdir = make_workdir(workdir, "polish")
