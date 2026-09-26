@@ -69,6 +69,10 @@ RUN apt-get update && \
         locales \
         locales-all \
         build-essential \
+        cmake \
+        libbz2-dev \
+        binutils \
+        patch \
         python3 \
         zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
@@ -133,26 +137,50 @@ RUN source /opt/aaftf_activate.sh && \
     test -x "${CONDA_PREFIX}/bin/bowtie2-align-s-v256"
 
 # ---------------------------------------------------------------------------
-# 6. Smoke test
+# 6. Build SPAdes for x86-64-v2 AND x86-64-v3 with runtime dispatch.
+#    The bioconda SPAdes recipe forces -march=x86-64-v3, so its binaries die
+#    with SIGILL (exit 132) on older CPUs (e.g. AMD Opteron / Intel Ivy
+#    Bridge HPC nodes). install_spades_multiarch.sh builds both levels under
+#    /opt/spades/{v2,v3} and replaces the conda SPAdes commands in the env
+#    bin/ with wrappers that pick the build matching the CPU at run time.
+#    Force a build with SPADES_ARCH=v2|v3.
+# ---------------------------------------------------------------------------
+RUN source /opt/aaftf_activate.sh && \
+    bash install_scripts/install_spades_multiarch.sh && \
+    test -x /opt/spades/v2/bin/spades-hammer && \
+    test -x /opt/spades/v3/bin/spades-hammer
+
+# ---------------------------------------------------------------------------
+# 7. Rebuild MEGAHIT from source without the bioconda -march=x86-64-v3 flag.
+#    MEGAHIT picks one of three core binaries at run time (BMI2 / POPCNT /
+#    baseline); the bioconda build puts v3 code into all three, so they die
+#    with SIGILL on older CPUs. See install_scripts/install_megahit_from_source.sh.
+# ---------------------------------------------------------------------------
+RUN source /opt/aaftf_activate.sh && \
+    bash install_scripts/install_megahit_from_source.sh && \
+    test -f "${CONDA_PREFIX}/bin/.megahit_sourcebuild_1.2.9"
+
+# ---------------------------------------------------------------------------
+# 8. Smoke test
 # ---------------------------------------------------------------------------
 RUN source /opt/aaftf_activate.sh && AAFTF --version
 
 # ---------------------------------------------------------------------------
-# 7. Cleanup build artefacts to reduce image size
+# 9. Cleanup build artefacts to reduce image size
 #    Keep /opt/pixi intact — pixi manages the conda env and removing it can
 #    break activation.  Only purge the download cache.
 # ---------------------------------------------------------------------------
 RUN rm -rf /root/.cache
 
 # ---------------------------------------------------------------------------
-# 8. Entrypoint: source the activation script then exec the user command
+# 10. Entrypoint: source the activation script then exec the user command
 # ---------------------------------------------------------------------------
 RUN printf '#!/bin/bash\nset -e\nsource /opt/aaftf_activate.sh\nexec "$@"\n' \
         > /usr/local/bin/docker-entrypoint.sh && \
     chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # ---------------------------------------------------------------------------
-# 9. Bake the pixi env bin dir onto PATH (mirrors funannotate's
+# 11. Bake the pixi env bin dir onto PATH (mirrors funannotate's
 #     `ENV PATH="/venv/bin:..."`). Docker execution gets this via the
 #     ENTRYPOINT sourcing aaftf_activate.sh, but Singularity/Apptainer SIFs
 #     converted from this image do NOT run the Docker ENTRYPOINT, and login

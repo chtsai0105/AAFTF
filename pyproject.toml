@@ -135,6 +135,8 @@ ncbi-fcs-gx = "*"
 #   pixi run -e complete install-bowtie2
 # Mirrors the approach used in funannotate.
 install-bowtie2 = { cmd = "bash install_scripts/pixi_install_bowtie2.sh", description = "Build bowtie2 from source to fix AVX2 runtime fallback issues" }
+install-spades-multiarch = { cmd = "SPADES_ROOT=$CONDA_PREFIX/opt/spades SPADES_BUILD_PATH=$PATH bash install_scripts/install_spades_multiarch.sh", description = "Build SPAdes for x86-64-v2 and v3 with runtime CPU dispatch" }
+install-megahit-from-source = { cmd = "MEGAHIT_BUILD_PATH=$PATH bash install_scripts/install_megahit_from_source.sh", description = "Rebuild MEGAHIT from source for older (x86-64-v2) CPUs" }
 
 # ---------------------------------------------------------------------------
 # "dev" feature: test and lint tools.

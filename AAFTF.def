@@ -71,6 +71,11 @@ From: debian:bookworm-slim
 	locales \
 	locales-all \
 	build-essential \
+	cmake \
+	libbz2-dev \
+	binutils \
+	patch \
+	python3 \
 	zlib1g-dev
     rm -rf /var/lib/apt/lists/*
 
@@ -111,7 +116,25 @@ From: debian:bookworm-slim
     test -x "$CONDA_PREFIX/bin/bowtie2-align-s-v256"
 
     # -------------------------------------------------------------------------
-    # 6. Database download (skippable via --build-arg skip_db_download=1,
+    # 6. Build SPAdes for x86-64-v2 AND x86-64-v3 with runtime dispatch
+    #     (bioconda SPAdes forces -march=x86-64-v3 and dies with SIGILL on
+    #     older CPUs). See install_scripts/install_spades_multiarch.sh.
+    #     Force a build at run time with SPADES_ARCH=v2|v3.
+    # -------------------------------------------------------------------------
+    bash install_scripts/install_spades_multiarch.sh
+    test -x /opt/spades/v2/bin/spades-hammer
+    test -x /opt/spades/v3/bin/spades-hammer
+
+    # -------------------------------------------------------------------------
+    # 7. Rebuild MEGAHIT from source without the bioconda -march=x86-64-v3
+    #     flag so its own BMI2/POPCNT/baseline core dispatch works on older
+    #     CPUs. See install_scripts/install_megahit_from_source.sh.
+    # -------------------------------------------------------------------------
+    bash install_scripts/install_megahit_from_source.sh
+    test -f "$CONDA_PREFIX/bin/.megahit_sourcebuild_1.2.9"
+
+    # -------------------------------------------------------------------------
+    # 8. Database download (skippable via --build-arg skip_db_download=1,
     #    used by CI where disk/time budgets don't allow baking in the DB;
     #    users then bind-mount or download AAFTF_DB separately at run time)
     # -------------------------------------------------------------------------
@@ -125,7 +148,7 @@ From: debian:bookworm-slim
     fi
 
     # -------------------------------------------------------------------------
-    # 7. Make AAFTF available in LOGIN shells too.
+    # 9. Make AAFTF available in LOGIN shells too.
     #    The %environment block above only takes effect for non-login container
     #    shells (singularity run/exec). SLURM/Nextflow run task scripts via
     #    /bin/bash -l, and a login shell re-sources /etc/profile, which
@@ -144,7 +167,7 @@ EOF
     chmod +x /etc/profile.d/aaftf.sh
 
     # -------------------------------------------------------------------------
-    # 8. Cleanup build artefacts to reduce image size
+    # 10. Cleanup build artefacts to reduce image size
     # -------------------------------------------------------------------------
     AAFTF --version || true
     rm -rf /opt/pixi
