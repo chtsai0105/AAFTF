@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0 (Development)
+## Unreleased (Development)
 
 Changes since `v0.7.0-beta.4`. This is a large refactor: many command-line options changed, so
 check the **Breaking changes** before updating scripts.
@@ -137,7 +137,7 @@ check the **Breaking changes** before updating scripts.
 
  - Release with updated tools and checking for pipeline.
 
-## 0.6.1 (unreleased notes, superseded by 0.7.0)
+## 0.6.1 (tagged v0.6.1-alpha2)
 
 ### Tests
 
