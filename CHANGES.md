@@ -131,6 +131,12 @@ check the **Breaking changes** before updating scripts.
  - Test suite rewritten and extended (about 700 tests, 96% line coverage), with tests isolated in
    temporary directories.
 
+## 0.6.2
+
+### Changed
+
+ - Release with updated tools and checking for pipeline.
+
 ## 0.6.1 (unreleased notes, superseded by 0.7.0)
 
 ### Tests
@@ -198,6 +204,12 @@ check the **Breaking changes** before updating scripts.
 
  - NCBI mitochondria genome download now points to the single FNA file instead of split between two
 
+## 0.4.1
+
+### Fixed
+
+ - Some bug fixes related to URLs.
+
 ## 0.4.0
 
 ### Added
@@ -249,3 +261,39 @@ check the **Breaking changes** before updating scripts.
 - Issue #10 added GC% in the assessment report table
 - Added --mem option to pilon to up the heapsize for java runs
 - merged changes in namespace by @gamcil and a tmpdir
+
+## 0.2.4
+
+### Added
+
+ - conda/pypi packages.
+
+## 0.2.3
+
+### Added
+
+ - Support a minimum length contig cutoff.
+
+## 0.2.1
+
+### Changed
+
+ - Fix some README docs.
+ - Sync zenodo with this release.
+
+## 0.2.0
+
+### Changed
+
+ - Rework temporary file and prefix use throughout, not relying on a set working directory, so that multiple runs can be completed in a single folder without clashes of names.
+ - Switch to BBTools bbduk for quality trimming instead of Trimmomatic.
+ - Switch to BBTools bbduk instead of BWA/Bowtie for mapping to the contamination db - speed improvements and accuracy of k-mer matches.
+
+### Added
+
+ - Specify memory use for pilon and SPAdes assembly steps.
+ - Support to generate scripts to run all steps in a pipeline with the 'pipeline' command.
+
+## 0.1.0
+
+ - Initial release, which includes automation for quality trimming and contaminant/adaptor removal, filtering, assembly, vector cleanup, refinement, duplication removal and sorting.
