@@ -382,7 +382,7 @@ class TestFilterRunAligners:
         read1 = str(tmp_path / "sample_R1.fastq.gz")
         cmds, _, args = _run_filter_aligner(tmp_path, aligner, read1)
         bam = str(Path(args.workdir, "sample_contam_db.bam"))
-        assert ["samtools", "fastq", "-f", "4", "-1", "sample_filtered.fastq.gz", bam] in cmds
+        assert ["samtools", "fastq", "-f", "4", "-0", "sample_filtered.fastq.gz", bam] in cmds
 
     @pytest.mark.parametrize("aligner", ["bwa", "bowtie2"])
     def test_index_built(self, tmp_path, aligner):

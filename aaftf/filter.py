@@ -202,7 +202,7 @@ def run(
         if forward_reads and reverse_reads:
             samtools_cmd = ["samtools", "fastq", "-f", "12", "-1", clean_reads + "_1.fastq.gz", "-2", clean_reads + "_2.fastq.gz", align_bam]
         elif forward_reads:
-            samtools_cmd = ["samtools", "fastq", "-f", "4", "-1", clean_reads + ".fastq.gz", align_bam]
+            samtools_cmd = ["samtools", "fastq", "-f", "4", "-0", clean_reads + ".fastq.gz", align_bam]
         run_cmd(samtools_cmd, debug)
         cleanup_workdir(workdir, debug, custom_workdir)
 
