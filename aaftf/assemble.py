@@ -67,7 +67,7 @@ def run(
     if method == "spades":
         run_spades(workdir=workdir, cpus=cpus, memory=memory, isolate=isolate, careful=careful, assembler_args=assembler_args, tmpdir=tmpdir, read1=read1, read2=read2, merged=merged, out=out, debug=debug, pipe=pipe)
     elif method == "megahit":
-        run_megahit(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, tmpdir=tmpdir, read1=read1, read2=read2, out=out, debug=debug, pipe=pipe)
+        run_megahit(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, tmpdir=tmpdir, read1=read1, read2=read2, merged=merged, out=out, debug=debug, pipe=pipe)
     elif method == "masurca":
         logger.info("Masurca assembly is not yet implemented in AAFTF")
     elif method == "nextdenovo":
@@ -136,13 +136,15 @@ def run_spades(
     forward_reads, reverse_reads = _resolve_reads(read1, read2)
 
     if not reverse_reads:
-        runcmd.extend(["--s1", forward_reads])
+        runcmd.extend(["-s", forward_reads])
         if merged:
-            runcmd.extend(["--s2", merged])
+            # no paired library to attach merged reads to: add them as a second single-read library
+            runcmd.extend(["--s", "2", merged])
     else:
-        runcmd.extend(["--pe1-1", forward_reads, "--pe1-2", reverse_reads])
+        runcmd.extend(["-1", forward_reads, "-2", reverse_reads])
         if merged:
-            runcmd.extend(["--s1", merged])
+            # merged pairs belong to the paired-end library (same as --pe-m 1)
+            runcmd.extend(["--merged", merged])
 
     # this basically overrides everything above and only runs --restart-from option
     if Path(workdir).is_dir():
@@ -163,6 +165,7 @@ def run_megahit(
     tmpdir: str | None = None,
     read1: str | None = None,
     read2: str | None = None,
+    merged: str | None = None,
     out: str | None = None,
     debug: bool = False,
     pipe: bool = False,
@@ -178,6 +181,8 @@ def run_megahit(
         tmpdir: Temporary directory.
         read1: Read 1 (forward, or single-end) FASTQ.
         read2: Read 2 (reverse) FASTQ, or None.
+        merged: Merged-pair FASTQ, or None. MEGAHIT has no merged-read option, so it is passed with
+            ``-r`` as a single-end library.
         out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
         pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
@@ -199,10 +204,13 @@ def run_megahit(
 
     forward_reads, reverse_reads = _resolve_reads(read1, read2)
 
-    if not reverse_reads:
-        runcmd.extend(["-r", forward_reads])
-    else:
+    single_reads = [forward_reads] if not reverse_reads else []
+    if merged:
+        single_reads.append(merged)
+    if reverse_reads:
         runcmd.extend(["-1", forward_reads, "-2", reverse_reads])
+    if single_reads:
+        runcmd.extend(["-r", ",".join(single_reads)])
 
     if Path(workdir).is_dir():
         raise FileExistsError(f"MEGAHIT output folder {workdir} already exists (MEGAHIT cannot resume); remove it or pass another -w/--workdir")

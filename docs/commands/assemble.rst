@@ -20,7 +20,9 @@ The assembler is selected with ``--method``:
 * **megahit** -- fast De Bruijn graph assembler, generally lower accuracy than SPAdes but much
   faster/lower memory; ``-m`` GB is converted to bytes for ``megahit --memory``. Does not support
   resuming: if the output folder already exists, AAFTF stops with an error before running MEGAHIT
-  (remove it or pass another ``-w``).
+  (remove it or pass another ``-w``). MEGAHIT has no merged-read option, so ``--merged`` reads
+  are passed with ``-r`` as single-end reads (alongside ``-1``/``-2``, or added to the
+  single-end ``-r`` list).
   Final assembly is copied from ``final.contigs.fa``.
 * **unicycler** -- wraps SPAdes with additional scaffolding logic; supports combining
   short reads with ``--longreads`` (hybrid assembly). With paired reads, ``--merged`` reads are

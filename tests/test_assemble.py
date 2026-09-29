@@ -205,36 +205,38 @@ def _run_spades(tmp_path, read1, read2=None, create_output=True, **extra):
 
 
 class TestAssembleRunSpades:
-    def test_pe_command_includes_pe1_1(self, tmp_path):
+    def test_pe_command_includes_forward(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")
         read2 = str(tmp_path / "filtered_2.fastq.gz")
         cmds, _ = _run_spades(tmp_path, read1, read2)
-        assert any("--pe1-1" in c for c in cmds[0])
+        assert cmds[0][cmds[0].index("-1") + 1] == read1
 
-    def test_pe_command_includes_pe1_2(self, tmp_path):
+    def test_pe_command_includes_reverse(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")
         read2 = str(tmp_path / "filtered_2.fastq.gz")
         cmds, _ = _run_spades(tmp_path, read1, read2)
-        assert any("--pe1-2" in c for c in cmds[0])
+        assert cmds[0][cmds[0].index("-2") + 1] == read2
 
-    def test_se_command_includes_s1(self, tmp_path):
+    def test_se_command_includes_s(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")
         cmds, _ = _run_spades(tmp_path, read1, read2=None)
-        assert any("--s1" in c for c in cmds[0])
+        assert cmds[0][cmds[0].index("-s") + 1] == read1
 
-    def test_merged_adds_s1_for_pe(self, tmp_path):
+    def test_merged_adds_merged_for_pe(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")
         read2 = str(tmp_path / "filtered_2.fastq.gz")
         merged = str(tmp_path / "merged.fastq.gz")
         cmds, _ = _run_spades(tmp_path, read1, read2, merged=merged)
-        assert cmds[0][cmds[0].index("--s1") + 1] == merged
+        assert cmds[0][cmds[0].index("--merged") + 1] == merged
+        assert "-s" not in cmds[0]
 
-    def test_merged_adds_s2_for_se(self, tmp_path):
+    def test_merged_adds_second_single_library_for_se(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")
         merged = str(tmp_path / "merged.fastq.gz")
         cmds, _ = _run_spades(tmp_path, read1, merged=merged)
-        assert cmds[0][cmds[0].index("--s1") + 1] == read1
-        assert cmds[0][cmds[0].index("--s2") + 1] == merged
+        assert cmds[0][cmds[0].index("-s") + 1] == read1
+        i = cmds[0].index("--s")
+        assert cmds[0][i + 1 : i + 3] == ["2", merged]
 
     def test_command_includes_threads(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")
@@ -339,6 +341,22 @@ class TestAssembleRunMegahit:
         read1 = str(tmp_path / "filtered_1.fastq.gz")
         cmds, _ = _run_megahit(tmp_path, read1, read2=None)
         assert "-r" in cmds[0]
+
+    def test_merged_adds_r_for_pe(self, tmp_path):
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        read2 = str(tmp_path / "filtered_2.fastq.gz")
+        merged = str(tmp_path / "merged.fastq.gz")
+        cmds, _ = _run_megahit(tmp_path, read1, read2, merged=merged)
+        assert cmds[0][cmds[0].index("-1") + 1] == read1
+        assert cmds[0][cmds[0].index("-2") + 1] == read2
+        assert cmds[0][cmds[0].index("-r") + 1] == merged
+
+    def test_merged_joins_r_list_for_se(self, tmp_path):
+        read1 = str(tmp_path / "filtered_1.fastq.gz")
+        merged = str(tmp_path / "merged.fastq.gz")
+        cmds, _ = _run_megahit(tmp_path, read1, merged=merged)
+        assert cmds[0][cmds[0].index("-r") + 1] == f"{read1},{merged}"
+        assert cmds[0].count("-r") == 1
 
     def test_command_includes_threads(self, tmp_path):
         read1 = str(tmp_path / "filtered_1.fastq.gz")

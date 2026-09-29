@@ -88,6 +88,10 @@ check the **Breaking changes** before updating scripts.
 
 ### Fixed
 
+ - `assemble --merged`: with paired reads SPAdes got the merged reads as a separate single-read
+   library (`--s1`); they are now the paired library's merged reads (`--merged`), and single-end
+   input uses `-s` (plus `--s 2` for merged reads) instead of the deprecated `--s1`/`--s2`/`--pe1-*`
+   syntax. MEGAHIT ignored `--merged`; it is now passed with `-r` (comma-joined with single-end reads).
  - `assemble --method megahit` passed `-m` to MEGAHIT as bytes (32 GB became 32 bytes); it is now
    converted from GB. An existing MEGAHIT output folder is refused instead of failing inside MEGAHIT.
  - `assemble`: SPAdes restart passed `--restart-from last` as one argument; Unicycler dropped the paired
