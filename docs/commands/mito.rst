@@ -87,7 +87,7 @@ Example
     AAFTF mito -1 STRAINX_1P.fastq.gz -2 STRAINX_2P.fastq.gz -o STRAINX.mito.fasta \
         --seed related_species_mito.fasta
 
-``mito`` is not part of ``pipeline``. To keep mitochondrial reads out of the nuclear assembly,
+``mito`` is not part of ``pipeline_short``, ``pipeline_long`` or ``pipeline_hybrid``. To keep mitochondrial reads out of the nuclear assembly,
 run it before :doc:`filter` and pass its output with ``-s``; unless ``-q`` is given, ``mito``
 prints this next command, e.g.
 ``AAFTF filter -1 STRAINX_1P.fastq.gz -2 STRAINX_2P.fastq.gz -s STRAINX.mito.fasta -o STRAINX``.

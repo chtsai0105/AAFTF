@@ -69,7 +69,7 @@ def run(
             0 uses all reads.
         memory: Max memory in GB for NOVOPlasty (and ``reformat.sh``).
         debug: Keep the work directory.
-        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
+        pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
 
     Raises:

@@ -31,7 +31,7 @@ Databases
 
 Run ``AAFTF database`` with no arguments to list every database: its short name, file, size,
 which subcommands use it, and the folder it is stored in (or ``not downloaded``, with the
-remote size). Like ``AAFTF dependency``, the list is split in two: the databases ``AAFTF pipeline``
+remote size). Like ``AAFTF dependency``, the list is split in two: the databases ``AAFTF pipeline_short``
 needs with its default settings (``phix``, ``univec``, ``euks``, ``proks``, ``mitodb``, ``sm_gbk``),
 then those only needed by non-default options or optional steps (``sm_gtdbrep``, ``sm_gtdb``,
 ``fcs_script``, ``fcs_image``); any other files found in the database folders are listed last.

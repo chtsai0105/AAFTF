@@ -68,7 +68,7 @@ def run(databases: list[str] | None = None, force: bool = False, **kwargs: Any) 
 def _list_db() -> None:
     """List every database with its abbreviation, file, size, users and storage folder.
 
-    Databases are listed in two groups, like ``AAFTF dependency``: those ``AAFTF pipeline`` needs
+    Databases are listed in two groups, like ``AAFTF dependency``: those ``AAFTF pipeline_short`` needs
     with its default settings, and those only needed by non-default options or optional steps.
     Missing databases show their remote (estimated) size and "not downloaded".
     """

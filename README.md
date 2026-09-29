@@ -6,7 +6,7 @@
 AAFTF automates draft genome assembly from Illumina short reads (optionally with long reads), with
 read trimming and contaminant filtering, assembly, vector and contaminant screening of contigs,
 duplicate removal, contig sorting and renaming, and summary statistics including telomere detection.
-Each step is a subcommand that can be run on its own, or all together with `AAFTF pipeline`.
+Each step is a subcommand that can be run on its own, or all together with `AAFTF pipeline_short` (Illumina), `pipeline_long` (ONT/PacBio) or `pipeline_hybrid`.
 
 # Requirements
 Python >=3.10 and the external tools below. Everything can be installed with conda (bioconda) or
@@ -41,7 +41,7 @@ pixi (see Install). Run `AAFTF dependency` to see which tools are found and whic
 With conda, from a checkout of this repository:
 
 ```
-# only what `AAFTF pipeline` needs with its default settings; installs AAFTF from PyPI
+# only what `AAFTF pipeline_short` needs with its default settings; installs AAFTF from PyPI
 $ conda env create -f environment.yml && conda activate aaftf
 
 # or every tool AAFTF can use, with AAFTF installed from this checkout (editable)
@@ -76,13 +76,13 @@ or pass `--fcs_script`/`--image`). `fcs_gx_purge` needs an FCS-GX database set u
 (see the [FCS-GX wiki](https://github.com/ncbi/fcs/wiki/FCS-GX)) and passed with `-d/--db`.
 
 # Commands
-`AAFTF -h` lists the subcommands in three groups.
+`AAFTF -h` lists the subcommands in four groups.
 
 **Setup**
 - `dependency` - check that the external tools and Python packages are installed
 - `database` - list or download the reference databases
 
-**Assembly pipeline** (in the order they are usually run)
+**Steps** (in the order they are usually run)
 
 | Step | Subcommand | What it does | Output |
 |---|---|---|---|
@@ -99,7 +99,14 @@ or pass `--fcs_script`/`--image`). `fcs_gx_purge` needs an FCS-GX database set u
 | 7 | `sort` | Sort contigs by length and rename them | final FASTA |
 | 8 | `assess` | Assembly statistics (N50/L50, GC, gaps, soft-masking, telomeres) | printed (and a `-r` file) |
 | - | `depth` | (Optional) Per-contig read depth (mosdepth), flagging outliers such as organelles or contaminants | coverage report and plots |
-|   | `pipeline` | Run steps 1-8 in one command | `<prefix>.final.fasta` |
+
+**Pipeline** (several steps in one command)
+
+| Subcommand | What it does | Output |
+|---|---|---|
+| `pipeline_short` | Run steps 1-8 on Illumina reads | `<prefix>.final.fasta` |
+| `pipeline_long` | Long reads: assemble (Flye), polish (Racon), vecscreen, rmdup, sort, assess | `<prefix>.final.fasta` |
+| `pipeline_hybrid` | Illumina + long reads: trim, filter, assemble (Flye or Unicycler), polish, vecscreen, sourpurge, rmdup, sort, assess | `<prefix>.final.fasta` |
 
 **Annotation**
 - `fix_tbl` - fix an NCBI `.tbl` feature table after FCS trimmed or excluded contigs
@@ -117,13 +124,30 @@ or pass `--fcs_script`/`--image`). `fcs_gx_purge` needs an FCS-GX database set u
 
 ## One command
 ```
-AAFTF pipeline -1 reads/STRAINX_R1.fq.gz -2 reads/STRAINX_R2.fq.gz \
+AAFTF pipeline_short -1 reads/STRAINX_R1.fq.gz -2 reads/STRAINX_R2.fq.gz \
     -o STRAINX -p Ascomycota -c 16 -m 64
 ```
 This writes `STRAINX_1P/2P.fastq.gz`, `STRAINX_filtered_1/2.fastq.gz`, `STRAINX.spades.fasta`,
 `STRAINX.vecscreen.fasta`, `STRAINX.sourpurge.fasta`, `STRAINX.rmdup.fasta` and `STRAINX.final.fasta`,
 then prints the `assess` statistics. Each step uses its own defaults unless a pipeline option overrides
 it, and steps whose output already exists are skipped, so an interrupted run can simply be restarted.
+
+Long reads only (no sourpurge, which needs Illumina reads for coverage):
+```
+AAFTF pipeline_long -lr reads/STRAINX_ont.fq.gz -o STRAINX --genome_size 40m -c 16
+```
+This writes `STRAINX.flye.fasta`, `STRAINX.racon.fasta`, `STRAINX.vecscreen.fasta`,
+`STRAINX.rmdup.fasta` and `STRAINX.final.fasta`.
+
+Illumina + long reads:
+```
+AAFTF pipeline_hybrid -1 reads/STRAINX_R1.fq.gz -2 reads/STRAINX_R2.fq.gz \
+    -lr reads/STRAINX_ont.fq.gz -o STRAINX -p Ascomycota -c 16 -m 64
+```
+After trim and filter this writes `STRAINX.flye.fasta`, `STRAINX.racon.fasta`,
+`STRAINX.polypolish.fasta` (`STRAINX.pypolca.fasta` with single-end reads), then the vecscreen,
+sourpurge, rmdup and final FASTA as above. With `--method unicycler` the Illumina and long reads are
+assembled together into `STRAINX.unicycler.fasta` and both polish steps are skipped.
 
 ## Step by step
 
@@ -225,13 +249,12 @@ AAFTF filter -c $CPU --memory $MEM --aligner bbduk \
 The assembler is chosen with `--method`. The full set of options:
 
 ```
-usage: AAFTF assemble [-h] -o FASTA [-1 FASTQ] [-2 FASTQ] [--merged MERGED]
-                      [-lr FASTQ]
+usage: AAFTF assemble [-h] -o FASTA --method {spades,megahit,unicycler,flye}
+                      [-1 FASTQ] [-2 FASTQ] [--merged MERGED] [-lr FASTQ]
                       [--longread_type {nano-raw,nano-hq,pacbio-raw,pacbio-hifi}]
-                      [--genome_size SIZE]
-                      [--method {spades,megahit,unicycler,flye}] [-w DIR]
-                      [--tmpdir DIR] [--assembler_args ARG] [-c INT] [-m GB]
-                      [-q] [-v] [--no-careful] [--no-isolate]
+                      [--genome_size SIZE] [-w DIR] [--tmpdir DIR]
+                      [--assembler_args ARG] [-c INT] [-m GB] [-q] [-v]
+                      [--no-careful] [--no-isolate]
 
 Run assembler on cleaned reads: Illumina reads (spades, megahit), Illumina
 plus optional long reads (unicycler) or long reads only (flye)
@@ -242,6 +265,10 @@ options:
 required arguments:
   -o FASTA, --out FASTA
                         Output assembly FASTA
+  --method {spades,megahit,unicycler,flye}
+                        Assembly method: spades or megahit (Illumina reads),
+                        unicycler (Illumina plus optional long reads) or flye
+                        (long reads)
 
 short-read (Illumina) arguments: spades, megahit, unicycler:
   -1 FASTQ, --read1 FASTQ
@@ -262,8 +289,6 @@ long-read (ONT/PacBio) arguments: flye, unicycler (hybrid):
                         estimated by flye
 
 optional arguments:
-  --method {spades,megahit,unicycler,flye}
-                        Assembly method (default: spades)
   -w DIR, --workdir DIR
                         Working directory for intermediate files; a temporary
                         one is created and removed afterwards (kept with -v)

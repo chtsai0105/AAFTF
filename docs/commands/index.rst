@@ -77,14 +77,15 @@ Command Reference
      - (Optional) Per-contig read-depth report + outlier flags
    * - :doc:`pipeline`
      - those of the steps it runs
-     - Run trim -> filter -> assemble -> vecscreen -> sourpurge -> rmdup -> sort -> assess in one command
+     - ``pipeline_short``: trim -> filter -> assemble -> vecscreen -> sourpurge -> rmdup -> sort -> assess
+       in one command; ``pipeline_long`` (long reads) and ``pipeline_hybrid`` (Illumina + long reads)
    * - :doc:`fix_tbl`
      - (none)
      - Annotation: adjust NCBI ``.tbl`` feature coordinates after FCS trimming
 
 ``AAFTF -h`` lists the subcommands in three groups: *Setup* (``dependency``, ``database``),
-*Assembly pipeline* (``trim`` through ``pipeline``, in the order above; steps marked "(Optional)"
-are not run by ``pipeline``) and *Annotation* (``fix_tbl``).
+*Assembly pipeline* (``trim`` through ``pipeline_short``, ``pipeline_long`` and ``pipeline_hybrid``, in the order
+above; steps marked "(Optional)" are not run by ``pipeline_short``) and *Annotation* (``fix_tbl``).
 
 Common options and exit codes
 =============================

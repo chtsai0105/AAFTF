@@ -51,7 +51,7 @@ def run(
         minlen: Contigs shorter than this are dropped.
         exhaustive: Check every contig, not only those shorter than N75.
         debug: Log per-contig progress and keep the work directory.
-        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
+        pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
     """
     workdir, custom_workdir = make_workdir(workdir, "rmdup")

@@ -7,9 +7,9 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 - Entry point: `aaftf/main.py` (console script `AAFTF = "aaftf.main:main"`) — builds the top-level parser, wires up subcommands via `register_subcommands(parser)` (imported from `aaftf/_menu.py`; it creates the subparsers action and lists the subcommands in `AAFTF --help` under three group titles — Setup, Assembly pipeline, Annotation — using the help-only `SubcommandGroup` action from `aaftf/utility.py`), sets up logging from `-q/--quiet` / `-v/--verbose` (`setup_logging()`), and dispatches by calling `args.func(**vars(args))`; `main()` returns a numeric exit code (0 ok, 1 error, 2 `FileNotFoundError`, 130 Ctrl-C) and subcommands raise exceptions instead of calling `sys.exit` (see AGENTS.md). There is no central dispatcher function: each subcommand parser binds its own subtool's `run` directly via `parser_x.set_defaults(func=<module>.run)` inside its `<name>_menu()` function in `_menu.py`. Subcommand parsers register no `aliases=[...]` — each subcommand has exactly one canonical name.
 - All argparse subcommand-parser definitions ("menus") live in one place: `aaftf/_menu.py`. Each subcommand has a `<name>_menu(subparsers)` function there (e.g. `trim_menu`, `depth_menu`) that builds and registers that subtool's `subparsers.add_parser(...)` block and its arguments, then calls `parser_x.set_defaults(func=<module>.run)`; `aaftf/_menu.py` also defines `add_verbosity_args()` and `register_subcommands()` (which calls every `<name>_menu()` group by group, in `AAFTF --help` order, and returns the subparsers action), and imports every subcommand module to reference their `run` functions. Each subcommand module itself (`trim.py`, `depth.py`, etc.) only contains the `run(**kwargs)` execution logic — no parser-building code.
 - Every subcommand's `run()` function takes its CLI dest names directly as keyword arguments (not an `args`/`parser` pair) and ends its parameter list with `**kwargs` to absorb argparse's bookkeeping attributes (`command`, `func`, and `quiet` where the step doesn't use it) that ride along in `vars(args)`. The body uses those parameters directly (e.g. `read1`, `workdir`); a parameter that needs to change during the run (e.g. `basename` auto-derived from `read1`, `workdir` defaulted when not given) is simply reassigned as a local variable. Only `assemble.py`'s internal helpers (`run_spades`, `run_megahit`, `run_unicycler`) take a forwarded subset of fields.
-- `pipe` is a `run()`-only parameter (not a CLI option): `pipeline` passes `pipe=True` to suppress each step's "next command" hint.
+- `pipe` is a `run()`-only parameter (not a CLI option): the `pipeline_*` subcommands pass `pipe=True` to suppress each step's "next command" hint.
 - Because `run()` never mutates a caller-supplied object, tests must not expect derived values (e.g. `trim.run()`'s auto-derived `basename`) to show up on the kwargs the test constructed — assert on side effects (subprocess commands, files written) instead. See `tests/test_trim.py::_run_bbduk` for the pattern.
-- `aaftf/pipeline.py`'s own `run()` follows the same convention, and calls each step as `<module>.run(**_step_kwargs(name, shared, ...))`.
+- `aaftf/pipeline.py` has one entry point per pipeline subcommand (`run_short`, `run_long`, `run_hybrid`), each following the same convention and calling each step through `_run_step()` / `<module>.run(**_step_kwargs(name, shared, ...))`; shared stretches live in private helpers (`_trim_and_filter`, `_assemble_flye`, `_racon`, `_clean_and_finish`).
 - `CustomHelpFormatter` lives in `aaftf/utility.py`. Every subcommand parser (built in `_menu.py`) uses `formatter_class=CustomHelpFormatter`.
 - Working directories: `workdir, custom_workdir = make_workdir(workdir, "<name>")` at the start and `cleanup_workdir(workdir, debug, custom_workdir)` at the end (both in `utility.py`); `make_workdir` also opens the step's log file. Logging is via a module-level `logger = logging.getLogger(__name__)`.
 
@@ -43,7 +43,9 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 | `sort` | `aaftf/sort.py` | (none — BioPython only) |
 | `assess` | `aaftf/assess.py` | (none — BioPython only) |
 | `depth` | `aaftf/depth.py` | samtools, mosdepth, minimap2 or bwa |
-| `pipeline` | `aaftf/pipeline.py` | tools of its steps |
+| `pipeline_short` | `aaftf/pipeline.py` (`run_short`) | tools of its steps |
+| `pipeline_long` | `aaftf/pipeline.py` (`run_long`) | flye, racon + tools of its steps |
+| `pipeline_hybrid` | `aaftf/pipeline.py` (`run_hybrid`) | flye/unicycler, racon, polypolish/pypolca + tools of its steps |
 | `fix_tbl` | `aaftf/fix_tbl.py` | (none) |
 
 ## Module `run()` Parameters
@@ -65,16 +67,20 @@ Keyword parameters of each `run()` (besides the trailing `**kwargs`):
 - **sort**: `input`, `out`, `minlen`, `name`
 - **assess**: `input`, `report`, `telomere_monomer`, `telomere_n_repeat`, `telomere_window`
 - **depth**: `input`, `out`, `read1`, `read2`, `longreads`, `longread_preset`, `aligner`, `cpus`, `workdir`, `debug`, `pipe`, `min_contig_len`, `no_plot`, `plot_format`
-- **pipeline**: `read1`, `read2`, `basename`, `phylum`, `cpus`, `tmpdir`, `assembler_args`, `method`, `memory`, `minlen`, `screen_accessions`, `screen_urls`, `mincontiglen`, `workdir`, `sourdb`, `mincovpct`, `debug`, `quiet`
+- **pipeline_short** (`run_short`): `read1`, `read2`, `basename`, `phylum`, `cpus`, `tmpdir`, `assembler_args`, `method`, `memory`, `minlen`, `screen_accessions`, `screen_urls`, `mincontiglen`, `workdir`, `sourdb`, `mincovpct`, `debug`, `quiet`
+- **pipeline_long** (`run_long`): `longreads`, `basename`, `longread_type`, `genome_size`, `cpus`, `assembler_args`, `memory`, `mincontiglen`, `workdir`, `debug`, `quiet`
+- **pipeline_hybrid** (`run_hybrid`): `read1`, `longreads`, `basename`, `phylum`, `read2`, `longread_type`, `genome_size`, `method` (`flye`/`unicycler`), `cpus`, `tmpdir`, `assembler_args`, `memory`, `minlen`, `screen_accessions`, `screen_urls`, `mincontiglen`, `workdir`, `sourdb`, `mincovpct`, `debug`, `quiet`
 - **fix_tbl**: `table`, `report`, `output`
 
 ## Pipeline step defaults
 
-`pipeline.py` runs trim → filter → assemble → vecscreen → sourpurge → rmdup → sort → assess (mito, fcs_screen, fcs_gx_purge, polish and depth are optional and not run). A step whose output file already exists is skipped (`_run_step`). Each step is called with `_step_kwargs(name, shared, **step_options)`:
+`pipeline_short` runs trim → filter → assemble → vecscreen → sourpurge → rmdup → sort → assess (mito, fcs_screen, fcs_gx_purge, polish and depth are optional and not run).
+`pipeline_long` runs assemble (flye) → polish (racon) → vecscreen → rmdup → sort → assess (no sourpurge: it needs Illumina reads).
+`pipeline_hybrid` runs trim → filter → assemble (flye on the long reads) → polish (racon) → polish (polypolish for paired, pypolca for single-end filtered Illumina reads) → vecscreen → sourpurge → rmdup → sort → assess; with `--method unicycler` Unicycler gets both read types and both polish steps are skipped. A step whose output file already exists is skipped (`_run_step`). Each step is called with `_step_kwargs(name, shared, **step_options)`:
 - it starts from that step's CLI defaults, read from its `_menu.py` parser (`_subcommand_defaults()`), so every `run()` parameter is present and the pipeline never drifts from `AAFTF <step>` defaults — do not hard-code step settings in `pipeline.py`
 - `shared` pipeline options (`cpus`, `memory`, `workdir`, `debug`, `quiet`) go only to steps that have that option; a `None` value (e.g. no `--memory`) keeps the step default
 - `step_options` are the pipeline options specific to that step plus the file names chaining the steps; `pipe=True` is always set
-- `tests/test_pipeline.py` checks that each step receives exactly its CLI options, with defaults kept unless a pipeline option overrides them
+- `tests/test_pipeline.py` checks, for all three pipelines, that each step receives exactly its CLI options, with defaults kept unless a pipeline option overrides them
 
 ## Pipeline Workflow
 
@@ -86,7 +92,7 @@ trim → [mito optional, PE only] → filter → assemble → vecscreen
   → [polish optional, mainly with long reads] → sort → assess → [depth optional]
 ```
 
-Files `AAFTF pipeline -o {base}` writes:
+Files `AAFTF pipeline_short -o {base}` writes (`pipeline_long` / `pipeline_hybrid` also write `{base}.flye.fasta`, `{base}.racon.fasta` and, hybrid only, `{base}.polypolish.fasta` / `{base}.pypolca.fasta`, or `{base}.unicycler.fasta` with `--method unicycler`):
 
 | Step | Input | Output |
 |---|---|---|

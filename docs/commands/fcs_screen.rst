@@ -70,7 +70,7 @@ Example
         -i genomes/STRAINX.spades.fasta -o genomes/STRAINX.fcs_adaptor.fasta
 
 .. note::
-   ``fcs_screen`` is not currently wired into ``AAFTF pipeline`` -- run it as an extra manual step
+   ``fcs_screen`` is not currently wired into ``AAFTF pipeline_short`` -- run it as an extra manual step
    (typically in place of, or alongside, :doc:`vecscreen`) if you need NCBI-authoritative adaptor
    screening prior to genome submission. See also :doc:`fcs_gx_purge` for NCBI's genomic
    cross-contamination screen, and :doc:`fix_tbl` for adjusting NCBI ``.tbl`` annotation

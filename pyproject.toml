@@ -112,7 +112,8 @@ aaftf = { path = ".", editable = true }
 # ---------------------------------------------------------------------------
 # "optional" feature: tools only used by optional steps (polish, depth, mito,
 # fcs_screen, fcs_gx_purge) or non-default options (trim --method fastp /
-# trimmomatic, assemble --method megahit / unicycler / flye, filter --aligner bowtie2)
+# trimmomatic, assemble --method megahit / unicycler / flye, filter --aligner bowtie2,
+# pipeline_long, pipeline_hybrid)
 # -- OPTIONAL_TOOLS in aaftf/dependency.py.
 # The complete environment (default + optional) is mirrored by environment.dev.yml.
 # ---------------------------------------------------------------------------

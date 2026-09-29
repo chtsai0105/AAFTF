@@ -80,7 +80,7 @@ def run(
         cuttail: Enable fastp ``--cut_tail``.
         cutright: Enable fastp ``--cut_right``.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
+        pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
     """
     if not basename:

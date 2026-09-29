@@ -32,7 +32,7 @@ FROM ubuntu:noble
 LABEL org.opencontainers.image.description="Automatic Assembly For The Fungi"
 
 # Which pixi environment to install: "complete" (default-pipeline tools + every optional
-# tool) or "default" (only what `AAFTF pipeline` needs with its default settings).
+# tool) or "default" (only what `AAFTF pipeline_short` needs with its default settings).
 ARG PIXI_ENV=complete
 
 # hatch-vcs can't see git history inside the build context (.git is excluded

@@ -54,7 +54,7 @@ Three environments are defined, each installing AAFTF from the checkout in edita
      - Contents
    * - ``default``
      - default
-     - Only what ``AAFTF pipeline`` needs with its default settings (BBTools, SPAdes, BLAST+,
+     - Only what ``AAFTF pipeline_short`` needs with its default settings (BBTools, SPAdes, BLAST+,
        sourmash, bwa, samtools, minimap2). ``pixi install`` alone creates this one.
    * - ``complete``
      - default, optional
@@ -134,7 +134,7 @@ Checking the installation
 =========================
 
 ``AAFTF dependency`` lists every external tool and Python package AAFTF uses, in two groups: those
-``AAFTF pipeline`` needs with its default settings (BBTools and Java, SPAdes, BLAST+, sourmash,
+``AAFTF pipeline_short`` needs with its default settings (BBTools and Java, SPAdes, BLAST+, sourmash,
 bwa, samtools, minimap2; biopython, psutil), and those only needed by optional steps
 (``polish``, ``depth``, ``mito``, ``fcs_screen``, ``fcs_gx_purge``) or non-default options
 (e.g. ``filter --aligner bowtie2``, ``assemble --method megahit``). It exits with an error only

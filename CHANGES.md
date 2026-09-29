@@ -7,6 +7,8 @@ check the **Breaking changes** before updating scripts.
 
 ### Breaking changes
 
+ - **`pipeline` renamed to `pipeline_short`** (same options and behaviour, no alias for the old name).
+
  - **Package renamed** from `AAFTF` to `aaftf` for imports (`import aaftf`, `from aaftf.utility import ...`).
    The PyPI distribution and the `AAFTF` command keep their names.
  - **Read options renamed**: `-l/--left` and `-r/--right` are now `-1/--read1` and `-2/--read2` in
@@ -45,6 +47,11 @@ check the **Breaking changes** before updating scripts.
    default `nano-hq`, `--genome_size`); resumes a previous run in the workdir with `--resume`, and
    the next-command hint suggests `polish --method racon`. `-1/--read1` is now required only for
    spades, megahit and unicycler. Flye is an optional tool (`dependency`, pixi `complete`).
+ - **`pipeline_long`**: long-read pipeline assemble (flye) → polish (racon) → vecscreen → rmdup →
+   sort → assess (no sourpurge, which needs Illumina reads).
+ - **`pipeline_hybrid`**: Illumina + long reads: trim → filter → assemble (flye) → polish (racon,
+   then polypolish for paired or pypolca for single-end reads) → vecscreen → sourpurge → rmdup →
+   sort → assess; `--method unicycler` assembles both read types with Unicycler and skips polishing.
 
  - **`dependency`** (was `check_dependencies`): checks the tools and Python packages in two groups —
    what the default pipeline needs (an error if missing) and what only optional steps or non-default
@@ -59,7 +66,7 @@ check the **Breaking changes** before updating scripts.
    even with `-q`, full tracebacks on errors), kept whenever the working directory is kept (own `-w`,
    `-v`, or a failed run); steps without one write `./<step>.log` with `-v`.
  - `-c/--cpus` and `-m/--memory` are lowered to what the machine/job can provide, with a warning.
- - Grouped `AAFTF -h` (Setup / Assembly pipeline / Annotation) with optional steps marked "(Optional)".
+ - Grouped `AAFTF -h` (Setup / Steps / Pipeline / Annotation) with optional steps marked "(Optional)".
  - `depth`: quantized coverage plots (heatmap and barplot, paginated by contig length), `--min_contig_len`,
    `--no-plot`, `--plot-format`; errors on samtools merge/index/flagstat failures.
  - pixi environments `default` (default pipeline), `complete` (every optional tool) and `dev` (tests

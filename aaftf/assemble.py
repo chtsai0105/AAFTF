@@ -1,9 +1,8 @@
 """Run a genome assembly using defaults suited to fungi.
 
-This uses SPAdes by default but additional tools like megahit are
-supported and can be added, including Flye for long reads. There is
-some access to updating parameters but this entire package is intended
-to be a general solution for draft genome processing en masse.
+The assembler is chosen with --method (no default): SPAdes, MEGAHIT or Unicycler for
+Illumina reads, or Flye for long reads. There is some access to updating parameters but
+this entire package is intended to be a general solution for draft genome processing en masse.
 """
 
 import logging
@@ -27,8 +26,8 @@ logger = logging.getLogger(__name__)
 
 def run(
     out: str | None,
+    method: str,
     read1: str | None = None,
-    method: str = "spades",
     workdir: str | None = None,
     cpus: int = 1,
     memory: int = 32,
@@ -49,9 +48,9 @@ def run(
 
     Args:
         out: Output assembly FASTA; derived from ``read1`` (``longreads`` for Flye) if None.
+        method: Assembler: ``"spades"``, ``"megahit"``, ``"unicycler"`` or ``"flye"``; there is no
+            default (``"masurca"``/``"nextdenovo"`` only log that they are not implemented).
         read1: Read 1 (forward, or single-end) FASTQ; required by every method except ``flye``.
-        method: Assembler: ``"spades"``, ``"megahit"``, ``"unicycler"`` or ``"flye"``
-            (``"masurca"``/``"nextdenovo"`` only log that they are not implemented).
         workdir: Assembler output directory; a unique name is generated if None.
         cpus: Number of threads.
         memory: Max memory in GB (SPAdes ``--mem``; converted to bytes for MEGAHIT ``--memory``).
@@ -65,7 +64,7 @@ def run(
         longread_type: Flye read type (a ``FLYE_READ_TYPES`` key).
         genome_size: Estimated genome size for Flye (e.g. ``"40m"``), or None.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
+        pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
 
     Raises:
@@ -120,7 +119,7 @@ def run_spades(
         merged: Merged-pair FASTQ, or None.
         out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
+        pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
     """
     if not workdir:
@@ -194,7 +193,7 @@ def run_megahit(
             ``-r`` as a single-end library.
         out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
+        pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
     """
     if not workdir:
@@ -255,7 +254,7 @@ def run_unicycler(
             single ``--unpaired`` file, so it is ignored for single-end input).
         out: Output assembly FASTA; derived from ``read1`` if None.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
+        pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
     """
     if not workdir:
@@ -318,7 +317,7 @@ def run_flye(
         assembler_args: Extra Flye arguments.
         out: Output assembly FASTA; derived from ``longreads`` if None.
         debug: Show external command output when True.
-        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
+        pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
 
     Raises:

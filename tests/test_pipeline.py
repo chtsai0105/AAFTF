@@ -14,7 +14,7 @@ pytestmark = pytest.mark.unit
 STEPS = ["trim", "filter", "assemble", "vecscreen", "sourpurge", "rmdup", "sort", "assess"]
 _MODULE = {"filter": "aaftf_filter", "sort": "aaftf_sort"}
 # the kwarg that names each step's output file (trim and filter derive theirs from basename)
-_OUTPUT = {"assemble": "out", "vecscreen": "outfile", "sourpurge": "outfile", "rmdup": "out", "sort": "out"}
+_OUTPUT = {"assemble": "out", "polish": "outfile", "vecscreen": "outfile", "sourpurge": "outfile", "rmdup": "out", "sort": "out"}
 
 
 def _cli_defaults(step):
@@ -23,29 +23,34 @@ def _cli_defaults(step):
     return {a.dest: a.default for a in parser._actions if a.dest != "help"}
 
 
-def _run_pipeline(tmp_path, read2=True, **options):
-    """Run pipeline.run() with every step's run() replaced; return {step: kwargs it was called with}."""
+def _run_steps(func, tmp_path, **options):
+    """Run a pipeline function with every step's run() replaced; return [(step, kwargs)] in call order."""
     base = str(tmp_path / "sample")
-    calls = {}
+    calls = []
 
     def _fake(step):
         def _run(**kwargs):
-            calls[step] = kwargs
+            calls.append((step, kwargs))
             outputs = {"trim": [f"{base}_1P.fastq.gz"], "filter": [f"{base}_filtered_1.fastq.gz"]}.get(step, [kwargs.get(_OUTPUT.get(step, ""))])
             for out in filter(None, outputs):
                 Path(out).write_text("data")
 
         return _run
 
-    patches = [patch(f"aaftf.pipeline.{_MODULE.get(step, step)}.run", side_effect=_fake(step)) for step in STEPS]
+    patches = [patch(f"aaftf.pipeline.{_MODULE.get(step, step)}.run", side_effect=_fake(step)) for step in STEPS + ["polish"]]
     for p in patches:
         p.start()
     try:
-        pipeline.run(read1="R1.fq.gz", read2="R2.fq.gz" if read2 else None, basename=base, phylum=["Ascomycota"], **options)
+        func(basename=base, **options)
     finally:
         for p in patches:
             p.stop()
     return calls
+
+
+def _run_pipeline(tmp_path, read2=True, **options):
+    """Run pipeline.run_short() with every step replaced; return {step: kwargs it was called with}."""
+    return dict(_run_steps(pipeline.run_short, tmp_path, read1="R1.fq.gz", read2="R2.fq.gz" if read2 else None, phylum=["Ascomycota"], **options))
 
 
 class TestSteps:
@@ -67,7 +72,7 @@ class TestSteps:
     def test_missing_output_raises(self, tmp_path):
         with patch("aaftf.pipeline.trim.run"):
             with pytest.raises(RuntimeError, match="AAFTF trim failed"):
-                pipeline.run(read1="R1.fq.gz", basename=str(tmp_path / "sample"), phylum=["Ascomycota"])
+                pipeline.run_short(read1="R1.fq.gz", basename=str(tmp_path / "sample"), phylum=["Ascomycota"])
 
 
 class TestDefaults:
@@ -149,3 +154,105 @@ class TestFileChaining:
     def test_single_end_reads_have_no_read2(self, tmp_path):
         calls = _run_pipeline(tmp_path, read2=False)
         assert all(calls[s]["read2"] is None for s in ("trim", "filter", "assemble", "sourpurge"))
+
+
+LONG_STEPS = ["assemble", "polish", "vecscreen", "rmdup", "sort", "assess"]
+HYBRID_STEPS = ["trim", "filter", "assemble", "polish", "polish", "vecscreen", "sourpurge", "rmdup", "sort", "assess"]
+
+
+def _run_long(tmp_path, **options):
+    return _run_steps(pipeline.run_long, tmp_path, longreads="ont.fq.gz", **options)
+
+
+def _run_hybrid(tmp_path, read2=True, **options):
+    return _run_steps(pipeline.run_hybrid, tmp_path, read1="R1.fq.gz", read2="R2.fq.gz" if read2 else None, longreads="ont.fq.gz", phylum=["Ascomycota"], **options)
+
+
+class TestLongPipeline:
+    def test_step_order(self, tmp_path):
+        assert [step for step, _ in _run_long(tmp_path)] == LONG_STEPS
+
+    def test_every_step_gets_every_cli_option(self, tmp_path):
+        for step, kwargs in _run_long(tmp_path):
+            assert set(kwargs) == set(_cli_defaults(step)) | {"pipe"}, step
+
+    def test_flye_then_racon_chain(self, tmp_path):
+        calls = dict(_run_long(tmp_path, longread_type="pacbio-hifi", genome_size="40m", cpus=4))
+        base = str(tmp_path / "sample")
+        asm = calls["assemble"]
+        assert (asm["method"], asm["longreads"], asm["read1"], asm["out"]) == ("flye", "ont.fq.gz", None, f"{base}.flye.fasta")
+        assert (asm["longread_type"], asm["genome_size"], asm["cpus"]) == ("pacbio-hifi", "40m", 4)
+        assert (calls["polish"]["method"], calls["polish"]["infile"], calls["polish"]["longreads"]) == ("racon", f"{base}.flye.fasta", "ont.fq.gz")
+        assert calls["vecscreen"]["infile"] == f"{base}.racon.fasta"
+        assert calls["rmdup"]["input"] == f"{base}.vecscreen.fasta"  # no sourpurge without Illumina reads
+
+    def test_assemble_defaults_kept(self, tmp_path):
+        asm = dict(_run_long(tmp_path))["assemble"]
+        assert (asm["longread_type"], asm["genome_size"]) == (_cli_defaults("assemble")["longread_type"], None)
+
+
+class TestHybridPipeline:
+    def test_step_order(self, tmp_path):
+        assert [step for step, _ in _run_hybrid(tmp_path)] == HYBRID_STEPS
+
+    def test_every_step_gets_every_cli_option(self, tmp_path):
+        for step, kwargs in _run_hybrid(tmp_path):
+            assert set(kwargs) == set(_cli_defaults(step)) | {"pipe"}, step
+
+    def test_flye_racon_polypolish_chain(self, tmp_path):
+        calls = _run_hybrid(tmp_path)
+        base = str(tmp_path / "sample")
+        racon, short = [kwargs for step, kwargs in calls if step == "polish"]
+        assert (racon["method"], racon["infile"]) == ("racon", f"{base}.flye.fasta")
+        assert (short["method"], short["infile"]) == ("polypolish", f"{base}.racon.fasta")
+        assert (short["read1"], short["read2"]) == (f"{base}_filtered_1.fastq.gz", f"{base}_filtered_2.fastq.gz")
+        steps = dict(calls)
+        assert steps["vecscreen"]["infile"] == f"{base}.polypolish.fasta"
+        assert steps["sourpurge"]["read1"] == f"{base}_filtered_1.fastq.gz"
+
+    def test_single_end_uses_pypolca(self, tmp_path):
+        short = [kwargs for step, kwargs in _run_hybrid(tmp_path, read2=False) if step == "polish"][-1]
+        assert (short["method"], short["read2"]) == ("pypolca", None)
+
+    def test_unicycler_gets_both_read_types_and_skips_polish(self, tmp_path):
+        calls = _run_hybrid(tmp_path, method="unicycler")
+        base = str(tmp_path / "sample")
+        assert "polish" not in [step for step, _ in calls]
+        asm = dict(calls)["assemble"]
+        assert (asm["method"], asm["read1"], asm["longreads"]) == ("unicycler", f"{base}_filtered_1.fastq.gz", "ont.fq.gz")
+        assert dict(calls)["vecscreen"]["infile"] == f"{base}.unicycler.fasta"
+
+    def test_unknown_method_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="flye or unicycler"):
+            _run_hybrid(tmp_path, method="spades")
+
+
+class TestPipelineParsers:
+    """Each pipeline subcommand dispatches to its own run function with its own options."""
+
+    @pytest.mark.parametrize(
+        "argv, func, expected",
+        [
+            (["pipeline_short", "-1", "R1.fq", "-o", "s", "-p", "Ascomycota"], "run_short", {"read1": "R1.fq", "method": "spades"}),
+            (["pipeline_long", "-lr", "ont.fq", "-o", "s", "--genome_size", "40m"], "run_long", {"longreads": "ont.fq", "genome_size": "40m", "longread_type": "nano-hq"}),
+            (["pipeline_hybrid", "-1", "R1.fq", "-lr", "ont.fq", "-o", "s", "-p", "Ascomycota"], "run_hybrid", {"read1": "R1.fq", "longreads": "ont.fq", "method": "flye"}),
+        ],
+    )
+    def test_dispatch(self, argv, func, expected):
+        import sys
+
+        from aaftf.main import main
+
+        with patch.object(sys, "argv", ["AAFTF", *argv]), patch(f"aaftf.pipeline.{func}") as mock_run:
+            # main() builds the parsers, binding the patched function, inside the patch
+            assert main() == 0
+        kwargs = mock_run.call_args.kwargs
+        assert {k: kwargs[k] for k in expected} == expected
+
+    def test_long_requires_longreads(self):
+        import sys
+
+        from aaftf.main import main
+
+        with patch.object(sys, "argv", ["AAFTF", "pipeline_long", "-o", "s"]), pytest.raises(SystemExit):
+            main()

@@ -6,7 +6,8 @@ AAFTF chains a fixed sequence of subcommands to go from raw Illumina (optionally
 sequencing data to a polished, sorted, and QC'd genome assembly. Each step consumes the previous
 step's output and, unless run with ``-q/--quiet``, prints the exact next AAFTF command to run --
 so the whole pipeline can be worked through interactively one command at a time, or run end-to-end
-with the single ``AAFTF pipeline`` subcommand (see :doc:`commands/pipeline`).
+with the single ``AAFTF pipeline_short`` subcommand, or ``pipeline_long`` / ``pipeline_hybrid``
+for long reads (see :doc:`commands/pipeline`).
 
 Pipeline diagram
 =================
@@ -97,19 +98,19 @@ Expected inputs/outputs per step
 Running the whole thing end-to-end
 =====================================
 
-The :doc:`commands/pipeline` subcommand runs trim -> filter -> assemble -> vecscreen ->
+The ``pipeline_short`` subcommand (:doc:`commands/pipeline`) runs trim -> filter -> assemble -> vecscreen ->
 sourpurge -> rmdup -> sort -> assess automatically (mito, fcs_screen, fcs_gx_purge, polish and
 depth are optional and run separately), skipping any step whose
 output file already exists (so an interrupted run can simply be re-launched):
 
 .. code-block:: bash
 
-    AAFTF pipeline \
+    AAFTF pipeline_short \
         -1 reads_R1.fq.gz -2 reads_R2.fq.gz \
         -o STRAINX -c 24 -m 96 \
         --phylum Ascomycota
 
-``fcs_screen``/``fcs_gx_purge`` and ``depth`` are *not* part of ``pipeline`` -- run them
+``fcs_screen``/``fcs_gx_purge`` and ``depth`` are *not* part of any ``pipeline_*`` subcommand -- run them
 separately (see :doc:`commands/fcs_screen`, :doc:`commands/fcs_gx_purge`,
 :doc:`commands/depth`) if you want NCBI FCS-based contamination screening in place of/alongside
 sourmash, or a coverage report of the final assembly.
@@ -155,3 +156,9 @@ Running step-by-step
 
 Each individual command page under :doc:`commands/index` documents its own defaults and cutoffs
 in detail.
+
+For long reads, ``pipeline_long`` runs assemble (flye) -> polish (racon) -> vecscreen -> rmdup ->
+sort -> assess (no sourpurge, which needs Illumina reads), and ``pipeline_hybrid`` combines
+Illumina and long reads: trim -> filter -> assemble (flye, or unicycler with both read types) ->
+polish (racon, then polypolish/pypolca with the Illumina reads; skipped for unicycler) ->
+vecscreen -> sourpurge -> rmdup -> sort -> assess. See :doc:`commands/pipeline`.

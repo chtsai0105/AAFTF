@@ -9,7 +9,7 @@ from typing import Any
 __all__ = ["REQUIRED_TOOLS", "OPTIONAL_TOOLS", "REQUIRED_PYTHON_PACKAGES", "OPTIONAL_PYTHON_PACKAGES", "run"]
 
 
-# external tools needed to run ``AAFTF pipeline`` with its default settings (tool -> where it is used)
+# external tools needed to run ``AAFTF pipeline_short`` with its default settings (tool -> where it is used)
 REQUIRED_TOOLS = {
     "bbduk.sh": "trim, filter",
     "shuffle.sh": "trim, filter (paired reads)",
@@ -32,15 +32,15 @@ OPTIONAL_TOOLS = {
     "bowtie2": "filter (--aligner bowtie2)",
     "bowtie2-build": "filter (--aligner bowtie2)",
     "megahit": "assemble (--method megahit)",
-    "unicycler": "assemble (--method unicycler)",
-    "flye": "assemble (--method flye)",
+    "unicycler": "assemble (--method unicycler), pipeline_hybrid (--method unicycler)",
+    "flye": "assemble (--method flye), pipeline_long, pipeline_hybrid",
     "polypolish": "polish (--method polypolish)",
     "pypolca": "polish (--method pypolca)",
     "freebayes": "polish (--method pypolca / polca)",
     "aaftf_polca.sh": "polish (--method polca; installed with AAFTF)",
     "nextPolish2": "polish (--method nextpolish2)",
     "yak": "polish (--method nextpolish2)",
-    "racon": "polish (--method racon)",
+    "racon": "polish (--method racon), pipeline_long, pipeline_hybrid",
     "mosdepth": "depth",
     "NOVOPlasty.pl": "mito",
     "run_fcsadaptor.sh": "fcs_screen (or download it with: AAFTF database fcs_script)",
@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 def run(quiet: bool = False, **kwargs: Any) -> None:
     """Check whether AAFTF's external tools and Python packages are installed.
 
-    Tools and packages are checked in two groups: those needed to run ``AAFTF pipeline`` with its
+    Tools and packages are checked in two groups: those needed to run ``AAFTF pipeline_short`` with its
     default settings, and those only needed by optional steps (e.g. ``polish``, ``depth``,
     ``mito``) or non-default options (e.g. ``--aligner bowtie2``). An OK/MISSING line is printed
     for each, with its location (or where a missing one is used). Only missing required items

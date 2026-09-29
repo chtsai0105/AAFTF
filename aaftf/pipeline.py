@@ -1,9 +1,16 @@
 """Support pipelining of AAFTF to simplify all-in-one runs.
 
-Runs trim → filter → assemble → vecscreen → sourpurge → rmdup → sort → assess (polish is optional
-and not run: it is not recommended for short-read-only assemblies).
-Every step runs with its own ``AAFTF <step>`` defaults; only the options given to
-``AAFTF pipeline`` (and the file names that chain the steps together) override them.
+Three pipelines, one per kind of sequencing data:
+
+* ``pipeline_short`` (Illumina): trim → filter → assemble → vecscreen → sourpurge → rmdup → sort → assess.
+* ``pipeline_long`` (ONT/PacBio): assemble (Flye) → polish (Racon) → vecscreen → rmdup → sort → assess.
+* ``pipeline_hybrid`` (Illumina + long reads): trim → filter → assemble (Flye on the long reads) →
+  polish (Racon, then Polypolish or pypolca with the Illumina reads) → vecscreen → sourpurge → rmdup
+  → sort → assess. With ``--method unicycler`` both read types go to Unicycler, which polishes its own
+  assembly, so the polish steps are skipped.
+
+Every step runs with its own ``AAFTF <step>`` defaults; only the options given to the pipeline (and
+the file names that chain the steps together) override them.
 """
 
 import argparse as ap
@@ -15,6 +22,7 @@ from typing import Any
 import aaftf.assemble as assemble
 import aaftf.assess as assess
 import aaftf.filter as aaftf_filter
+import aaftf.polish as polish
 import aaftf.rmdup as rmdup
 import aaftf.sort as aaftf_sort
 import aaftf.sourpurge as sourpurge
@@ -22,13 +30,13 @@ import aaftf.trim as trim
 import aaftf.vecscreen as vecscreen
 from aaftf.utility import check_file
 
-__all__ = ["run"]
+__all__ = ["run_short", "run_long", "run_hybrid"]
 
 
 logger = logging.getLogger(__name__)
 
 
-def run(
+def run_short(
     read1: str,
     basename: str,
     phylum: list[str],
@@ -49,7 +57,7 @@ def run(
     quiet: bool = False,
     **kwargs: Any,
 ) -> None:
-    """Run the whole AAFTF pipeline, skipping steps whose output file already exists.
+    """Run the short-read (Illumina) pipeline, skipping steps whose output file already exists.
 
     Args:
         read1: Read 1 (forward, or single-end) raw FASTQ reads.
@@ -75,37 +83,175 @@ def run(
     Raises:
         RuntimeError: If a step finishes without producing its expected output file.
     """
-    # passed to every step that has an option of the same name
-    shared = {"cpus": cpus, "memory": memory, "workdir": workdir, "debug": debug, "quiet": quiet}
-    trimmed_1, trimmed_2 = basename + "_1P.fastq.gz", (basename + "_2P.fastq.gz" if read2 else None)
-    filtered_1, filtered_2 = basename + "_filtered_1.fastq.gz", (basename + "_filtered_2.fastq.gz" if read2 else None)
-
-    _run_step(trim, "trim", trimmed_1, shared, read1=read1, read2=read2, basename=basename, minlen=minlen)
-    _run_step(aaftf_filter, "filter", filtered_1, shared, read1=trimmed_1, read2=trimmed_2, basename=basename, screen_accessions=screen_accessions, screen_urls=screen_urls)
+    shared = _shared(cpus, memory, workdir, debug, quiet)
+    filtered_1, filtered_2 = _trim_and_filter(read1, read2, basename, shared, minlen, screen_accessions, screen_urls)
 
     assembly = basename + f".{method}.fasta"
     _run_step(assemble, "assemble", assembly, shared, read1=filtered_1, read2=filtered_2, out=assembly, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
 
+    sourpurge_options = {"read1": filtered_1, "read2": filtered_2, "phylum": phylum, "sourdb": sourdb, "mincovpct": mincovpct}
+    _clean_and_finish(assembly, basename, shared, mincontiglen, sourpurge_options)
+
+
+def run_long(
+    longreads: str,
+    basename: str,
+    longread_type: str = "nano-hq",
+    genome_size: str | None = None,
+    cpus: int = 1,
+    assembler_args: list[str] | None = None,
+    memory: int | None = None,
+    mincontiglen: int = 500,
+    workdir: str | None = None,
+    debug: bool = False,
+    quiet: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the long-read (ONT/PacBio) pipeline, skipping steps whose output file already exists.
+
+    ``sourpurge`` is not run: it needs Illumina reads to compute contig coverage.
+
+    Args:
+        longreads: Long-read FASTQ.
+        basename: Prefix for every output file (``{basename}.flye.fasta``, ``{basename}.final.fasta``, ...).
+        longread_type: Flye read type (``nano-raw``, ``nano-hq``, ``pacbio-raw`` or ``pacbio-hifi``).
+        genome_size: Estimated genome size for Flye (e.g. ``40m``), or None to let Flye estimate it.
+        cpus: Threads for every step that takes ``-c/--cpus``.
+        assembler_args: Extra arguments passed through to Flye.
+        memory: Memory in GB for steps that take ``-m/--memory``; None keeps each step's default.
+        mincontiglen: Minimum contig length kept by ``rmdup`` and ``sort``.
+        workdir: Working directory for steps that take ``-w/--workdir``; None keeps each step's default.
+        debug: Show debug output and keep temporary files in every step.
+        quiet: Only show warnings and errors in every step.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ...); ignored.
+
+    Raises:
+        RuntimeError: If a step finishes without producing its expected output file.
+    """
+    shared = _shared(cpus, memory, workdir, debug, quiet)
+    assembly = _assemble_flye(longreads, basename, shared, longread_type, genome_size, assembler_args)
+    polished = _racon(assembly, longreads, basename, shared)
+    _clean_and_finish(polished, basename, shared, mincontiglen)
+
+
+def run_hybrid(
+    read1: str,
+    longreads: str,
+    basename: str,
+    phylum: list[str],
+    read2: str | None = None,
+    longread_type: str = "nano-hq",
+    genome_size: str | None = None,
+    method: str = "flye",
+    cpus: int = 1,
+    tmpdir: str | None = None,
+    assembler_args: list[str] | None = None,
+    memory: int | None = None,
+    minlen: int = 75,
+    screen_accessions: list[str] | None = None,
+    screen_urls: list[str] | None = None,
+    mincontiglen: int = 500,
+    workdir: str | None = None,
+    sourdb: str | None = None,
+    mincovpct: int = 5,
+    debug: bool = False,
+    quiet: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the hybrid (Illumina + long-read) pipeline, skipping steps whose output file already exists.
+
+    With ``method="flye"`` the long reads are assembled by Flye, polished by Racon, then polished
+    with the filtered Illumina reads (Polypolish for paired reads, pypolca for single-end). With
+    ``method="unicycler"`` Unicycler assembles both read types and polishes its own output, so the
+    polish steps are skipped.
+
+    Args:
+        read1: Read 1 (forward, or single-end) raw Illumina FASTQ reads.
+        longreads: Long-read FASTQ.
+        basename: Prefix for every output file.
+        phylum: Phyla whose sourmash matches are kept by ``sourpurge``.
+        read2: Read 2 (reverse) raw Illumina FASTQ reads, or None for single-end data.
+        longread_type: Flye read type (``nano-raw``, ``nano-hq``, ``pacbio-raw`` or ``pacbio-hifi``).
+        genome_size: Estimated genome size for Flye (e.g. ``40m``), or None.
+        method: ``flye`` or ``unicycler``.
+        cpus: Threads for every step that takes ``-c/--cpus``.
+        tmpdir: Assembler temporary directory.
+        assembler_args: Extra arguments passed through to the assembler.
+        memory: Memory in GB for steps that take ``-m/--memory``; None keeps each step's default.
+        minlen: Minimum Illumina read length after trimming.
+        screen_accessions: GenBank accessions to screen out of the Illumina reads in ``filter``.
+        screen_urls: URLs of sequences to screen out of the Illumina reads in ``filter``.
+        mincontiglen: Minimum contig length kept by ``rmdup`` and ``sort``.
+        workdir: Working directory for steps that take ``-w/--workdir``; None keeps each step's default.
+        sourdb: Sourmash LCA database for ``sourpurge``.
+        mincovpct: Minimum percent of N50 coverage below which ``sourpurge`` removes contigs.
+        debug: Show debug output and keep temporary files in every step.
+        quiet: Only show warnings and errors in every step.
+        **kwargs: Other parsed CLI attributes (``command``, ``func``, ...); ignored.
+
+    Raises:
+        ValueError: If ``method`` is not ``flye`` or ``unicycler``.
+        RuntimeError: If a step finishes without producing its expected output file.
+    """
+    if method not in ("flye", "unicycler"):
+        raise ValueError(f"pipeline_hybrid --method must be flye or unicycler, not {method}")
+    shared = _shared(cpus, memory, workdir, debug, quiet)
+    filtered_1, filtered_2 = _trim_and_filter(read1, read2, basename, shared, minlen, screen_accessions, screen_urls)
+
+    if method == "unicycler":
+        polished = basename + ".unicycler.fasta"
+        _run_step(assemble, "assemble", polished, shared, read1=filtered_1, read2=filtered_2, longreads=longreads, out=polished, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
+    else:
+        assembly = _assemble_flye(longreads, basename, shared, longread_type, genome_size, assembler_args)
+        racon_file = _racon(assembly, longreads, basename, shared)
+        short_method = "polypolish" if filtered_2 else "pypolca"  # polypolish needs paired reads
+        polished = basename + f".{short_method}.fasta"
+        _run_step(polish, "polish", polished, shared, infile=racon_file, outfile=polished, method=short_method, read1=filtered_1, read2=filtered_2)
+
+    sourpurge_options = {"read1": filtered_1, "read2": filtered_2, "phylum": phylum, "sourdb": sourdb, "mincovpct": mincovpct}
+    _clean_and_finish(polished, basename, shared, mincontiglen, sourpurge_options)
+
+
+def _shared(cpus: int, memory: int | None, workdir: str | None, debug: bool, quiet: bool) -> dict[str, Any]:
+    """Return the options passed to every step that has an option of the same name."""
+    return {"cpus": cpus, "memory": memory, "workdir": workdir, "debug": debug, "quiet": quiet}
+
+
+def _trim_and_filter(read1: str, read2: str | None, basename: str, shared: dict[str, Any], minlen: int, screen_accessions: list[str] | None, screen_urls: list[str] | None) -> tuple[str, str | None]:
+    """Run ``trim`` then ``filter`` on the Illumina reads; return the filtered (read1, read2) files."""
+    trimmed_1, trimmed_2 = basename + "_1P.fastq.gz", (basename + "_2P.fastq.gz" if read2 else None)
+    filtered_1, filtered_2 = basename + "_filtered_1.fastq.gz", (basename + "_filtered_2.fastq.gz" if read2 else None)
+    _run_step(trim, "trim", trimmed_1, shared, read1=read1, read2=read2, basename=basename, minlen=minlen)
+    _run_step(aaftf_filter, "filter", filtered_1, shared, read1=trimmed_1, read2=trimmed_2, basename=basename, screen_accessions=screen_accessions, screen_urls=screen_urls)
+    return filtered_1, filtered_2
+
+
+def _assemble_flye(longreads: str, basename: str, shared: dict[str, Any], longread_type: str, genome_size: str | None, assembler_args: list[str] | None) -> str:
+    """Assemble ``longreads`` with Flye into ``{basename}.flye.fasta`` and return that file name."""
+    assembly = basename + ".flye.fasta"
+    _run_step(assemble, "assemble", assembly, shared, read1=None, longreads=longreads, out=assembly, method="flye", longread_type=longread_type, genome_size=genome_size, assembler_args=assembler_args)
+    return assembly
+
+
+def _racon(assembly: str, longreads: str, basename: str, shared: dict[str, Any]) -> str:
+    """Polish ``assembly`` with Racon and the long reads into ``{basename}.racon.fasta``; return that file name."""
+    polished = basename + ".racon.fasta"
+    _run_step(polish, "polish", polished, shared, infile=assembly, outfile=polished, method="racon", longreads=longreads)
+    return polished
+
+
+def _clean_and_finish(assembly: str, basename: str, shared: dict[str, Any], mincontiglen: int, sourpurge_options: dict[str, Any] | None = None) -> None:
+    """Run vecscreen → sourpurge (when ``sourpurge_options`` is given) → rmdup → sort → assess on ``assembly``."""
     vecscreen_file = basename + ".vecscreen.fasta"
     _run_step(vecscreen, "vecscreen", vecscreen_file, shared, infile=assembly, outfile=vecscreen_file)
 
-    sourpurge_file = basename + ".sourpurge.fasta"
-    _run_step(
-        sourpurge,
-        "sourpurge",
-        sourpurge_file,
-        shared,
-        input=vecscreen_file,
-        outfile=sourpurge_file,
-        read1=filtered_1,
-        read2=filtered_2,
-        phylum=phylum,
-        sourdb=sourdb,
-        mincovpct=mincovpct,
-    )
+    rmdup_input = vecscreen_file
+    if sourpurge_options is not None:
+        rmdup_input = basename + ".sourpurge.fasta"
+        _run_step(sourpurge, "sourpurge", rmdup_input, shared, input=vecscreen_file, outfile=rmdup_input, **sourpurge_options)
 
     rmdup_file = basename + ".rmdup.fasta"
-    _run_step(rmdup, "rmdup", rmdup_file, shared, input=sourpurge_file, out=rmdup_file, minlen=mincontiglen)
+    _run_step(rmdup, "rmdup", rmdup_file, shared, input=rmdup_input, out=rmdup_file, minlen=mincontiglen)
 
     final_file = basename + ".final.fasta"
     _run_step(aaftf_sort, "sort", final_file, shared, input=rmdup_file, out=final_file, minlen=mincontiglen)

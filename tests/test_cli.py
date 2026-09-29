@@ -368,9 +368,10 @@ class TestMainHelpGroups:
 
     def test_pipeline_group_has_every_other_step(self, capsys):
         names = self._section(self._help(capsys), "Assembly pipeline")
-        assert names[-1] == "pipeline"
+        pipelines = ["pipeline_short", "pipeline_long", "pipeline_hybrid"]
+        assert names[-3:] == pipelines
         steps = {"trim", "mito", "filter", "assemble", "vecscreen", "fcs_screen", "fcs_gx_purge", "sourpurge", "rmdup", "polish", "sort", "assess", "depth"}
-        assert set(names) == steps | {"pipeline"}
+        assert set(names) == steps | set(pipelines)
 
     def test_annotation_group(self, capsys):
         assert self._section(self._help(capsys), "Annotation") == ["fix_tbl"]

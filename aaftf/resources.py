@@ -58,7 +58,7 @@ FCSADAPTOR = {
 }
 
 # Databases `AAFTF database` can fetch, keyed by abbreviation. `used_by` lists the subcommands that
-# read each one; `required` marks those `AAFTF pipeline` needs with its default settings (the rest are
+# read each one; `required` marks those `AAFTF pipeline_short` needs with its default settings (the rest are
 # only for non-default options or optional steps); `executable` marks files that must be runnable
 # after download.
 DATABASES = {

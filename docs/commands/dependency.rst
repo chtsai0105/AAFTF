@@ -13,7 +13,7 @@ Each tool is looked up on ``$PATH`` and each Python package is imported. They ar
 groups, and printed in the order listed below:
 
 * **Needed by the default pipeline** (``REQUIRED_TOOLS`` / ``REQUIRED_PYTHON_PACKAGES`` in
-  ``aaftf/dependency.py``) -- what ``AAFTF pipeline`` needs with its default settings:
+  ``aaftf/dependency.py``) -- what ``AAFTF pipeline_short`` needs with its default settings:
   ``bbduk.sh``, ``shuffle.sh``, ``reformat.sh``, ``java``, ``spades.py``, ``blastn``,
   ``makeblastdb``, ``sourmash``, ``bwa``, ``samtools``, ``minimap2``; Python packages
   ``biopython`` and ``psutil``.

@@ -53,13 +53,15 @@ __all__ = [
     "assess_menu",
     "fix_tbl_menu",
     "depth_menu",
-    "pipeline_menu",
+    "pipeline_short_menu",
+    "pipeline_long_menu",
+    "pipeline_hybrid_menu",
     "dependency_menu",
 ]
 
 
 def register_subcommands(parser: ap.ArgumentParser) -> ap._SubParsersAction:
-    """Add every AAFTF subcommand to ``parser``, listed in ``AAFTF --help`` under three group titles.
+    """Add every AAFTF subcommand to ``parser``, listed in ``AAFTF --help`` under four group titles.
 
     Args:
         parser: The top-level ``AAFTF`` parser.
@@ -71,9 +73,10 @@ def register_subcommands(parser: ap.ArgumentParser) -> ap._SubParsersAction:
     groups = [
         ("Setup (dependencies and databases)", [dependency_menu, database_menu]),
         (
-            "Assembly pipeline",
-            [trim_menu, mito_menu, filter_menu, assemble_menu, vecscreen_menu, sourpurge_menu, fcs_screen_menu, fcs_gx_purge_menu, rmdup_menu, polish_menu, sort_menu, assess_menu, depth_menu, pipeline_menu],
+            "Steps",
+            [trim_menu, mito_menu, filter_menu, assemble_menu, vecscreen_menu, sourpurge_menu, fcs_screen_menu, fcs_gx_purge_menu, rmdup_menu, polish_menu, sort_menu, assess_menu, depth_menu],
         ),
+        ("Pipeline", [pipeline_short_menu, pipeline_long_menu, pipeline_hybrid_menu]),
         ("Annotation", [fix_tbl_menu]),
     ]
     for title, menus in groups:
@@ -357,6 +360,8 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     required.add_argument("-o", "--out", type=str, required=True, help="Output assembly FASTA", metavar="FASTA")  # think about sensible replacement in future
 
+    required.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler", "flye"], required=True, help="Assembly method: spades or megahit (Illumina reads), unicycler (Illumina plus optional long reads) or flye (long reads)")
+
     shortread_group = parser_asm.add_argument_group(title="short-read (Illumina) arguments: spades, megahit, unicycler")
 
     shortread_group.add_argument("-1", "--read1", metavar="FASTQ", type=str, help="Read 1 (forward) FASTQ, or single-end FASTQ; required for spades, megahit and unicycler")
@@ -369,13 +374,11 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     longread_group.add_argument("-lr", "--longreads", type=str, help="Long-read FASTQ (PacBio or ONT); required for flye, optional for unicycler", metavar="FASTQ")
 
-    longread_group.add_argument("--longread_type", choices=["nano-raw", "nano-hq", "pacbio-raw", "pacbio-hifi"], default="nano-hq", help="Long-read type for flye")
+    longread_group.add_argument("--longread_type", choices=list(assemble.FLYE_READ_TYPES), default="nano-hq", help="Long-read type for flye")
 
     longread_group.add_argument("--genome_size", type=str, help="Estimated genome size for flye, e.g. 40m; default: estimated by flye", metavar="SIZE")
 
     optional = parser_asm.add_argument_group("optional arguments")
-
-    optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler", "flye"], default="spades", help="Assembly method")
 
     optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
@@ -644,7 +647,7 @@ def polish_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     """
     parser_polish = subparsers.add_parser(
         "polish",
-        description="Polish contig sequences with Polypolish, pypolca, POLCA (polca.sh), NextPolish2 or Racon. Recommended for assemblies with long reads (or hybrid data); polishing a short-read-only assembly with the same short reads rarely helps and can introduce errors, so it is not part of AAFTF pipeline.",
+        description="Polish contig sequences with Polypolish, pypolca, POLCA (polca.sh), NextPolish2 or Racon. Recommended for assemblies with long reads (or hybrid data); polishing a short-read-only assembly with the same short reads rarely helps and can introduce errors, so it is not part of AAFTF pipeline_short (pipeline_long and pipeline_hybrid run it).",
         help="(Optional) Polish contig sequences with short and/or long reads",
         formatter_class=CustomHelpFormatter,
     )
@@ -867,19 +870,19 @@ def depth_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     return parser_depth
 
 
-def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
-    """Add the pipeline subcommand parser.
+def pipeline_short_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the pipeline_short subcommand parser.
 
     Args:
         subparsers: The top-level subparsers action to add the parser to.
 
     Returns:
-        The new ``pipeline`` subcommand parser.
+        The new ``pipeline_short`` subcommand parser.
     """
     parser_pipeline = subparsers.add_parser(
-        "pipeline",
-        description="Run the AAFTF pipeline: trim, filter, assemble, vecscreen, sourpurge, rmdup, sort and assess. Each step uses its own defaults (see AAFTF <step> -h); only the options below override them.",
-        help="Run AAFTF pipeline",
+        "pipeline_short",
+        description="Run the AAFTF short-read (Illumina) pipeline: trim, filter, assemble, vecscreen, sourpurge, rmdup, sort and assess. Each step uses its own defaults (see AAFTF <step> -h); only the options below override them.",
+        help="Run the AAFTF pipeline on Illumina reads",
         formatter_class=CustomHelpFormatter,
     )
 
@@ -920,7 +923,113 @@ def pipeline_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     add_verbosity_args(optional)
 
-    parser_pipeline.set_defaults(func=pipeline.run)
+    parser_pipeline.set_defaults(func=pipeline.run_short)
+    return parser_pipeline
+
+
+def pipeline_long_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the pipeline_long subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``pipeline_long`` subcommand parser.
+    """
+    parser_pipeline = subparsers.add_parser(
+        "pipeline_long",
+        description="Run the AAFTF long-read (ONT/PacBio) pipeline: assemble (flye), polish (racon), vecscreen, rmdup, sort and assess. sourpurge is not run, since it needs Illumina reads. Each step uses its own defaults (see AAFTF <step> -h); only the options below override them.",
+        help="Run the AAFTF pipeline on long reads",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_pipeline.add_argument_group("required arguments")
+    optional = parser_pipeline.add_argument_group("optional arguments")
+
+    required.add_argument("-lr", "--longreads", type=str, required=True, help="Long-read FASTQ (PacBio or ONT)", metavar="FASTQ")
+
+    required.add_argument("-o", "--out", type=str, required=True, dest="basename", help="Output file prefix for every step's output files", metavar="PREFIX")
+
+    optional.add_argument("--longread_type", choices=list(assemble.FLYE_READ_TYPES), default="nano-hq", help="Long-read type for flye")
+
+    optional.add_argument("--genome_size", type=str, help="Estimated genome size for flye, e.g. 40m; default: estimated by flye", metavar="SIZE")
+
+    optional.add_argument("-w", "--workdir", type=str, help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
+
+    optional.add_argument("--assembler_args", action="append", help="Extra argument passed to the assembler (repeat for several)", metavar="ARG", type=str)
+
+    optional.add_argument("-mc", "--mincontiglen", type=int, default=500, help="Minimum length of contigs to keep", metavar="BP")
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
+
+    optional.add_argument("-m", "--memory", type=int, dest="memory", help="Max memory in GB, passed to every step that has -m/--memory (assemble, polish); default: each step's own default", metavar="GB")
+
+    add_verbosity_args(optional)
+
+    parser_pipeline.set_defaults(func=pipeline.run_long)
+    return parser_pipeline
+
+
+def pipeline_hybrid_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
+    """Add the pipeline_hybrid subcommand parser.
+
+    Args:
+        subparsers: The top-level subparsers action to add the parser to.
+
+    Returns:
+        The new ``pipeline_hybrid`` subcommand parser.
+    """
+    parser_pipeline = subparsers.add_parser(
+        "pipeline_hybrid",
+        description="Run the AAFTF hybrid (Illumina + long-read) pipeline: trim, filter, assemble (flye on the long reads), polish (racon, then polypolish for paired or pypolca for single-end Illumina reads), vecscreen, sourpurge, rmdup, sort and assess. With --method unicycler both read types go to unicycler, which polishes its own assembly, so the polish steps are skipped. Each step uses its own defaults (see AAFTF <step> -h); only the options below override them.",
+        help="Run the AAFTF pipeline on Illumina plus long reads",
+        formatter_class=CustomHelpFormatter,
+    )
+
+    required = parser_pipeline.add_argument_group("required arguments")
+    optional = parser_pipeline.add_argument_group("optional arguments")
+
+    required.add_argument("-1", "--read1", metavar="FASTQ", type=str, required=True, help="Read 1 (forward) FASTQ, or single-end FASTQ")
+
+    required.add_argument("-lr", "--longreads", type=str, required=True, help="Long-read FASTQ (PacBio or ONT)", metavar="FASTQ")
+
+    required.add_argument("-o", "--out", type=str, required=True, dest="basename", help="Output file prefix for every step's output files", metavar="PREFIX")
+
+    required.add_argument("-p", "--phylum", required=True, nargs="+", help="Phylum or phyla whose contigs are kept, e.g. Ascomycota", metavar="PHYLUM", type=str)
+
+    optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
+
+    optional.add_argument("--method", type=str, choices=["flye", "unicycler"], default="flye", help="Assembly method")
+
+    optional.add_argument("--longread_type", choices=list(assemble.FLYE_READ_TYPES), default="nano-hq", help="Long-read type for flye")
+
+    optional.add_argument("--genome_size", type=str, help="Estimated genome size for flye, e.g. 40m; default: estimated by flye", metavar="SIZE")
+
+    optional.add_argument("-w", "--workdir", type=str, help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
+
+    optional.add_argument("--tmpdir", type=str, help="Temporary directory for the assembler", metavar="DIR")
+
+    optional.add_argument("--assembler_args", action="append", help="Extra argument passed to the assembler (repeat for several)", metavar="ARG", type=str)
+
+    optional.add_argument("-ml", "--minlen", type=int, default=75, help="Minimum read length to keep after trimming", metavar="BP")
+
+    optional.add_argument("-a", "--screen_accessions", type=str, nargs="*", help="GenBank accession(s) whose sequences are screened out of the reads", metavar="ACCESSION")
+
+    optional.add_argument("-u", "--screen_urls", type=str, nargs="*", help="URL(s) of FASTA files whose sequences are screened out of the reads", metavar="URL")
+
+    optional.add_argument("-mc", "--mincontiglen", type=int, default=500, help="Minimum length of contigs to keep", metavar="BP")
+
+    optional.add_argument("--sourdb", type=str, help="sourmash LCA (k-31) taxonomy database; default: the one from 'AAFTF database'", metavar="FILE")
+
+    optional.add_argument("--mincovpct", default=5, type=int, help="Remove contigs whose coverage is below this percent of the N50 contigs' average coverage", metavar="PCT")
+
+    optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
+
+    optional.add_argument("-m", "--memory", type=int, dest="memory", help="Max memory in GB, passed to every step that has -m/--memory (trim, filter, assemble, polish); default: each step's own default", metavar="GB")
+
+    add_verbosity_args(optional)
+
+    parser_pipeline.set_defaults(func=pipeline.run_hybrid)
     return parser_pipeline
 
 

@@ -116,5 +116,5 @@ Example
         --plot-format png -c 16 -o coverage_report.txt
 
 .. note::
-   ``depth`` is not part of ``AAFTF pipeline`` -- run it manually against the final
+   ``depth`` is not part of ``AAFTF pipeline_short`` -- run it manually against the final
    (:doc:`sort`-produced) assembly as a QC follow-up, alongside :doc:`assess`.

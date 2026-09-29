@@ -939,7 +939,7 @@ def cleanup_workdir(workdir: str | Path, debug: bool, custom_workdir: bool) -> N
 
     The step log lives in the workdir, so it is kept exactly when the workdir is.
 
-    A user-supplied ``--workdir`` (which may be shared, e.g. by ``pipeline``, or
+    A user-supplied ``--workdir`` (which may be shared, e.g. by the ``pipeline_*`` subcommands, or
     even the current directory) is never deleted.
 
     Args:
@@ -1092,7 +1092,7 @@ def _close_step_log(restore_buffer: bool = True) -> None:
 
     Args:
         restore_buffer: Re-attach the memory buffer so messages before the next step's log (e.g.
-            the next ``pipeline`` step) are not lost.
+            the next pipeline step) are not lost.
     """
     global _step_log
     package_logger = logging.getLogger("aaftf")
