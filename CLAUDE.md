@@ -33,7 +33,7 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 | `trim` | `aaftf/trim.py` | bbduk.sh, trimmomatic, fastp |
 | `mito` | `aaftf/mito.py` | NOVOPlasty.pl, minimap2, reformat.sh (subsampling) |
 | `filter` | `aaftf/filter.py` | bbduk.sh, bowtie2, bwa, minimap2, samtools |
-| `assemble` | `aaftf/assemble.py` | spades.py, megahit, unicycler |
+| `assemble` | `aaftf/assemble.py` | spades.py, megahit, unicycler, flye |
 | `vecscreen` | `aaftf/vecscreen.py` | blastn, makeblastdb |
 | `sourpurge` | `aaftf/sourpurge.py` | sourmash, bwa, samtools |
 | `fcs_screen` | `aaftf/fcs_screen.py` | run_fcsadaptor.sh (singularity/docker) |
@@ -55,7 +55,7 @@ Keyword parameters of each `run()` (besides the trailing `**kwargs`):
 - **trim**: `read1`, `read2`, `basename`, `method`, `cpus`, `memory`, `minlen`, `avgqual`, `trimmomatic_adaptors`, `trimmomatic_clip`, `trimmomatic_leadingwindow`, `trimmomatic_trailingwindow`, `trimmomatic_slidingwindow`, `trimmomatic_quality`, `merge`, `dedup`, `cutfront`, `cuttail`, `cutright`, `debug`, `pipe`
 - **mito**: `read1`, `read2`, `out`, `workdir`, `minlen`, `maxlen`, `seed`, `subsample`, `memory`, `debug`, `pipe`
 - **filter**: `read1`, `read2`, `workdir`, `cpus`, `screen_accessions`, `screen_urls`, `screen_local`, `basename`, `aligner`, `memory`, `debug`, `pipe`
-- **assemble**: `read1`, `out`, `method`, `workdir`, `cpus`, `memory`, `isolate`, `careful`, `assembler_args`, `tmpdir`, `read2`, `longreads`, `merged`, `debug`, `pipe`
+- **assemble**: `out`, `read1`, `method`, `workdir`, `cpus`, `memory`, `isolate`, `careful`, `assembler_args`, `tmpdir`, `read2`, `longreads`, `merged`, `longread_type`, `genome_size`, `debug`, `pipe`. `read1` is optional in the parser (required by spades/megahit/unicycler; `flye` needs `longreads` instead).
 - **vecscreen**: `infile`, `outfile`, `workdir`, `cpus`, `percent_id`, `stringency`, `debug`, `pipe`
 - **sourpurge**: `input`, `outfile`, `phylum`, `workdir`, `cpus`, `read1`, `read2`, `sourdb`, `sourdb_type`, `kmer`, `mincovpct`, `taxonomy`, `debug`, `pipe`
 - **fcs_screen**: `infile`, `outfile`, `container_engine`, `workdir`, `image`, `prok`, `fcs_script`, `debug`, `pipe`

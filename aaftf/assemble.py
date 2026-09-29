@@ -1,9 +1,9 @@
 """Run a genome assembly using defaults suited to fungi.
 
 This uses SPAdes by default but additional tools like megahit are
-supported and can be added. There is some access to updating
-parameters but this entire package is intended to be a general
-solution for draft Illumina genome processing en masse.
+supported and can be added, including Flye for long reads. There is
+some access to updating parameters but this entire package is intended
+to be a general solution for draft genome processing en masse.
 """
 
 import logging
@@ -16,15 +16,18 @@ from typing import Any
 
 from aaftf.utility import fasta_stats, run_cmd
 
-__all__ = ["run", "run_spades", "run_megahit", "run_unicycler"]
+__all__ = ["run", "run_spades", "run_megahit", "run_unicycler", "run_flye"]
+
+# assemble --longread_type -> Flye read-type flag
+FLYE_READ_TYPES = {"nano-raw": "--nano-raw", "nano-hq": "--nano-hq", "pacbio-raw": "--pacbio-raw", "pacbio-hifi": "--pacbio-hifi"}
 
 
 logger = logging.getLogger(__name__)
 
 
 def run(
-    read1: str,
     out: str | None,
+    read1: str | None = None,
     method: str = "spades",
     workdir: str | None = None,
     cpus: int = 1,
@@ -36,6 +39,8 @@ def run(
     read2: str | None = None,
     longreads: str | None = None,
     merged: str | None = None,
+    longread_type: str = "nano-hq",
+    genome_size: str | None = None,
     debug: bool = False,
     pipe: bool = False,
     **kwargs: Any,
@@ -43,9 +48,9 @@ def run(
     """Run the ``assemble`` subcommand by dispatching to the chosen assembler.
 
     Args:
-        read1: Read 1 (forward, or single-end) FASTQ.
-        out: Output assembly FASTA; derived from ``read1`` if None.
-        method: Assembler: ``"spades"``, ``"megahit"`` or ``"unicycler"``
+        out: Output assembly FASTA; derived from ``read1`` (``longreads`` for Flye) if None.
+        read1: Read 1 (forward, or single-end) FASTQ; required by every method except ``flye``.
+        method: Assembler: ``"spades"``, ``"megahit"``, ``"unicycler"`` or ``"flye"``
             (``"masurca"``/``"nextdenovo"`` only log that they are not implemented).
         workdir: Assembler output directory; a unique name is generated if None.
         cpus: Number of threads.
@@ -55,16 +60,20 @@ def run(
         assembler_args: Extra arguments appended to the assembler command.
         tmpdir: Assembler temporary directory.
         read2: Read 2 (reverse) FASTQ, or None for single-end.
-        longreads: Long-read FASTQ (Unicycler only).
+        longreads: Long-read FASTQ (Unicycler, and required by Flye).
         merged: Merged-pair FASTQ, or None.
+        longread_type: Flye read type (a ``FLYE_READ_TYPES`` key).
+        genome_size: Estimated genome size for Flye (e.g. ``"40m"``), or None.
         debug: Show external command output when True.
         pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
 
     Raises:
-        ValueError: If ``method`` is not a known assembler.
+        ValueError: If ``method`` is not a known assembler, or ``flye`` is given no ``longreads``.
     """
-    if method == "spades":
+    if method == "flye":
+        run_flye(workdir=workdir, cpus=cpus, longreads=longreads, longread_type=longread_type, genome_size=genome_size, assembler_args=assembler_args, out=out, debug=debug, pipe=pipe)
+    elif method == "spades":
         run_spades(workdir=workdir, cpus=cpus, memory=memory, isolate=isolate, careful=careful, assembler_args=assembler_args, tmpdir=tmpdir, read1=read1, read2=read2, merged=merged, out=out, debug=debug, pipe=pipe)
     elif method == "megahit":
         run_megahit(workdir=workdir, cpus=cpus, memory=memory, assembler_args=assembler_args, tmpdir=tmpdir, read1=read1, read2=read2, merged=merged, out=out, debug=debug, pipe=pipe)
@@ -284,6 +293,62 @@ def run_unicycler(
     _finish_assembly(Path(workdir, "assembly.fasta"), final_out, "Unicycler", cpus, pipe)
 
 
+def run_flye(
+    workdir: str | None = None,
+    cpus: int = 1,
+    longreads: str | None = None,
+    longread_type: str = "nano-hq",
+    genome_size: str | None = None,
+    assembler_args: list[str] | None = None,
+    out: str | None = None,
+    debug: bool = False,
+    pipe: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Run the Flye long-read assembler.
+
+    If ``workdir`` holds a previous Flye run (its ``params.json``), Flye is restarted with ``--resume``.
+
+    Args:
+        workdir: Flye output directory; a unique ``flye_*`` name is generated if None.
+        cpus: Number of threads.
+        longreads: Long-read FASTQ.
+        longread_type: Read type, a ``FLYE_READ_TYPES`` key (e.g. ``"nano-hq"``).
+        genome_size: Estimated genome size (e.g. ``"40m"``), or None to let Flye estimate it.
+        assembler_args: Extra Flye arguments.
+        out: Output assembly FASTA; derived from ``longreads`` if None.
+        debug: Show external command output when True.
+        pipe: Suppress the "next command" hint; set by ``pipeline`` (not a CLI option).
+        **kwargs: Extra keyword arguments; ignored.
+
+    Raises:
+        ValueError: If ``longreads`` is not given or ``longread_type`` is unknown.
+    """
+    if not longreads:
+        raise ValueError("Flye needs long reads, provide -lr/--longreads")
+    if longread_type not in FLYE_READ_TYPES:
+        raise ValueError(f"Unknown long-read type {longread_type}; choose from {', '.join(FLYE_READ_TYPES)}")
+    longreads = str(Path(longreads).resolve())
+    if not workdir:
+        workdir = "flye_" + str(uuid.uuid4())[:8]
+
+    runcmd = ["flye", FLYE_READ_TYPES[longread_type], longreads, "--out-dir", workdir, "--threads", str(cpus)]
+    if genome_size:
+        runcmd.extend(["--genome-size", genome_size])
+    if assembler_args:
+        runcmd.extend(assembler_args)
+    if Path(workdir, "params.json").is_file():
+        logger.info(f"Flye run found in {workdir}, resuming it")
+        runcmd.append("--resume")
+
+    logger.info("Assembling long reads using Flye")
+    run_cmd(runcmd, debug, quiet_stdout=True)
+
+    final_out = _derive_final_out(out, longreads, ".flye.fasta")
+    next_cmd = f"AAFTF polish --method racon -i {final_out} -lr {longreads} -c {cpus}"
+    _finish_assembly(Path(workdir, "assembly.fasta"), final_out, "Flye", cpus, pipe, next_cmd=next_cmd)
+
+
 def _resolve_reads(read1: str | None, read2: str | None) -> tuple[str, str | None]:
     """Resolve absolute paths for the forward and reverse reads.
 
@@ -324,7 +389,7 @@ def _derive_final_out(out: str | None, forward_reads: str, suffix: str) -> str:
     return prefix + suffix
 
 
-def _finish_assembly(src: str | Path, final_out: str, tool_name: str, cpus: int, pipe: bool) -> None:
+def _finish_assembly(src: str | Path, final_out: str, tool_name: str, cpus: int, pipe: bool, next_cmd: str | None = None) -> None:
     """Copy the assembler's raw output to ``final_out``, report stats, and log the next-step hint.
 
     Args:
@@ -333,6 +398,7 @@ def _finish_assembly(src: str | Path, final_out: str, tool_name: str, cpus: int,
         tool_name: Assembler name used in log messages.
         cpus: Thread count shown in the suggested command.
         pipe: Suppress the "next command" hint.
+        next_cmd: Suggested next command; ``AAFTF vecscreen`` on ``final_out`` if None.
 
     Raises:
         RuntimeError: If the assembler did not produce ``src``.
@@ -345,4 +411,5 @@ def _finish_assembly(src: str | Path, final_out: str, tool_name: str, cpus: int,
     logger.info(f"Assembly is {num_seqs:,} scaffolds and {assembly_size:,} bp")
 
     if not pipe:
-        logger.info(f"Your next command might be:\nAAFTF vecscreen -i {final_out} -c {cpus}")
+        next_cmd = next_cmd or f"AAFTF vecscreen -i {final_out} -c {cpus}"
+        logger.info(f"Your next command might be:\n{next_cmd}")

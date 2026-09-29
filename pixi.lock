@@ -22,6 +22,7 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-64/entrez-direct-26.0-h1079eea_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/fastahack-2016.07.2-h4ac6f70_6.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/fastp-1.3.7-h43da1c4_0.conda
+      - conda: https://conda.anaconda.org/bioconda/linux-64/flye-2.9.6-py312h734f728_1.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/freebayes-1.3.10-h3752d28_1.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/htslib-1.24-ha79157c_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/k8-1.2-he8db53b_6.tar.bz2
@@ -394,6 +395,7 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-64/entrez-direct-26.0-h1079eea_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/fastahack-2016.07.2-h4ac6f70_6.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/fastp-1.3.7-h43da1c4_0.conda
+      - conda: https://conda.anaconda.org/bioconda/linux-64/flye-2.9.6-py312h734f728_1.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/freebayes-1.3.10-h3752d28_1.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/htslib-1.24-ha79157c_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/k8-1.2-he8db53b_6.tar.bz2
@@ -718,6 +720,24 @@ packages:
     - fastp >=1.3.7,<1.4.0a0
   size: 2930609
   timestamp: 1789152887677
+- conda: https://conda.anaconda.org/bioconda/linux-64/flye-2.9.6-py312h734f728_1.conda
+  sha256: 6a868d3f3bdbf540021228aee893b5bacd0647cbc22ae2a3b3be95eba5af0bc5
+  md5: 423cd132f1fc91fd8fe9ec53fe2ebd6a
+  depends:
+  - libgcc >=14
+  - libstdcxx >=14
+  - libzlib >=1.3.2,<2.0a0
+  - python >=3.12,<3.13.0a0
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/flye?source=hash-mapping
+  run_exports:
+    weak:
+    - flye >=2.9.6,<3.0a0
+  size: 33701589
+  timestamp: 1776053816669
 - conda: https://conda.anaconda.org/bioconda/linux-64/freebayes-1.3.10-h3752d28_1.conda
   sha256: 5e1f7c753b79c88c7823b09646bb3a721a2a82487ec9e9d426c99b96e496a4ae
   md5: 5dc06794b30835794c911d351a8be85a

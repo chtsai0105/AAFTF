@@ -89,7 +89,7 @@ or pass `--fcs_script`/`--image`). `fcs_gx_purge` needs an FCS-GX database set u
 | 1 | `trim` | Trim adaptors and low-quality reads - BBDuk (default), Trimmomatic or fastp | `<prefix>_1P.fastq.gz`, `<prefix>_2P.fastq.gz` |
 | - | `mito` | (Optional) Assemble the mitochondrial genome with NOVOPlasty, to screen its reads out in `filter` | mitochondrial FASTA |
 | 2 | `filter` | Remove PhiX, vector and other contaminant reads - BBDuk (default), bowtie2, bwa or minimap2 | `<prefix>_filtered_1.fastq.gz`, `<prefix>_filtered_2.fastq.gz` |
-| 3 | `assemble` | Assemble - SPAdes (default), MEGAHIT or Unicycler | assembly FASTA |
+| 3 | `assemble` | Assemble - SPAdes (default), MEGAHIT, Unicycler or Flye (long reads) | assembly FASTA |
 | 4 | `vecscreen` | BLAST-based vector/contaminant screen of contigs, following NCBI VecScreen | cleaned FASTA (and `.mitochondria.fasta`) |
 | 5 | `sourpurge` | Drop contigs of other phyla (sourmash) and low-coverage contigs | purged FASTA |
 | - | `fcs_screen` | (Optional) NCBI FCS-adaptor vector screen | cleaned FASTA |
@@ -225,35 +225,50 @@ AAFTF filter -c $CPU --memory $MEM --aligner bbduk \
 The assembler is chosen with `--method`. The full set of options:
 
 ```
-usage: AAFTF assemble [-h] -1 FASTQ -o FASTA [-2 FASTQ] [--merged MERGED]
-                      [-w DIR] [--tmpdir DIR]
-                      [--method {spades,megahit,unicycler}]
-                      [--assembler_args ARG] [-c INT] [-m GB] [-q] [-v]
-                      [--no-careful] [--no-isolate] [-lr FASTQ]
+usage: AAFTF assemble [-h] -o FASTA [-1 FASTQ] [-2 FASTQ] [--merged MERGED]
+                      [-lr FASTQ]
+                      [--longread_type {nano-raw,nano-hq,pacbio-raw,pacbio-hifi}]
+                      [--genome_size SIZE]
+                      [--method {spades,megahit,unicycler,flye}] [-w DIR]
+                      [--tmpdir DIR] [--assembler_args ARG] [-c INT] [-m GB]
+                      [-q] [-v] [--no-careful] [--no-isolate]
 
-Run assembler on cleaned reads
+Run assembler on cleaned reads: Illumina reads (spades, megahit), Illumina
+plus optional long reads (unicycler) or long reads only (flye)
 
 options:
   -h, --help            show this help message and exit
 
 required arguments:
-  -1 FASTQ, --read1 FASTQ
-                        Read 1 (forward) FASTQ, or single-end FASTQ
   -o FASTA, --out FASTA
                         Output assembly FASTA
 
-optional arguments:
+short-read (Illumina) arguments: spades, megahit, unicycler:
+  -1 FASTQ, --read1 FASTQ
+                        Read 1 (forward) FASTQ, or single-end FASTQ; required
+                        for spades, megahit and unicycler
   -2 FASTQ, --read2 FASTQ
                         Read 2 (reverse) FASTQ for paired-end data
   --merged MERGED       Merged reads from flash or fastp or just single end
                         reads
+
+long-read (ONT/PacBio) arguments: flye, unicycler (hybrid):
+  -lr FASTQ, --longreads FASTQ
+                        Long-read FASTQ (PacBio or ONT); required for flye,
+                        optional for unicycler
+  --longread_type {nano-raw,nano-hq,pacbio-raw,pacbio-hifi}
+                        Long-read type for flye (default: nano-hq)
+  --genome_size SIZE    Estimated genome size for flye, e.g. 40m; default:
+                        estimated by flye
+
+optional arguments:
+  --method {spades,megahit,unicycler,flye}
+                        Assembly method (default: spades)
   -w DIR, --workdir DIR
                         Working directory for intermediate files; a temporary
                         one is created and removed afterwards (kept with -v)
                         when not given
   --tmpdir DIR          Temporary directory for the assembler
-  --method {spades,megahit,unicycler}
-                        Assembly method (default: spades)
   --assembler_args ARG  Extra argument passed to the assembler (repeat for
                         several)
   -c INT, --cpus INT    Number of CPUs/threads to use (default: 1)
@@ -263,14 +278,10 @@ optional arguments:
                         temporary working directories
 
 SPAdes options:
-  --no-careful          Disable --careful mode in spades (Default: --careful
-                        is on) (default: True)
-  --no-isolate          Disable --isolate mode in spades (Default: --isolate
-                        is on) (default: True)
-
-Unicycler options:
-  -lr FASTQ, --longreads FASTQ
-                        Long-read FASTQ (PacBio or ONT)
+  --no-careful          Disable --careful mode in spades (default: --careful
+                        is on)
+  --no-isolate          Disable --isolate mode in spades (default: --isolate
+                        is on)
 ```
 
 ```

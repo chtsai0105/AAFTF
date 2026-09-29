@@ -24,7 +24,7 @@ Pipeline diagram
     [2] filter --------------------------- remove PhiX/UniVec/user-specified contaminant reads
         |
         v
-    [3] assemble -------------------------- SPAdes (default) / megahit / unicycler
+    [3] assemble -------------------------- SPAdes (default) / megahit / unicycler / flye
         |
         v
     [4] vecscreen -------------------------- BLASTN vector + Euk/Prok/Mito contamination screen

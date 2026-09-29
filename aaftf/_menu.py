@@ -348,34 +348,38 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     """
     parser_asm = subparsers.add_parser(
         "assemble",
-        description="Run assembler on cleaned reads",
+        description="Run assembler on cleaned reads: Illumina reads (spades, megahit), Illumina plus optional long reads (unicycler) or long reads only (flye)",
         help="Assemble reads",
         formatter_class=CustomHelpFormatter,
     )
 
     required = parser_asm.add_argument_group("required arguments")
-    optional = parser_asm.add_argument_group("optional arguments")
-
-    required.add_argument(
-        "-1",
-        "--read1",
-        metavar="FASTQ",
-        type=str,
-        required=True,  # every implemented --method (spades/megahit/unicycler) requires this
-        help="Read 1 (forward) FASTQ, or single-end FASTQ",
-    )
 
     required.add_argument("-o", "--out", type=str, required=True, help="Output assembly FASTA", metavar="FASTA")  # think about sensible replacement in future
 
-    optional.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
+    shortread_group = parser_asm.add_argument_group(title="short-read (Illumina) arguments: spades, megahit, unicycler")
 
-    optional.add_argument("--merged", type=str, dest="merged", help="Merged reads from flash or fastp or just single end reads")
+    shortread_group.add_argument("-1", "--read1", metavar="FASTQ", type=str, help="Read 1 (forward) FASTQ, or single-end FASTQ; required for spades, megahit and unicycler")
+
+    shortread_group.add_argument("-2", "--read2", metavar="FASTQ", type=str, help="Read 2 (reverse) FASTQ for paired-end data")
+
+    shortread_group.add_argument("--merged", type=str, dest="merged", help="Merged reads from flash or fastp or just single end reads")
+
+    longread_group = parser_asm.add_argument_group(title="long-read (ONT/PacBio) arguments: flye, unicycler (hybrid)")
+
+    longread_group.add_argument("-lr", "--longreads", type=str, help="Long-read FASTQ (PacBio or ONT); required for flye, optional for unicycler", metavar="FASTQ")
+
+    longread_group.add_argument("--longread_type", choices=["nano-raw", "nano-hq", "pacbio-raw", "pacbio-hifi"], default="nano-hq", help="Long-read type for flye")
+
+    longread_group.add_argument("--genome_size", type=str, help="Estimated genome size for flye, e.g. 40m; default: estimated by flye", metavar="SIZE")
+
+    optional = parser_asm.add_argument_group("optional arguments")
+
+    optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler", "flye"], default="spades", help="Assembly method")
 
     optional.add_argument("-w", "--workdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
     optional.add_argument("--tmpdir", type=str, help="Temporary directory for the assembler", metavar="DIR")
-
-    optional.add_argument("--method", type=str, choices=["spades", "megahit", "unicycler"], default="spades", help="Assembly method")
 
     optional.add_argument("--assembler_args", action="append", help="Extra argument passed to the assembler (repeat for several)", metavar="ARG", type=str)
 
@@ -392,7 +396,7 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         action="store_false",
         default=True,
         dest="careful",
-        help="Disable --careful mode in spades (Default: --careful is on)",
+        help="Disable --careful mode in spades (default: --careful is on)",
     )
 
     spades_group.add_argument(
@@ -400,12 +404,8 @@ def assemble_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
         action="store_false",
         default=True,
         dest="isolate",
-        help="Disable --isolate mode in spades (Default: --isolate is on)",
+        help="Disable --isolate mode in spades (default: --isolate is on)",
     )
-
-    unicycler_group = parser_asm.add_argument_group(title="Unicycler options")
-
-    unicycler_group.add_argument("-lr", "--longreads", type=str, help="Long-read FASTQ (PacBio or ONT)", metavar="FASTQ")
 
     parser_asm.set_defaults(func=assemble.run)
     return parser_asm

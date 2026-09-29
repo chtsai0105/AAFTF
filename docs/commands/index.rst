@@ -46,7 +46,7 @@ Command Reference
      - bbduk.sh, bowtie2, bwa, minimap2, samtools
      - Remove contaminant/PhiX reads
    * - :doc:`assemble`
-     - spades.py, megahit, unicycler
+     - spades.py, megahit, unicycler, flye
      - Assemble cleaned reads
    * - :doc:`vecscreen`
      - blastn, makeblastdb

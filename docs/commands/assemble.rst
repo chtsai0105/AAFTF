@@ -2,7 +2,8 @@
 assemble
 ========
 
-Runs a de novo genome assembler on cleaned (trimmed + filtered) reads.
+Runs a de novo genome assembler on cleaned (trimmed + filtered) short reads, or on long reads
+(Flye).
 
 Algorithm
 =========
@@ -28,6 +29,13 @@ The assembler is selected with ``--method``:
   short reads with ``--longreads`` (hybrid assembly). With paired reads, ``--merged`` reads are
   passed as ``--unpaired`` alongside the pairs (ignored for single-end input). Final assembly is
   copied from ``assembly.fasta``.
+* **flye** -- long-read assembler for ONT/PacBio reads (``-lr/--longreads``, required; ``-1`` is
+  not used). ``--longread_type`` selects Flye's ``--nano-raw`` / ``--nano-hq`` (default) /
+  ``--pacbio-raw`` / ``--pacbio-hifi``; ``--genome_size`` (e.g. ``40m``) is passed as
+  ``--genome-size`` when given. If the ``--workdir`` holds a previous Flye run (``params.json``),
+  Flye is restarted with ``--resume``. Final assembly is copied from ``assembly.fasta``; without
+  ``-o`` it is named ``<long-read prefix>.flye.fasta``. The next-step hint suggests
+  ``AAFTF polish --method racon``.
 
 If the assembler's expected output file is missing after the run, a ``RuntimeError`` is raised
 (exit code 1) pointing at the assembler log in the work directory.
@@ -44,7 +52,7 @@ Cutoffs / defaults
      - Meaning
    * - ``--method``
      - spades
-     - spades / megahit / unicycler
+     - spades / megahit / unicycler / flye
    * - ``-m/--memory``
      - 32 (GB)
      - Integer GB; SPAdes ``--mem`` / MEGAHIT ``--memory`` (converted to bytes)
@@ -57,21 +65,30 @@ Cutoffs / defaults
    * - SPAdes coverage cutoff
      - ``auto``
      - ``--cov-cutoff auto`` unless running in ``--meta`` mode
+   * - ``--longread_type``
+     - nano-hq
+     - Flye read type: nano-raw / nano-hq / pacbio-raw / pacbio-hifi
+   * - ``--genome_size``
+     - estimated by Flye
+     - Flye ``--genome-size``, e.g. ``40m``
 
 Invocation
 ==========
 
 .. code-block:: text
 
-    AAFTF assemble -1 FASTQ -o FASTA [-2 FASTQ] [--method {spades,megahit,unicycler}]
+    AAFTF assemble -o FASTA [-1 FASTQ] [-2 FASTQ] [--method {spades,megahit,unicycler,flye}]
                    [-w DIR] [-c INT] [-m GB] [--merged FASTQ] [-lr FASTQ]
+                   [--longread_type {nano-raw,nano-hq,pacbio-raw,pacbio-hifi}]
+                   [--genome_size SIZE]
                    [--no-careful] [--no-isolate]
                    [--tmpdir DIR] [--assembler_args ARG]
                    [-q] [-v]
 
-``-1/--read1`` and ``-o/--out`` (output assembly FASTA) are required. ``--assembler_args`` takes
+``-o/--out`` (output assembly FASTA) is required, and ``-1/--read1`` for spades, megahit and
+unicycler. ``--assembler_args`` takes
 one argument and may be repeated to pass several raw arguments to the assembler. ``-lr/--longreads``
-is used by Unicycler only. The step log is written to ``<workdir>/assemble.log``.
+is required for Flye and optional for Unicycler. The step log is written to ``<workdir>/assemble.log``.
 
 Example
 =======
@@ -88,4 +105,9 @@ Example
         --longreads ont_reads.fastq.gz \
         -o genomes/STRAINX.unicycler.fasta
 
-Next step: :doc:`vecscreen`.
+    # Long-read assembly with Flye (ONT reads, ~40 Mb genome)
+    AAFTF assemble --method flye -c 24 \
+        --longreads ont_reads.fastq.gz --genome_size 40m \
+        -o genomes/STRAINX.flye.fasta -w working_AAFTF/flye_STRAINX
+
+Next step: :doc:`vecscreen` (after Flye: :doc:`polish` ``--method racon``).

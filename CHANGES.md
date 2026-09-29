@@ -41,6 +41,11 @@ check the **Breaking changes** before updating scripts.
 
 ### Added
 
+ - **`assemble --method flye`**: Flye long-read assembly (`-lr/--longreads`, `--longread_type`
+   default `nano-hq`, `--genome_size`); resumes a previous run in the workdir with `--resume`, and
+   the next-command hint suggests `polish --method racon`. `-1/--read1` is now required only for
+   spades, megahit and unicycler. Flye is an optional tool (`dependency`, pixi `complete`).
+
  - **`dependency`** (was `check_dependencies`): checks the tools and Python packages in two groups —
    what the default pipeline needs (an error if missing) and what only optional steps or non-default
    options use — printed in a fixed order with each tool's location or where a missing one is used;

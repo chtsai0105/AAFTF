@@ -477,3 +477,82 @@ def test_megahit_existing_workdir_raises(tmp_path):
         with pytest.raises(FileExistsError, match="already exists"):
             run_megahit(workdir=str(workdir), read1=str(tmp_path / "R1.fq"), out=str(tmp_path / "o.fa"))
     run.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Flye command construction
+# ---------------------------------------------------------------------------
+
+
+def _run_flye(tmp_path, longreads="ont.fq.gz", create_output=True, **extra):
+    """Invoke run_flye() with subprocess mocked (writing assembly.fasta); return the commands run."""
+    args = _make_asm_args(tmp_path, method="flye", read1=None, longreads=str(tmp_path / longreads), **extra)
+    cmds = []
+
+    def _fake_run(cmd, **kw):
+        cmds.append(cmd)
+        if create_output:
+            workdir = Path(cmd[cmd.index("--out-dir") + 1])
+            workdir.mkdir(parents=True, exist_ok=True)
+            (workdir / "assembly.fasta").write_text(">contig_1\nATCGATCG\n")
+
+    from aaftf.assemble import run
+
+    with patch("aaftf.utility.subprocess.run", side_effect=_fake_run):
+        run(**vars(args))
+    return cmds, args
+
+
+class TestAssembleFlye:
+    def test_parser_accepts_flye_without_read1(self):
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "flye", "-lr", "ont.fq", "-o", "out.fa", "--longread_type", "pacbio-hifi", "--genome_size", "40m"])
+        assert (args.method, args.read1, args.longreads, args.longread_type, args.genome_size) == ("flye", None, "ont.fq", "pacbio-hifi", "40m")
+
+    def test_parser_longread_type_default(self):
+        assert _parse_assemble(["AAFTF", "assemble", "--method", "flye", "-lr", "ont.fq", "-o", "out.fa"]).longread_type == "nano-hq"
+
+    def test_command(self, tmp_path):
+        cmds, args = _run_flye(tmp_path, cpus=8)
+        cmd = cmds[0]
+        assert cmd[:3] == ["flye", "--nano-hq", args.longreads]
+        assert cmd[cmd.index("--threads") + 1] == "8"
+        assert "--genome-size" not in cmd and "--resume" not in cmd
+
+    @pytest.mark.parametrize("read_type", ["nano-raw", "nano-hq", "pacbio-raw", "pacbio-hifi"])
+    def test_read_type_flag(self, tmp_path, read_type):
+        cmds, _ = _run_flye(tmp_path, longread_type=read_type)
+        assert cmds[0][1] == f"--{read_type}"
+
+    def test_genome_size_and_assembler_args(self, tmp_path):
+        cmd = _run_flye(tmp_path, genome_size="40m", assembler_args=["--iterations", "2"])[0][0]
+        assert cmd[cmd.index("--genome-size") + 1] == "40m"
+        assert cmd[cmd.index("--iterations") + 1] == "2"
+
+    def test_output_copied(self, tmp_path):
+        _, args = _run_flye(tmp_path)
+        assert Path(args.out).read_text().startswith(">contig_1")
+
+    def test_out_derived_from_longreads(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        _run_flye(tmp_path, longreads="strain.fastq.gz", out=None)
+        assert (tmp_path / "strain.flye.fasta").exists()
+
+    def test_resumes_previous_run(self, tmp_path):
+        workdir = tmp_path / "flye_workdir"
+        workdir.mkdir()
+        (workdir / "params.json").write_text("{}")
+        assert _run_flye(tmp_path)[0][0][-1] == "--resume"
+
+    def test_existing_non_flye_workdir_does_not_resume(self, tmp_path):
+        (tmp_path / "flye_workdir").mkdir()
+        assert "--resume" not in _run_flye(tmp_path)[0][0]
+
+    def test_missing_longreads_raises(self, tmp_path):
+        from aaftf.assemble import run
+
+        with pytest.raises(ValueError, match="long reads"):
+            run(**vars(_make_asm_args(tmp_path, method="flye", read1=None)))
+
+    def test_missing_output_raises(self, tmp_path):
+        with pytest.raises(RuntimeError, match="Flye assembly output"):
+            _run_flye(tmp_path, create_output=False)

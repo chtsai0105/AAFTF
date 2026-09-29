@@ -33,6 +33,7 @@ OPTIONAL_TOOLS = {
     "bowtie2-build": "filter (--aligner bowtie2)",
     "megahit": "assemble (--method megahit)",
     "unicycler": "assemble (--method unicycler)",
+    "flye": "assemble (--method flye)",
     "polypolish": "polish (--method polypolish)",
     "pypolca": "polish (--method pypolca)",
     "freebayes": "polish (--method pypolca / polca)",
