@@ -12,10 +12,12 @@ No external bioinformatics tools are invoked in the unit tests.
 
 import sys
 from argparse import Namespace
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+import aaftf.polish as polish
 from aaftf.main import main
 
 # ---------------------------------------------------------------------------
@@ -617,3 +619,35 @@ class TestPolishNextpolish2:
         assert len(yak_cmds) == 1
         assert any("R1.fq" in a for a in yak_cmds[0])
         assert any("R2.fq" in a for a in yak_cmds[0])
+
+
+# ---------------------------------------------------------------------------
+# polca (aaftf_polca.sh) threads/memory/environment
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPolishPolca:
+    def test_threads_and_memory_passed_to_polca(self, tmp_path, monkeypatch):
+        """cpus/memory reach aaftf_polca.sh as -t/-m and NUM_THREADS/MEM; BASH_FUNC_* is dropped."""
+        (tmp_path / "asm.fa").write_text(">contig1\nATCG\n")
+        workdir = tmp_path / "workdir"
+        workdir.mkdir()
+        monkeypatch.setenv("BASH_FUNC_which%%", "() { :; }")
+        calls = {}
+
+        def fake_run(cmd, cwd=None, env=None, **kw):
+            calls.update(cmd=cmd, env=env)
+            Path(cwd, "asm.fa.PolcaCorrected.fa").write_text(">contig1\nATCG\n")
+            Path(cwd, "asm.fa.report").write_text("report\n")
+            return MagicMock(returncode=0)
+
+        with patch("aaftf.polish.subprocess.run", side_effect=fake_run):
+            ret, out = polish.run_polca(str(tmp_path / "asm.fa"), "R1.fq", "R2.fq", 8, 32, str(workdir), "polca.log", str(tmp_path / "out.fasta"))
+        assert ret == 0 and out.endswith("asm.fa.PolcaCorrected.fa")
+        cmd = calls["cmd"]
+        assert cmd[cmd.index("-t") + 1] == "8" and cmd[cmd.index("-m") + 1] == "4G"
+        assert cmd[cmd.index("-r") + 1] == "R1.fq R2.fq"
+        assert calls["env"]["NUM_THREADS"] == "8" and calls["env"]["MEM"] == "4G"
+        assert not any(k.startswith("BASH_FUNC_") for k in calls["env"])
+        assert (tmp_path / "out.fasta.polca_report.txt").exists()

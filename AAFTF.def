@@ -100,6 +100,9 @@ From: debian:bookworm-slim
     pixi install --environment complete --locked --frozen
     pixi shell-hook --environment complete --shell bash | grep '^export ' > /opt/aaftf_activate.sh
     chmod +x /opt/aaftf_activate.sh
+    # patched POLCA scripts are installed into bin/ with AAFTF (pyproject.toml shared-scripts)
+    test -x .pixi/envs/complete/bin/aaftf_polca.sh
+    test -x .pixi/envs/complete/bin/fix_consensus_from_vcf.pl
     pixi clean cache --yes
     # -------------------------------------------------------------------------
     # 5. Build bowtie2 from source

@@ -644,7 +644,7 @@ def polish_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
     """
     parser_polish = subparsers.add_parser(
         "polish",
-        description="Polish contig sequences with Polypolish, pypolca, NextPolish2 or Racon. Recommended for assemblies with long reads (or hybrid data); polishing a short-read-only assembly with the same short reads rarely helps and can introduce errors, so it is not part of AAFTF pipeline.",
+        description="Polish contig sequences with Polypolish, pypolca, POLCA (polca.sh), NextPolish2 or Racon. Recommended for assemblies with long reads (or hybrid data); polishing a short-read-only assembly with the same short reads rarely helps and can introduce errors, so it is not part of AAFTF pipeline.",
         help="(Optional) Polish contig sequences with short and/or long reads",
         formatter_class=CustomHelpFormatter,
     )
@@ -653,7 +653,7 @@ def polish_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     required.add_argument("-i", "--infile", "--input", type=str, dest="infile", required=True, help="Input genome assembly FASTA", metavar="FASTA")
 
-    shortread_group = parser_polish.add_argument_group(title="polypolish / pypolca / NextPolish2 required arguments")
+    shortread_group = parser_polish.add_argument_group(title="polypolish / pypolca / polca / NextPolish2 required arguments")
 
     shortread_group.add_argument("-1", "--read1", metavar="FASTQ", type=str, help="Read 1 (forward) FASTQ, or single-end FASTQ; required for short-read polishing methods")
 
@@ -669,13 +669,13 @@ def polish_menu(subparsers: ap._SubParsersAction) -> ap.ArgumentParser:
 
     optional.add_argument("-w", "--workdir", "--tmpdir", type=str, dest="workdir", help="Working directory for intermediate files; a temporary one is created and removed afterwards (kept with -v) when not given", metavar="DIR")
 
-    optional.add_argument("--method", type=str, choices=["polypolish", "pypolca", "nextpolish2", "racon"], default="polypolish", help="Polishing method")
+    optional.add_argument("--method", type=str, choices=["polypolish", "pypolca", "polca", "nextpolish2", "racon"], default="polypolish", help="Polishing method")
 
     optional.add_argument("-c", "--cpus", type=int, metavar="INT", default=1, help="Number of CPUs/threads to use")
 
     add_verbosity_args(optional)
 
-    pypolca_group = parser_polish.add_argument_group(title="pypolca options")
+    pypolca_group = parser_polish.add_argument_group(title="pypolca / polca options")
 
     pypolca_group.add_argument("-m", "--memory", type=int, default=16, dest="memory", help="Max memory in GB", metavar="GB")
 

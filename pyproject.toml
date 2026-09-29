@@ -63,10 +63,15 @@ raw-options = { version_scheme = "guess-next-dev", local_scheme = "node-and-date
 [tool.hatch.build.targets.wheel]
 packages = ["aaftf"]
 
+# Patched MaSuRCA POLCA (GPL-3.0; see patches/polca/polca.patch), installed into bin/ for `polish --method polca`
+[tool.hatch.build.targets.wheel.shared-scripts]
+"patches/polca/aaftf_polca.sh" = "aaftf_polca.sh"
+"patches/polca/fix_consensus_from_vcf.pl" = "fix_consensus_from_vcf.pl"
+
 # The sdist carries only what is needed to build and test the package; pyproject.toml,
 # README.md and LICENSE are always added by hatchling. Docs, CI, container and dev files stay out.
 [tool.hatch.build.targets.sdist]
-include = ["/aaftf", "/tests", "/CHANGES.md"]
+include = ["/aaftf", "/tests", "/CHANGES.md", "/patches/polca/aaftf_polca.sh", "/patches/polca/fix_consensus_from_vcf.pl", "/patches/polca/polca.patch"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

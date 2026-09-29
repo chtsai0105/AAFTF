@@ -163,7 +163,8 @@ RUN source /opt/aaftf_activate.sh && \
 # ---------------------------------------------------------------------------
 # 8. Smoke test
 # ---------------------------------------------------------------------------
-RUN source /opt/aaftf_activate.sh && AAFTF --version
+RUN source /opt/aaftf_activate.sh && AAFTF --version && \
+    command -v aaftf_polca.sh fix_consensus_from_vcf.pl
 
 # ---------------------------------------------------------------------------
 # 9. Cleanup build artefacts to reduce image size

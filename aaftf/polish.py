@@ -1,7 +1,8 @@
 """Polish an assembly with short and/or long reads.
 
-Four polishing engines are supported via --method:
+Five polishing engines are supported via --method:
   - pypolca:    single-pass POLCA-style polishing (Illumina short reads)
+  - polca:      MaSuRCA POLCA via the bundled aaftf_polca.sh (Illumina short reads)
   - polypolish: alignment-filtering short-read polisher (Illumina short reads)
   - nextpolish2: repeat-aware polishing of HiFi assemblies using a short-read
                  k-mer (yak) database (requires --longreads HiFi + short reads)
@@ -9,6 +10,7 @@ Four polishing engines are supported via --method:
 """
 
 import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -16,10 +18,13 @@ from typing import Any
 
 from aaftf.utility import align_to_sorted_bam, cleanup_workdir, make_workdir, next_step_name, print_cmd, require_tools, run_cmd
 
-__all__ = ["run", "run_polypolish", "run_pypolca", "run_nextpolish2", "run_racon"]
+__all__ = ["run", "run_polypolish", "run_pypolca", "run_polca", "run_nextpolish2", "run_racon"]
 
 
 logger = logging.getLogger(__name__)
+
+# Patched MaSuRCA polca.sh installed into bin/ with AAFTF (see patches/polca and pyproject.toml)
+POLCA_SCRIPT = "aaftf_polca.sh"
 
 
 def run(
@@ -44,8 +49,8 @@ def run(
     Args:
         infile: Input assembly FASTA.
         outfile: Output polished FASTA; ``<input prefix>.polished.fasta`` if None.
-        method: ``"polypolish"``, ``"pypolca"``, ``"nextpolish2"`` or ``"racon"`` (case-insensitive).
-        memory: Total memory in GB (pypolca only).
+        method: ``"polypolish"``, ``"pypolca"``, ``"polca"``, ``"nextpolish2"`` or ``"racon"`` (case-insensitive).
+        memory: Total memory in GB (pypolca and polca only).
         cpus: Number of threads.
         read1: Read 1 (forward) short reads, or None.
         read2: Read 2 (reverse) short reads, or None.
@@ -74,7 +79,7 @@ def run(
         raise ValueError("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads")
     if method == "nextpolish2" and not longreads:
         raise ValueError("Unable to locate long read FASTQ raw reads, pass via -lr or --longreads (nextpolish2 requires HiFi long reads)")
-    if method in ("pypolca", "polypolish", "nextpolish2") and not forward_reads:
+    if method in ("pypolca", "polca", "polypolish", "nextpolish2") and not forward_reads:
         raise ValueError("Unable to locate FASTQ raw reads, pass via -1/--read1 and/or -2/--read2")
 
     workdir, custom_workdir = make_workdir(workdir, "polish")
@@ -91,6 +96,7 @@ def run(
     required_exes = {
         "polypolish": ["bwa", "polypolish"],
         "pypolca": ["bwa", "samtools", "freebayes", "pypolca"],
+        "polca": ["bwa", "samtools", "freebayes", POLCA_SCRIPT],
         "nextpolish2": ["minimap2", "samtools", "yak", "nextPolish2"],
         "racon": ["minimap2", "racon"],
     }.get(method, [])
@@ -103,6 +109,9 @@ def run(
     elif method == "pypolca":
         assert forward_reads
         ret, out_path = run_pypolca(infile, forward_reads, reverse_reads, cpus, memory, workdir, polish_log, polished_fasta)
+    elif method == "polca":
+        assert forward_reads
+        ret, out_path = run_polca(infile, forward_reads, reverse_reads, cpus, memory, workdir, polish_log, polished_fasta)
     elif method == "nextpolish2":
         assert forward_reads and longreads
         ret, out_path = run_nextpolish2(infile, forward_reads, reverse_reads, longreads, cpus, workdir, polish_log, debug)
@@ -220,6 +229,54 @@ def run_pypolca(infile: str, forward_reads: str, reverse_reads: str | None, cpus
             shutil.copyfile(vcf_src, f"{polished_fasta}.vcf")
         if Path(report_src).exists():
             shutil.copyfile(report_src, f"{polished_fasta}.pypolca_report.txt")
+    return ret.returncode, out_path
+
+
+def run_polca(infile: str, forward_reads: str, reverse_reads: str | None, cpus: int, memory: int, workdir: str, polish_log: str, polished_fasta: str) -> tuple[int, str]:
+    """Polish with ``aaftf_polca.sh``, AAFTF's patched copy of MaSuRCA's ``polca.sh`` (bwa + samtools + freebayes).
+
+    Threads and per-thread sort memory are passed both as ``-t``/``-m`` and as the
+    ``NUM_THREADS``/``MEM`` environment variables, so the script never falls back to a
+    hard-coded value. Exported bash functions (``BASH_FUNC_*``, e.g. an HPC ``which``) are
+    dropped from its environment. Copies polca's ``.vcf``/``.report`` sidecar outputs to
+    ``{polished_fasta}.vcf`` / ``{polished_fasta}.polca_report.txt``.
+
+    Args:
+        infile: Input assembly FASTA.
+        forward_reads: Forward reads FASTQ.
+        reverse_reads: Reverse reads FASTQ, or None.
+        cpus: Number of threads.
+        memory: Total memory in GB; divided by ``cpus`` for polca's per-thread ``-m`` (min 1G).
+        workdir: Working directory.
+        polish_log: Log file name (inside ``workdir``) for polca output.
+        polished_fasta: Final output FASTA path, used to name the sidecar files.
+
+    Returns:
+        Tuple of (return code, polished FASTA path); validating and copying that primary
+        output is handled centrally by ``run()``.
+    """
+    memperthread = f"{max(int(memory / cpus), 1)}G"  # at least 1G per thread
+    polca_exe = shutil.which(POLCA_SCRIPT) or POLCA_SCRIPT
+
+    # aaftf_polca.sh writes its outputs next to the assembly name it is given, so work on a copy in workdir
+    asm_name = Path(infile).name
+    shutil.copyfile(infile, Path(workdir, asm_name))
+    reads = " ".join(r for r in (forward_reads, reverse_reads) if r)
+    polca_env = {k: v for k, v in os.environ.items() if not k.startswith("BASH_FUNC_")}
+    polca_env.update(NUM_THREADS=str(cpus), MEM=memperthread)
+
+    polca_cmd = [polca_exe, "-a", asm_name, "-r", reads, "-t", str(cpus), "-m", memperthread]
+    print_cmd(polca_cmd)
+    with open(str(Path(workdir, polish_log)), "w") as logfile:
+        ret = subprocess.run(polca_cmd, cwd=workdir, stderr=logfile, stdout=logfile, env=polca_env)
+    out_path = str(Path(workdir, f"{asm_name}.PolcaCorrected.fa"))
+    if ret.returncode == 0:
+        vcf_src = Path(workdir, f"{asm_name}.vcf")
+        report_src = Path(workdir, f"{asm_name}.report")
+        if vcf_src.exists():
+            shutil.copyfile(vcf_src, f"{polished_fasta}.vcf")
+        if report_src.exists():
+            shutil.copyfile(report_src, f"{polished_fasta}.polca_report.txt")
     return ret.returncode, out_path
 
 

@@ -39,7 +39,7 @@ See [AGENTS.md](AGENTS.md) for full development guidelines, code style, and comm
 | `fcs_screen` | `aaftf/fcs_screen.py` | run_fcsadaptor.sh (singularity/docker) |
 | `fcs_gx_purge` | `aaftf/fcs_gx_purge.py` | run_gx.py (NCBI FCS-GX) |
 | `rmdup` | `aaftf/rmdup.py` | minimap2 |
-| `polish` | `aaftf/polish.py` | polypolish+bwa; pypolca+bwa+samtools+freebayes; nextPolish2+minimap2+samtools+yak; racon+minimap2 |
+| `polish` | `aaftf/polish.py` | polypolish+bwa; pypolca+bwa+samtools+freebayes; aaftf_polca.sh+bwa+samtools+freebayes; nextPolish2+minimap2+samtools+yak; racon+minimap2 |
 | `sort` | `aaftf/sort.py` | (none — BioPython only) |
 | `assess` | `aaftf/assess.py` | (none — BioPython only) |
 | `depth` | `aaftf/depth.py` | samtools, mosdepth, minimap2 or bwa |
@@ -61,7 +61,7 @@ Keyword parameters of each `run()` (besides the trailing `**kwargs`):
 - **fcs_screen**: `infile`, `outfile`, `container_engine`, `workdir`, `image`, `prok`, `fcs_script`, `debug`, `pipe`
 - **fcs_gx_purge**: `input`, `outfile`, `workdir`, `taxid`, `db`, `debug`, `pipe`
 - **rmdup**: `input`, `out`, `workdir`, `cpus`, `percent_id`, `percent_cov`, `minlen`, `exhaustive`, `debug`, `pipe`
-- **polish**: `infile`, `outfile`, `method`, `memory`, `cpus`, `read1`, `read2`, `longreads`, `workdir`, `debug`, `pipe`. Each `--method` (`polypolish` (default), `pypolca`, `nextpolish2`, `racon`) has its own `run_<method>()` function in `aaftf/polish.py`.
+- **polish**: `infile`, `outfile`, `method`, `memory`, `cpus`, `read1`, `read2`, `longreads`, `workdir`, `debug`, `pipe`. Each `--method` (`polypolish` (default), `pypolca`, `polca` (bundled `aaftf_polca.sh`, a patched MaSuRCA `polca.sh` from `patches/polca/`, installed into `bin/` via hatch `shared-scripts`), `nextpolish2`, `racon`) has its own `run_<method>()` function in `aaftf/polish.py`.
 - **sort**: `input`, `out`, `minlen`, `name`
 - **assess**: `input`, `report`, `telomere_monomer`, `telomere_n_repeat`, `telomere_window`
 - **depth**: `input`, `out`, `read1`, `read2`, `longreads`, `longread_preset`, `aligner`, `cpus`, `workdir`, `debug`, `pipe`, `min_contig_len`, `no_plot`, `plot_format`
