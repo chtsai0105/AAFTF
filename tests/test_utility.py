@@ -489,6 +489,15 @@ class TestDatabaseFolders:
         assert find_db_file("UniVec") == str(shared.resolve() / "UniVec")
         assert find_db_file("missing") is None
 
+    def test_matches_with_or_without_gz(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("AAFTF_DB", str(tmp_path))
+        (tmp_path / "contam_in_euks.fa").write_text(">a\n")
+        (tmp_path / "UniVec.gz").write_bytes(b"")
+        assert find_db_file("contam_in_euks.fa.gz") == str(tmp_path.resolve() / "contam_in_euks.fa")
+        assert find_db_file("UniVec") == str(tmp_path.resolve() / "UniVec.gz")
+        (tmp_path / "UniVec").write_text(">b\n")
+        assert find_db_file("UniVec") == str(tmp_path.resolve() / "UniVec")
+
     def test_missing_file_goes_to_first_writable_folder(self, monkeypatch, tmp_path):
         readonly, mine = tmp_path / "readonly", tmp_path / "mine"
         readonly.mkdir()

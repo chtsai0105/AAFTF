@@ -701,15 +701,21 @@ def require_databases(names: Iterable[str], hint: str | None = None) -> list[str
 def find_db_file(name: str) -> str | None:
     """Return the first existing copy of database file ``name`` in ``db_dirs()``, or None.
 
+    A copy that differs only by a ``.gz`` suffix also matches (e.g. a user who
+    gunzipped ``contam_in_euks.fa.gz``, or gzipped ``UniVec``); within each
+    folder the exact name is preferred.
+
     Args:
         name: Database filename.
 
     Returns:
         Path of the first copy found, or None.
     """
+    alt = name[: -len(".gz")] if name.endswith(".gz") else f"{name}.gz"
     for folder in db_dirs():
-        if (folder / name).is_file():
-            return str(folder / name)
+        for candidate in (name, alt):
+            if (folder / candidate).is_file():
+                return str(folder / candidate)
     return None
 
 
