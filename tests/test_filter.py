@@ -300,13 +300,13 @@ class TestFilterRunBbduk:
         assert "sample_filtered_U.fastq.gz" in cmd_str
 
     def test_se_hint_is_a_valid_assemble_command(self, tmp_path, caplog):
-        """The single-end hint passes the reads as -1 (assemble requires -1), not only --merged."""
+        """The single-end hint passes the reads as -1 (assemble requires --method and -1), not only --merged."""
         import logging
 
         with caplog.at_level(logging.INFO, logger="aaftf"):
             _run_filter_bbduk(tmp_path, str(tmp_path / "sample_R1.fastq.gz"), read2=None)
         hint = caplog.text.split("Your next command might be:")[-1]
-        assert "AAFTF assemble -1 sample_filtered_U.fastq.gz" in hint and "--merged" not in hint
+        assert "AAFTF assemble --method spades -1 sample_filtered_U.fastq.gz" in hint and "--merged" not in hint
 
     def test_command_starts_with_bbduk(self, tmp_path):
         read1 = str(tmp_path / "sample_R1.fastq.gz")

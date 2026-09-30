@@ -83,9 +83,10 @@ Command Reference
      - (none)
      - Annotation: adjust NCBI ``.tbl`` feature coordinates after FCS trimming
 
-``AAFTF -h`` lists the subcommands in three groups: *Setup* (``dependency``, ``database``),
-*Assembly pipeline* (``trim`` through ``pipeline_short``, ``pipeline_long`` and ``pipeline_hybrid``, in the order
-above; steps marked "(Optional)" are not run by ``pipeline_short``) and *Annotation* (``fix_tbl``).
+``AAFTF -h`` lists the subcommands in four groups: *Setup* (``dependency``, ``database``),
+*Steps* (``trim`` through ``depth``, in the order above; steps marked "(Optional)" are not run by
+``pipeline_short``), *Pipeline* (``pipeline_short``, ``pipeline_long`` and ``pipeline_hybrid``) and
+*Annotation* (``fix_tbl``).
 
 Common options and exit codes
 =============================

@@ -9,7 +9,7 @@ from typing import Any
 __all__ = ["REQUIRED_TOOLS", "OPTIONAL_TOOLS", "REQUIRED_PYTHON_PACKAGES", "OPTIONAL_PYTHON_PACKAGES", "run"]
 
 
-# external tools needed to run ``AAFTF pipeline_short`` with its default settings (tool -> where it is used)
+# external tools needed to run ``AAFTF pipeline_short``, ``pipeline_long`` and ``pipeline_hybrid`` with their default settings (tool -> where it is used)
 REQUIRED_TOOLS = {
     "bbduk.sh": "trim, filter",
     "shuffle.sh": "trim, filter (paired reads)",
@@ -22,6 +22,11 @@ REQUIRED_TOOLS = {
     "bwa": "sourpurge, filter (--aligner bwa), polish, depth (--aligner bwa)",
     "samtools": "sourpurge, filter (--aligner bowtie2/bwa/minimap2), polish, depth",
     "minimap2": "rmdup, mito, depth, polish (nextpolish2, racon)",
+    "flye": "assemble (--method flye), pipeline_long, pipeline_hybrid",
+    "racon": "polish (--method racon), pipeline_long, pipeline_hybrid",
+    "polypolish": "polish (--method polypolish), pipeline_hybrid (paired reads)",
+    "pypolca": "polish (--method pypolca), pipeline_hybrid (single-end reads)",
+    "freebayes": "polish (--method pypolca / polca), pipeline_hybrid (single-end reads)",
 }
 
 # tools only needed by optional steps or non-default options
@@ -33,14 +38,9 @@ OPTIONAL_TOOLS = {
     "bowtie2-build": "filter (--aligner bowtie2)",
     "megahit": "assemble (--method megahit)",
     "unicycler": "assemble (--method unicycler), pipeline_hybrid (--method unicycler)",
-    "flye": "assemble (--method flye), pipeline_long, pipeline_hybrid",
-    "polypolish": "polish (--method polypolish)",
-    "pypolca": "polish (--method pypolca)",
-    "freebayes": "polish (--method pypolca / polca)",
     "aaftf_polca.sh": "polish (--method polca; installed with AAFTF)",
     "nextPolish2": "polish (--method nextpolish2)",
     "yak": "polish (--method nextpolish2)",
-    "racon": "polish (--method racon), pipeline_long, pipeline_hybrid",
     "mosdepth": "depth",
     "NOVOPlasty.pl": "mito",
     "run_fcsadaptor.sh": "fcs_screen (or download it with: AAFTF database fcs_script)",
@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 def run(quiet: bool = False, **kwargs: Any) -> None:
     """Check whether AAFTF's external tools and Python packages are installed.
 
-    Tools and packages are checked in two groups: those needed to run ``AAFTF pipeline_short`` with its
+    Tools and packages are checked in two groups: those needed to run the ``pipeline_*`` subcommands with their
     default settings, and those only needed by optional steps (e.g. ``polish``, ``depth``,
     ``mito``) or non-default options (e.g. ``--aligner bowtie2``). An OK/MISSING line is printed
     for each, with its location (or where a missing one is used). Only missing required items
@@ -79,7 +79,7 @@ def run(quiet: bool = False, **kwargs: Any) -> None:
     Raises:
         FileNotFoundError: If a tool or Python package needed by the default pipeline is missing.
     """
-    missing_required = _print_tool_table("Checking tools needed by the default pipeline...", _check_tools(REQUIRED_TOOLS), quiet)
+    missing_required = _print_tool_table("Checking tools needed by the default pipelines...", _check_tools(REQUIRED_TOOLS), quiet)
     print()
     missing_optional = _print_tool_table("Checking tools for optional steps and non-default options...", _check_tools(OPTIONAL_TOOLS), quiet)
     print()

@@ -9,6 +9,10 @@ check the **Breaking changes** before updating scripts.
 
  - **`pipeline` renamed to `pipeline_short`** (same options and behaviour, no alias for the old name).
 
+ - **`assemble --method` is required**: there is no default assembler any more (it was spades); pass
+   `--method spades` to keep the old behaviour. The pipelines still choose one for you:
+   `pipeline_short` uses spades and `pipeline_long` / `pipeline_hybrid` use flye.
+
  - **Package renamed** from `AAFTF` to `aaftf` for imports (`import aaftf`, `from aaftf.utility import ...`).
    The PyPI distribution and the `AAFTF` command keep their names.
  - **Read options renamed**: `-l/--left` and `-r/--right` are now `-1/--read1` and `-2/--read2` in

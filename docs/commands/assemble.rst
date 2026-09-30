@@ -8,9 +8,10 @@ Runs a de novo genome assembler on cleaned (trimmed + filtered) short reads, or 
 Algorithm
 =========
 
-The assembler is selected with ``--method``:
+The assembler is selected with ``--method``, which is required (there is no default assembler;
+``pipeline_short`` uses spades, ``pipeline_long`` and ``pipeline_hybrid`` use flye):
 
-* **spades** (default) -- ``spades.py --mem <GB>`` in ``--isolate`` mode (default; disable with
+* **spades** -- ``spades.py --mem <GB>`` in ``--isolate`` mode (default; disable with
   ``--no-isolate``). SPAdes does not allow ``--careful`` together with ``--isolate``, so
   ``--careful`` is only added with ``--no-isolate`` (and dropped with ``--no-careful``).
   ``--cov-cutoff auto`` is added unless ``--meta`` is passed via ``--assembler_args``; merged/single
@@ -77,7 +78,7 @@ Invocation
 
 .. code-block:: text
 
-    AAFTF assemble -o FASTA [-1 FASTQ] [-2 FASTQ] [--method {spades,megahit,unicycler,flye}]
+    AAFTF assemble -o FASTA --method {spades,megahit,unicycler,flye} [-1 FASTQ] [-2 FASTQ]
                    [-w DIR] [-c INT] [-m GB] [--merged FASTQ] [-lr FASTQ]
                    [--longread_type {nano-raw,nano-hq,pacbio-raw,pacbio-hifi}]
                    [--genome_size SIZE]
@@ -85,8 +86,8 @@ Invocation
                    [--tmpdir DIR] [--assembler_args ARG]
                    [-q] [-v]
 
-``-o/--out`` (output assembly FASTA) is required, and ``-1/--read1`` for spades, megahit and
-unicycler. ``--assembler_args`` takes
+``-o/--out`` (output assembly FASTA) and ``--method`` are required, and ``-1/--read1`` for spades,
+megahit and unicycler. ``--assembler_args`` takes
 one argument and may be repeated to pass several raw arguments to the assembler. ``-lr/--longreads``
 is required for Flye and optional for Unicycler. The step log is written to ``<workdir>/assemble.log``.
 
@@ -95,7 +96,7 @@ Example
 
 .. code-block:: bash
 
-    AAFTF assemble -c 24 --memory 96 \
+    AAFTF assemble --method spades -c 24 --memory 96 \
         --read1 reads_filtered_1.fastq.gz --read2 reads_filtered_2.fastq.gz \
         -o genomes/STRAINX.spades.fasta -w working_AAFTF/spades_STRAINX
 

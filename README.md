@@ -12,8 +12,9 @@ Each step is a subcommand that can be run on its own, or all together with `AAFT
 Python >=3.10 and the external tools below. Everything can be installed with conda (bioconda) or
 pixi (see Install). Run `AAFTF dependency` to see which tools are found and which are missing.
 
-**Needed by the default pipeline** (`trim`, `filter`, `assemble`, `vecscreen`, `sourpurge`, `rmdup`,
-`sort`, `assess` with their default settings):
+**Needed by the pipelines** (`pipeline_short`, `pipeline_long` and `pipeline_hybrid`, i.e. `trim`,
+`filter`, `assemble`, `polish`, `vecscreen`, `sourpurge`, `rmdup`, `sort`, `assess` with the settings
+the pipelines use by default):
 
 - [BBTools](https://bbmap.org/) (`bbduk.sh`, `shuffle.sh`, `reformat.sh`; needs Java) - read trimming and contaminant filtering
 - [SPAdes](https://github.com/ablab/spades) - assembly
@@ -21,6 +22,8 @@ pixi (see Install). Run `AAFTF dependency` to see which tools are found and whic
 - [sourmash](https://sourmash.readthedocs.io/) >=4 ([paper](https://pubmed.ncbi.nlm.nih.gov/31508216/)) - taxonomic screening of contigs (`sourpurge`)
 - [bwa](https://github.com/lh3/bwa) and [samtools](https://github.com/samtools/samtools) >=1.13 - read mapping for the `sourpurge` coverage filter
 - [minimap2](https://github.com/lh3/minimap2) - duplicate contig detection (`rmdup`)
+- [Flye](https://github.com/mikolmogorov/Flye) - long-read assembly (`pipeline_long`, `pipeline_hybrid`)
+- [Racon](https://github.com/lbcb-sci/racon), [Polypolish](https://github.com/rrwick/Polypolish), [pypolca](https://github.com/gbouras13/pypolca) + freebayes - polishing (`pipeline_long`, `pipeline_hybrid`)
 - Python packages: biopython, psutil (and matplotlib for `depth` plots)
 
 **Only needed for optional steps or non-default options:**
@@ -29,11 +32,11 @@ pixi (see Install). Run `AAFTF dependency` to see which tools are found and whic
 |---|---|
 | [fastp](https://github.com/OpenGene/fastp), [Trimmomatic](https://github.com/usadellab/Trimmomatic) | `trim --method fastp` / `trimmomatic` |
 | [bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/index.shtml) | `filter --aligner bowtie2` (`bwa` and `minimap2` are the other alternatives) |
-| [MEGAHIT](https://github.com/voutcn/megahit), [Unicycler](https://github.com/rrwick/Unicycler) | `assemble --method megahit` / `unicycler` |
+| [MEGAHIT](https://github.com/voutcn/megahit), [Unicycler](https://github.com/rrwick/Unicycler) | `assemble --method megahit` / `unicycler` (also `pipeline_short`/`pipeline_hybrid --method`) |
 | [NOVOPlasty](https://github.com/ndierckx/NOVOPlasty) | `mito` (mitochondrial genome) |
 | [NCBI FCS-adaptor](https://github.com/ncbi/fcs) (with singularity/apptainer or docker) | `fcs_screen` |
 | [NCBI FCS-GX](https://github.com/ncbi/fcs-gx) ([paper](https://pubmed.ncbi.nlm.nih.gov/38409096/)) | `fcs_gx_purge` (needs a large-memory machine or a fast SSD) |
-| [Polypolish](https://github.com/rrwick/Polypolish); [pypolca](https://github.com/replikation/pypolca) + freebayes; [NextPolish2](https://github.com/Nextomics/NextPolish2) + yak; [Racon](https://github.com/lbcb-sci/racon) | `polish` |
+| [NextPolish2](https://github.com/Nextomics/NextPolish2) + yak | `polish --method nextpolish2` |
 | [mosdepth](https://github.com/brentp/mosdepth) | `depth` |
 | pigz | faster read counting (falls back to gzip) |
 
@@ -41,7 +44,7 @@ pixi (see Install). Run `AAFTF dependency` to see which tools are found and whic
 With conda, from a checkout of this repository:
 
 ```
-# only what `AAFTF pipeline_short` needs with its default settings; installs AAFTF from PyPI
+# only what the `AAFTF pipeline_*` subcommands need with their default settings; installs AAFTF from PyPI
 $ conda env create -f environment.yml && conda activate aaftf
 
 # or every tool AAFTF can use, with AAFTF installed from this checkout (editable)
@@ -89,7 +92,7 @@ or pass `--fcs_script`/`--image`). `fcs_gx_purge` needs an FCS-GX database set u
 | 1 | `trim` | Trim adaptors and low-quality reads - BBDuk (default), Trimmomatic or fastp | `<prefix>_1P.fastq.gz`, `<prefix>_2P.fastq.gz` |
 | - | `mito` | (Optional) Assemble the mitochondrial genome with NOVOPlasty, to screen its reads out in `filter` | mitochondrial FASTA |
 | 2 | `filter` | Remove PhiX, vector and other contaminant reads - BBDuk (default), bowtie2, bwa or minimap2 | `<prefix>_filtered_1.fastq.gz`, `<prefix>_filtered_2.fastq.gz` |
-| 3 | `assemble` | Assemble - SPAdes (default), MEGAHIT, Unicycler or Flye (long reads) | assembly FASTA |
+| 3 | `assemble` | Assemble - SPAdes, MEGAHIT, Unicycler or Flye (long reads); `--method` is required | assembly FASTA |
 | 4 | `vecscreen` | BLAST-based vector/contaminant screen of contigs, following NCBI VecScreen | cleaned FASTA (and `.mitochondria.fasta`) |
 | 5 | `sourpurge` | Drop contigs of other phyla (sourmash) and low-coverage contigs | purged FASTA |
 | - | `fcs_screen` | (Optional) NCBI FCS-adaptor vector screen | cleaned FASTA |
@@ -315,7 +318,7 @@ READ2=$TRIMREAD/${BASE}_filtered_2.fastq.gz
 WORKDIR=working_AAFTF
 OUTDIR=genomes
 mkdir -p $WORKDIR $OUTDIR
-AAFTF assemble -c $CPU --memory $MEM --read1 $READ1 --read2 $READ2 \
+AAFTF assemble --method spades -c $CPU --memory $MEM --read1 $READ1 --read2 $READ2 \
     -o $OUTDIR/${BASE}.spades.fasta -w $WORKDIR/spades_${BASE}
 ```
 

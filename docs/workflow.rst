@@ -25,7 +25,7 @@ Pipeline diagram
     [2] filter --------------------------- remove PhiX/UniVec/user-specified contaminant reads
         |
         v
-    [3] assemble -------------------------- SPAdes (default) / megahit / unicycler / flye
+    [3] assemble -------------------------- --method spades / megahit / unicycler / flye
         |
         v
     [4] vecscreen -------------------------- BLASTN vector + Euk/Prok/Mito contamination screen
@@ -132,7 +132,7 @@ Running step-by-step
         -o $TRIMREAD/${BASE} \
         --read1 $TRIMREAD/${BASE}_1P.fastq.gz --read2 $TRIMREAD/${BASE}_2P.fastq.gz
 
-    AAFTF assemble -c $CPU --memory $MEM \
+    AAFTF assemble --method spades -c $CPU --memory $MEM \
         --read1 $TRIMREAD/${BASE}_filtered_1.fastq.gz --read2 $TRIMREAD/${BASE}_filtered_2.fastq.gz \
         -o $OUTDIR/${BASE}.spades.fasta -w working_AAFTF/spades_${BASE}
 

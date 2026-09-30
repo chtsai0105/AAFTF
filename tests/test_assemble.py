@@ -82,15 +82,22 @@ def _make_asm_args(tmp_path, method="spades", read1=_UNSET, read2=None, **overri
 
 class TestAssembleParser:
     def test_debug_false_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa"])
         assert args.debug is False
 
     def test_debug_flag_sets_true(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-v"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa", "-v"])
         assert args.debug is True
 
-    def test_default_method_is_spades(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+    def test_method_is_required(self, capsys):
+        with patch.object(sys, "argv", ["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"]):
+            with pytest.raises(SystemExit) as exc:
+                main()
+        assert exc.value.code == 2
+        assert "--method" in capsys.readouterr().err
+
+    def test_method_spades(self):
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa"])
         assert args.method == "spades"
 
     def test_method_megahit(self):
@@ -102,47 +109,47 @@ class TestAssembleParser:
         assert args.method == "unicycler"
 
     def test_default_memory(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa"])
         assert args.memory == 32
 
     def test_custom_memory(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-m", "64"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa", "-m", "64"])
         assert args.memory == 64
 
     def test_default_cpus(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa"])
         assert args.cpus == 1
 
     def test_custom_cpus(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-c", "8"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa", "-c", "8"])
         assert args.cpus == 8
 
     def test_careful_true_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa"])
         assert args.careful is True
 
     def test_no_careful_flag(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "--no-careful"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa", "--no-careful"])
         assert args.careful is False
 
     def test_isolate_true_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa"])
         assert args.isolate is True
 
     def test_no_isolate_flag(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "--no-isolate"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa", "--no-isolate"])
         assert args.isolate is False
 
     def test_parses_read1_reads(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa"])
         assert args.read1 == "R1.fq"
 
     def test_parses_read2_reads(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa", "-2", "R2.fq"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa", "-2", "R2.fq"])
         assert args.read2 == "R2.fq"
 
     def test_read2_none_by_default(self):
-        args = _parse_assemble(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+        args = _parse_assemble(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa"])
         assert args.read2 is None
 
     def test_assemble_help_exits_zero(self):

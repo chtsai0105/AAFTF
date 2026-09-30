@@ -1,4 +1,4 @@
-# Tools needed to run `AAFTF pipeline` with its default settings (same as the pixi
+# Tools needed to run `AAFTF pipeline_short`, `pipeline_long` and `pipeline_hybrid` with their default settings (same as the pixi
 # "default" environment in pyproject.toml). For the optional steps and options too,
 # use environment.dev.yml.
 name: aaftf
@@ -14,6 +14,12 @@ dependencies:
   - bwa
   - samtools>=1.24,<2
   - minimap2
+  # pipeline_long / pipeline_hybrid: flye assembly, racon + polypolish/pypolca polishing
+  - flye
+  - racon
+  - polypolish>=0.7.1,<0.8
+  - pypolca>=0.5.0,<0.6
+  - freebayes
   - biopython>=1.88
   - psutil>=5
   - matplotlib-base>=3

@@ -267,7 +267,7 @@ class TestMemoryCappedToAvailable:
 
     def test_assemble_default_memory_capped(self):
         with patch("aaftf.main.get_ram", return_value=10.0):
-            args = _parse_with_main(["AAFTF", "assemble", "-1", "R1.fq", "-o", "out.fa"])
+            args = _parse_with_main(["AAFTF", "assemble", "--method", "spades", "-1", "R1.fq", "-o", "out.fa"])
         assert args.memory == 10
 
     def test_within_available_unchanged(self, capsys):
@@ -351,7 +351,7 @@ class TestMainExitCodes:
 
 
 class TestMainHelpGroups:
-    """AAFTF --help lists the subcommands under three group titles."""
+    """AAFTF --help lists the subcommands under four group titles."""
 
     def _help(self, capsys):
         with patch.object(sys, "argv", ["AAFTF", "--help"]):
@@ -366,12 +366,13 @@ class TestMainHelpGroups:
     def test_setup_group(self, capsys):
         assert self._section(self._help(capsys), "Setup (dependencies and databases)") == ["dependency", "database"]
 
-    def test_pipeline_group_has_every_other_step(self, capsys):
-        names = self._section(self._help(capsys), "Assembly pipeline")
-        pipelines = ["pipeline_short", "pipeline_long", "pipeline_hybrid"]
-        assert names[-3:] == pipelines
+    def test_steps_group_has_every_step(self, capsys):
+        names = self._section(self._help(capsys), "Steps")
         steps = {"trim", "mito", "filter", "assemble", "vecscreen", "fcs_screen", "fcs_gx_purge", "sourpurge", "rmdup", "polish", "sort", "assess", "depth"}
-        assert set(names) == steps | set(pipelines)
+        assert set(names) == steps
+
+    def test_pipeline_group(self, capsys):
+        assert self._section(self._help(capsys), "Pipeline") == ["pipeline_short", "pipeline_long", "pipeline_hybrid"]
 
     def test_annotation_group(self, capsys):
         assert self._section(self._help(capsys), "Annotation") == ["fix_tbl"]

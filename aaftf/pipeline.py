@@ -16,6 +16,7 @@ the file names that chain the steps together) override them.
 import argparse as ap
 import functools
 import logging
+from pathlib import Path
 from types import ModuleType
 from typing import Any
 
@@ -87,7 +88,7 @@ def run_short(
     filtered_1, filtered_2 = _trim_and_filter(read1, read2, basename, shared, minlen, screen_accessions, screen_urls)
 
     assembly = basename + f".{method}.fasta"
-    _run_step(assemble, "assemble", assembly, shared, read1=filtered_1, read2=filtered_2, out=assembly, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
+    _run_step(assemble, "assemble", assembly, shared, **_assemble_workdir(shared, method), read1=filtered_1, read2=filtered_2, out=assembly, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
 
     sourpurge_options = {"read1": filtered_1, "read2": filtered_2, "phylum": phylum, "sourdb": sourdb, "mincovpct": mincovpct}
     _clean_and_finish(assembly, basename, shared, mincontiglen, sourpurge_options)
@@ -200,7 +201,7 @@ def run_hybrid(
 
     if method == "unicycler":
         polished = basename + ".unicycler.fasta"
-        _run_step(assemble, "assemble", polished, shared, read1=filtered_1, read2=filtered_2, longreads=longreads, out=polished, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
+        _run_step(assemble, "assemble", polished, shared, **_assemble_workdir(shared, method), read1=filtered_1, read2=filtered_2, longreads=longreads, out=polished, method=method, tmpdir=tmpdir, assembler_args=assembler_args)
     else:
         assembly = _assemble_flye(longreads, basename, shared, longread_type, genome_size, assembler_args)
         racon_file = _racon(assembly, longreads, basename, shared)
@@ -217,6 +218,16 @@ def _shared(cpus: int, memory: int | None, workdir: str | None, debug: bool, qui
     return {"cpus": cpus, "memory": memory, "workdir": workdir, "debug": debug, "quiet": quiet}
 
 
+def _assemble_workdir(shared: dict[str, Any], method: str) -> dict[str, str]:
+    """Return ``assemble``'s own ``workdir`` option: ``{workdir}/assemble_{method}`` when the pipeline has a workdir.
+
+    The assemblers treat an existing output folder as a previous run of their own (SPAdes restarts
+    from it, MEGAHIT refuses it), so they must not share the pipeline workdir that ``filter`` has
+    already created. Without a pipeline workdir, ``assemble`` makes its own folder as usual.
+    """
+    return {"workdir": str(Path(shared["workdir"], f"assemble_{method}"))} if shared["workdir"] else {}
+
+
 def _trim_and_filter(read1: str, read2: str | None, basename: str, shared: dict[str, Any], minlen: int, screen_accessions: list[str] | None, screen_urls: list[str] | None) -> tuple[str, str | None]:
     """Run ``trim`` then ``filter`` on the Illumina reads; return the filtered (read1, read2) files."""
     trimmed_1, trimmed_2 = basename + "_1P.fastq.gz", (basename + "_2P.fastq.gz" if read2 else None)
@@ -229,7 +240,7 @@ def _trim_and_filter(read1: str, read2: str | None, basename: str, shared: dict[
 def _assemble_flye(longreads: str, basename: str, shared: dict[str, Any], longread_type: str, genome_size: str | None, assembler_args: list[str] | None) -> str:
     """Assemble ``longreads`` with Flye into ``{basename}.flye.fasta`` and return that file name."""
     assembly = basename + ".flye.fasta"
-    _run_step(assemble, "assemble", assembly, shared, read1=None, longreads=longreads, out=assembly, method="flye", longread_type=longread_type, genome_size=genome_size, assembler_args=assembler_args)
+    _run_step(assemble, "assemble", assembly, shared, **_assemble_workdir(shared, "flye"), read1=None, longreads=longreads, out=assembly, method="flye", longread_type=longread_type, genome_size=genome_size, assembler_args=assembler_args)
     return assembly
 
 

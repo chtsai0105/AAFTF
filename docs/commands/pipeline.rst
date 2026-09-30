@@ -62,7 +62,8 @@ Cutoffs / defaults
      - Passed to every step that has ``-m/--memory`` (trim, filter, assemble)
    * - ``-c/--cpus``, ``-w/--workdir``, ``-v/--verbose``, ``-q/--quiet``
      - each step's own default
-     - Passed to every step that has the option
+     - Passed to every step that has the option; ``assemble`` gets its own subfolder
+       ``<workdir>/assemble_<method>`` (an assembler treats an existing folder as its own earlier run)
    * - ``-a/--screen_accessions``, ``-u/--screen_urls``
      - none
      - Extra sequences screened out of the reads by filter

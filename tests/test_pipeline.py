@@ -118,9 +118,17 @@ class TestPipelineOptions:
     def test_cpus_passed(self, tmp_path, step):
         assert _run_pipeline(tmp_path, cpus=6)[step]["cpus"] == 6
 
-    @pytest.mark.parametrize("step", ["filter", "assemble", "vecscreen", "sourpurge", "rmdup"])
+    @pytest.mark.parametrize("step", ["filter", "vecscreen", "sourpurge", "rmdup"])
     def test_workdir_passed(self, tmp_path, step):
         assert _run_pipeline(tmp_path, workdir="wd")[step]["workdir"] == "wd"
+
+    @pytest.mark.parametrize("method", ["spades", "megahit", "unicycler"])
+    def test_assemble_gets_own_workdir_subfolder(self, tmp_path, method):
+        """filter creates the pipeline workdir first; SPAdes would restart from it and MEGAHIT refuse it."""
+        assert _run_pipeline(tmp_path, workdir="wd", method=method)["assemble"]["workdir"] == str(Path("wd", f"assemble_{method}"))
+
+    def test_assemble_workdir_default_without_pipeline_workdir(self, tmp_path):
+        assert _run_pipeline(tmp_path)["assemble"]["workdir"] == _cli_defaults("assemble")["workdir"]
 
     @pytest.mark.parametrize("step", STEPS)
     def test_debug_passed(self, tmp_path, step):
@@ -186,6 +194,10 @@ class TestLongPipeline:
         assert calls["vecscreen"]["infile"] == f"{base}.racon.fasta"
         assert calls["rmdup"]["input"] == f"{base}.vecscreen.fasta"  # no sourpurge without Illumina reads
 
+    def test_assemble_gets_own_workdir_subfolder(self, tmp_path):
+        calls = dict(_run_long(tmp_path, workdir="wd"))
+        assert (calls["assemble"]["workdir"], calls["polish"]["workdir"]) == (str(Path("wd", "assemble_flye")), "wd")
+
     def test_assemble_defaults_kept(self, tmp_path):
         asm = dict(_run_long(tmp_path))["assemble"]
         assert (asm["longread_type"], asm["genome_size"]) == (_cli_defaults("assemble")["longread_type"], None)
@@ -221,6 +233,11 @@ class TestHybridPipeline:
         asm = dict(calls)["assemble"]
         assert (asm["method"], asm["read1"], asm["longreads"]) == ("unicycler", f"{base}_filtered_1.fastq.gz", "ont.fq.gz")
         assert dict(calls)["vecscreen"]["infile"] == f"{base}.unicycler.fasta"
+
+    @pytest.mark.parametrize("method", ["flye", "unicycler"])
+    def test_assemble_gets_own_workdir_subfolder(self, tmp_path, method):
+        steps = dict(_run_hybrid(tmp_path, workdir="wd", method=method))
+        assert (steps["assemble"]["workdir"], steps["filter"]["workdir"]) == (str(Path("wd", f"assemble_{method}")), "wd")
 
     def test_unknown_method_raises(self, tmp_path):
         with pytest.raises(ValueError, match="flye or unicycler"):

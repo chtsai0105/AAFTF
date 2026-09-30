@@ -146,12 +146,12 @@ def run(
         if reverse_reads:
             logger.info(f"Filtering complete:\nFor: {clean_reads}_1.fastq.gz\nRev: {clean_reads}_2.fastq.gz")
             if not pipe:
-                logger.info(f"Your next command might be:\nAAFTF assemble -1 {clean_reads}_1.fastq.gz -2 {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
+                logger.info(f"Your next command might be:\nAAFTF assemble --method spades -1 {clean_reads}_1.fastq.gz -2 {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
         else:
             logger.info(f"Filtering complete:\nSingle: {clean_reads}_U.fastq.gz")
             if not pipe:
-                logger.info(f"Your next command might be:\nAAFTF assemble -1 {clean_reads}_U.fastq.gz -c {cpus} -o {basename}.spades.fasta")
+                logger.info(f"Your next command might be:\nAAFTF assemble --method spades -1 {clean_reads}_U.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
         return
 
@@ -209,11 +209,11 @@ def run(
         if reverse_reads:
             logger.info(f"Filtering complete:\nFor: {clean_reads}_1.fastq.gz\nRev: {clean_reads}_2.fastq.gz")
             if not pipe:
-                logger.info(f"Your next command might be:\nAAFTF assemble -1 {clean_reads}_1.fastq.gz -2 {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
+                logger.info(f"Your next command might be:\nAAFTF assemble --method spades -1 {clean_reads}_1.fastq.gz -2 {clean_reads}_2.fastq.gz -c {cpus} -o {basename}.spades.fasta")
         else:
             logger.info(f"Filtering complete:\nSingle: {clean_reads}.fastq.gz")
             if not pipe:
-                logger.info(f"Your next command might be:\nAAFTF assemble -1 {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta")
+                logger.info(f"Your next command might be:\nAAFTF assemble --method spades -1 {clean_reads}.fastq.gz -c {cpus} -o {basename}.spades.fasta")
 
 
 def _rebuild_index_if_stale(marker_file: str, contamdb: str, build_cmd: list[str], debug: bool) -> None:

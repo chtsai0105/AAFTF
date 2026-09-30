@@ -100,6 +100,12 @@ sourmash = "*"
 bwa = "*"
 samtools = ">=1.24,<2"
 minimap2 = "*"
+# pipeline_long / pipeline_hybrid: flye assembly, racon + polypolish/pypolca polishing
+flye = "*"
+racon = "*"
+polypolish = ">=0.7.1,<0.8"
+pypolca = ">=0.5.0,<0.6"
+freebayes = "*"
 biopython = ">=1.88"
 psutil = ">=5"
 matplotlib-base = ">=3"
@@ -112,8 +118,8 @@ aaftf = { path = ".", editable = true }
 # ---------------------------------------------------------------------------
 # "optional" feature: tools only used by optional steps (polish, depth, mito,
 # fcs_screen, fcs_gx_purge) or non-default options (trim --method fastp /
-# trimmomatic, assemble --method megahit / unicycler / flye, filter --aligner bowtie2,
-# pipeline_long, pipeline_hybrid)
+# trimmomatic, assemble --method megahit / unicycler, pipeline_short --method megahit /
+# unicycler, pipeline_hybrid --method unicycler, filter --aligner bowtie2)
 # -- OPTIONAL_TOOLS in aaftf/dependency.py.
 # The complete environment (default + optional) is mirrored by environment.dev.yml.
 # ---------------------------------------------------------------------------
@@ -124,13 +130,8 @@ fastp = "*"
 trimmomatic = "*"
 megahit = "*"
 unicycler = "*"
-flye = "*"
-polypolish = ">=0.7.1,<0.8"
-pypolca = ">=0.5.0,<0.6"
-freebayes = "*"
 nextpolish2 = ">=0.2.2,<0.3"
 yak = "*"
-racon = "*"
 mosdepth = ">=0.3.10"
 novoplasty = "*"
 ncbi-fcs-gx = "*"
