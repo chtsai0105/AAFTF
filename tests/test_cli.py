@@ -398,7 +398,9 @@ def test_run_defaults_match_menu(name):
         if action.dest in ("help", "quiet", "debug"):
             continue
         assert action.dest in params, f"{name} run() has no {action.dest} parameter"
-        expected = inspect.Parameter.empty if action.required else action.default
+        # a nargs="*" positional (e.g. database's DATABASE list) is optional, but Python < 3.12 argparse marks it required
+        optional_star_positional = not action.option_strings and action.nargs == "*"
+        expected = inspect.Parameter.empty if action.required and not optional_star_positional else action.default
         actual = params[action.dest].default
         assert (actual, type(actual)) == (expected, type(expected)), f"{name} --{action.dest}: menu {expected!r}, run() {actual!r}"
 
