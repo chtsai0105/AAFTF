@@ -12,7 +12,7 @@ from typing import Any
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from aaftf.utility import calc_nx, cleanup_workdir, filter_fasta, make_workdir, next_step_name, paf_hits, write_fasta
+from aaftf.utility import calc_nx, cleanup_workdir, close_step_log, filter_fasta, make_workdir, next_step_name, paf_hits, write_fasta
 
 __all__ = ["run"]
 
@@ -55,57 +55,59 @@ def run(
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``, ...); ignored.
     """
     workdir, custom_workdir = make_workdir(workdir, "rmdup")
-
-    if debug:
-        logger.info(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive}")
-    logger.info("Looping through assembly shortest --> longest searching for duplicated contigs using minimap2")
-
-    # read the assembly once; later lookups and the per-contig query/reference files use it
-    lengths = []
-    seqs: dict[str, str] = {}
-    with open(input) as infile:
-        for header, seq in SimpleFastaParser(infile):
-            lengths.append(len(seq))
-            seqs.setdefault(header.split(None, 1)[0], seq)
-    n50, _ = calc_nx(lengths, 0.5)
-    n75, _ = calc_nx(lengths, 0.75)
-    logger.info(f"Assembly is {len(lengths):,} contigs; {sum(lengths):,} bp; N50 is {n50:,} bp; N75 is {n75:,} bp")
-
-    # (id, length) sorted shortest --> longest
-    by_length = sorted(((seq_id, len(seq)) for seq_id, seq in seqs.items()), key=lambda item: item[1])
-    if exhaustive:
-        n75 = by_length[-1][1]
-    to_check = [item for item in by_length if item[1] < n75]
-    logger.info(f"Will check {len(to_check):,} contigs for duplication --> those that are < {n75:,} && > {minlen:,}")
-
-    ignore = set()
-    prefix = str(os.getpid())
-    for i, (seq_id, length) in enumerate(by_length):
-        if length < minlen:
-            ignore.add(seq_id)
-            continue
-        if length > n75:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-            break
+    try:
         if debug:
-            logger.info(f"Working on {seq_id} len={length} remove_tally={len(ignore)}")
-        else:
-            sys.stdout.write(f"\rProgress: {i} of {len(to_check)}; remove tally={len(ignore):,}; current={seq_id}; length={length}     ")
-            sys.stdout.flush()
-        longer = [other_id for other_id, _ in by_length[i + 1 :]]
-        query, reference = _write_query_and_reference(seqs, seq_id, longer, workdir, prefix)
-        if _is_duplicate(query, reference, seq_id, cpus, percent_id, percent_cov, debug):
-            ignore.add(seq_id)
+            logger.info(f"input={input} out={out} workdir={workdir} cpus={cpus} percent_id={percent_id} percent_cov={percent_cov} minlen={minlen} exhaustive={exhaustive}")
+        logger.info("Looping through assembly shortest --> longest searching for duplicated contigs using minimap2")
 
-    num_seqs, assembly_size = filter_fasta(input, out, lambda seq_id: seq_id not in ignore)
-    logger.info(f"Cleaned assembly is {num_seqs:,} contigs and {assembly_size:,} bp")
-    next_out = next_step_name(out, ".final.fasta")
+        # read the assembly once; later lookups and the per-contig query/reference files use it
+        lengths = []
+        seqs: dict[str, str] = {}
+        with open(input) as infile:
+            for header, seq in SimpleFastaParser(infile):
+                lengths.append(len(seq))
+                seqs.setdefault(header.split(None, 1)[0], seq)
+        n50, _ = calc_nx(lengths, 0.5)
+        n75, _ = calc_nx(lengths, 0.75)
+        logger.info(f"Assembly is {len(lengths):,} contigs; {sum(lengths):,} bp; N50 is {n50:,} bp; N75 is {n75:,} bp")
 
-    if not pipe:
-        logger.info(f"Your next command might be:\nAAFTF sort -i {out} -o {next_out}")
+        # (id, length) sorted shortest --> longest
+        by_length = sorted(((seq_id, len(seq)) for seq_id, seq in seqs.items()), key=lambda item: item[1])
+        if exhaustive:
+            n75 = by_length[-1][1]
+        to_check = [item for item in by_length if item[1] < n75]
+        logger.info(f"Will check {len(to_check):,} contigs for duplication --> those that are < {n75:,} && > {minlen:,}")
 
-    cleanup_workdir(workdir, debug, custom_workdir)
+        ignore = set()
+        prefix = str(os.getpid())
+        for i, (seq_id, length) in enumerate(by_length):
+            if length < minlen:
+                ignore.add(seq_id)
+                continue
+            if length > n75:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                break
+            if debug:
+                logger.info(f"Working on {seq_id} len={length} remove_tally={len(ignore)}")
+            else:
+                sys.stdout.write(f"\rProgress: {i} of {len(to_check)}; remove tally={len(ignore):,}; current={seq_id}; length={length}     ")
+                sys.stdout.flush()
+            longer = [other_id for other_id, _ in by_length[i + 1 :]]
+            query, reference = _write_query_and_reference(seqs, seq_id, longer, workdir, prefix)
+            if _is_duplicate(query, reference, seq_id, cpus, percent_id, percent_cov, debug):
+                ignore.add(seq_id)
+
+        num_seqs, assembly_size = filter_fasta(input, out, lambda seq_id: seq_id not in ignore)
+        logger.info(f"Cleaned assembly is {num_seqs:,} contigs and {assembly_size:,} bp")
+        next_out = next_step_name(out, ".final.fasta")
+
+        if not pipe:
+            logger.info(f"Your next command might be:\nAAFTF sort -i {out} -o {next_out}")
+
+        cleanup_workdir(workdir, debug, custom_workdir)
+    finally:
+        close_step_log()
 
 
 def _write_query_and_reference(seqs: dict[str, str], query_id: str, reference_ids: list[str], workdir: str, prefix: str) -> tuple[str, str]:

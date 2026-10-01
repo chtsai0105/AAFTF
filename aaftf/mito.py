@@ -11,7 +11,7 @@ from typing import Any
 
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 
-from aaftf.utility import COMPLEMENT, basename_from_reads, cleanup_workdir, estimate_read_length, make_workdir, paf_hits, print_cmd, require_tools, run_cmd, write_fasta
+from aaftf.utility import COMPLEMENT, basename_from_reads, cleanup_workdir, close_step_log, estimate_read_length, make_workdir, paf_hits, print_cmd, require_tools, run_cmd, write_fasta
 
 __all__ = ["run"]
 
@@ -82,78 +82,80 @@ def run(
     # first we need to generate working directory
     unique_id = str(uuid.uuid4())[:8]
     workdir, custom_workdir = make_workdir(workdir, "mito")
+    try:
+        input_reads = (read1, read2)  # the hint suggests filtering these, not the subsample
+        if subsample:
+            read1, read2 = _subsample_pairs(read1, read2, subsample, workdir, memory, debug)
 
-    input_reads = (read1, read2)  # the hint suggests filtering these, not the subsample
-    if subsample:
-        read1, read2 = _subsample_pairs(read1, read2, subsample, workdir, memory, debug)
+        # now estimate read lengths of FASTQ
+        read_len = estimate_read_length(read1)
 
-    # now estimate read lengths of FASTQ
-    read_len = estimate_read_length(read1)
+        # NOVOPlasty seed: --seed, else the bundled default (copied into the work directory so
+        # NOVOPlasty gets a real file path even from a zipped install)
+        if seed:
+            seed_fasta = str(Path(seed).resolve())
+        else:
+            seed_fasta = str(Path(workdir, "mito-seed.fasta").resolve())
+            Path(seed_fasta).write_bytes((_PACKAGE_DATA / "mito-seed.fasta").read_bytes())
 
-    # NOVOPlasty seed: --seed, else the bundled default (copied into the work directory so
-    # NOVOPlasty gets a real file path even from a zipped install)
-    if seed:
-        seed_fasta = str(Path(seed).resolve())
-    else:
-        seed_fasta = str(Path(workdir, "mito-seed.fasta").resolve())
-        Path(seed_fasta).write_bytes((_PACKAGE_DATA / "mito-seed.fasta").read_bytes())
+        # write the NOVOPlasty config from the bundled template
+        placeholders = {
+            "<PROJECT>": unique_id,
+            "<MINLEN>": str(minlen),
+            "<MAXLEN>": str(maxlen),
+            "<MAXMEM>": str(memory),
+            "<SEED>": seed_fasta,
+            "<READLEN>": str(read_len),
+            "<FORWARD>": str(Path(read1).resolve()),
+            "<REVERSE>": str(Path(read2).resolve()),
+        }
+        config_text = (_PACKAGE_DATA / "novoplasty-config.txt").read_text()
+        for placeholder, value in placeholders.items():
+            config_text = config_text.replace(placeholder, value)
+        Path(workdir, "novo-config.txt").write_text(config_text)
 
-    # write the NOVOPlasty config from the bundled template
-    placeholders = {
-        "<PROJECT>": unique_id,
-        "<MINLEN>": str(minlen),
-        "<MAXLEN>": str(maxlen),
-        "<MAXMEM>": str(memory),
-        "<SEED>": seed_fasta,
-        "<READLEN>": str(read_len),
-        "<FORWARD>": str(Path(read1).resolve()),
-        "<REVERSE>": str(Path(read2).resolve()),
-    }
-    config_text = (_PACKAGE_DATA / "novoplasty-config.txt").read_text()
-    for placeholder, value in placeholders.items():
-        config_text = config_text.replace(placeholder, value)
-    Path(workdir, "novo-config.txt").write_text(config_text)
+        # now we can finally run NOVOplasty.pl
+        logger.info("De novo assembling mitochondrial genome using NOVOplasty")
+        cmd = ["NOVOPlasty.pl", "-c", "novo-config.txt"]
+        print_cmd(cmd)
+        novolog = str(Path(workdir, "novoplasty.log"))
+        with open(novolog, "w") as logfile:
+            p1 = subprocess.Popen(cmd, cwd=workdir, stdout=logfile, stderr=logfile)
+            p1.communicate()
 
-    # now we can finally run NOVOplasty.pl
-    logger.info("De novo assembling mitochondrial genome using NOVOplasty")
-    cmd = ["NOVOPlasty.pl", "-c", "novo-config.txt"]
-    print_cmd(cmd)
-    novolog = str(Path(workdir, "novoplasty.log"))
-    with open(novolog, "w") as logfile:
-        p1 = subprocess.Popen(cmd, cwd=workdir, stdout=logfile, stderr=logfile)
-        p1.communicate()
+        # now parse the results, preferring a circular assembly over partial ones
+        outputs = sorted(os.listdir(workdir))
+        draft_mito = None
+        for output_prefix in ("Circularized_assembly_", "Contigs_1_", "Uncircularized_assemblies_"):
+            draft_mito = next((str(Path(workdir, f)) for f in outputs if f.startswith(output_prefix)), None)
+            if draft_mito:
+                break
+        if draft_mito is None:
+            raise RuntimeError(f"NOVOplasty did not produce an assembly - check {novolog}")
+        circular = Path(draft_mito).name.startswith("Circularized_assembly_")
+        if circular:
+            logger.info("NOVOplasty assembled complete circular genome")
+            logger.info("Rotating assembly to start at the cytochrome b (cob) gene")
+            _orient_to_start(draft_mito, out)
+        else:
+            num_contigs = 0
+            contig_length = 0
+            with open(out, "w") as outfile:
+                with open(draft_mito) as infile:
+                    for title, seq in SimpleFastaParser(infile):
+                        num_contigs += 1
+                        contig_length += len(seq)
+                        write_fasta(outfile, f"contig_{num_contigs}", seq)
+            # weird formatting here for PEP8
+            logger.info(f"NOVOplasty assembled {num_contigs} contigs consisting of {contig_length:,} bp," + "but was unable to circularize genome")
 
-    # now parse the results, preferring a circular assembly over partial ones
-    outputs = sorted(os.listdir(workdir))
-    draft_mito = None
-    for output_prefix in ("Circularized_assembly_", "Contigs_1_", "Uncircularized_assemblies_"):
-        draft_mito = next((str(Path(workdir, f)) for f in outputs if f.startswith(output_prefix)), None)
-        if draft_mito:
-            break
-    if draft_mito is None:
-        raise RuntimeError(f"NOVOplasty did not produce an assembly - check {novolog}")
-    circular = Path(draft_mito).name.startswith("Circularized_assembly_")
-    if circular:
-        logger.info("NOVOplasty assembled complete circular genome")
-        logger.info("Rotating assembly to start at the cytochrome b (cob) gene")
-        _orient_to_start(draft_mito, out)
-    else:
-        num_contigs = 0
-        contig_length = 0
-        with open(out, "w") as outfile:
-            with open(draft_mito) as infile:
-                for title, seq in SimpleFastaParser(infile):
-                    num_contigs += 1
-                    contig_length += len(seq)
-                    write_fasta(outfile, f"contig_{num_contigs}", seq)
-        # weird formatting here for PEP8
-        logger.info(f"NOVOplasty assembled {num_contigs} contigs consisting of {contig_length:,} bp," + "but was unable to circularize genome")
-
-    logger.info(f"AAFTF mito complete: {out}")
-    cleanup_workdir(workdir, debug, custom_workdir)
-    if not pipe:
-        read1, read2 = input_reads
-        logger.info(f"Your next command might be:\nAAFTF filter -1 {read1} -2 {read2} -s {out} -o {basename_from_reads(read1)}")
+        logger.info(f"AAFTF mito complete: {out}")
+        cleanup_workdir(workdir, debug, custom_workdir)
+        if not pipe:
+            read1, read2 = input_reads
+            logger.info(f"Your next command might be:\nAAFTF filter -1 {read1} -2 {read2} -s {out} -o {basename_from_reads(read1)}")
+    finally:
+        close_step_log()
 
 
 def _subsample_pairs(read1: str, read2: str, pairs: int, workdir: str, memory: int, debug: bool) -> tuple[str, str]:

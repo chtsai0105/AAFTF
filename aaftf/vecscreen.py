@@ -20,7 +20,7 @@ from typing import Any
 # biopython needed
 from Bio import SeqIO
 
-from aaftf.utility import cleanup_workdir, concat_files, make_workdir, next_step_name, print_cmd, require_databases, write_fasta
+from aaftf.utility import cleanup_workdir, close_step_log, concat_files, make_workdir, next_step_name, print_cmd, require_databases, write_fasta
 
 __all__ = ["BLAST_PERCENT_ID_CONTAM_MATCH", "BLAST_PERCENT_ID_MITO_MATCH", "run"]
 
@@ -87,41 +87,44 @@ def run(
         **kwargs: Other parsed CLI attributes (``command``, ``func``, ``quiet``); ignored.
     """
     workdir, custom_workdir = make_workdir(workdir, "vecscreen")
-    percentid_cutoff = percent_id or BLAST_PERCENT_ID_CONTAM_MATCH
+    try:
+        percentid_cutoff = percent_id or BLAST_PERCENT_ID_CONTAM_MATCH
 
-    # final_outfile/outdir/prefix are derived from the user's --outfile once,
-    # up front, so nothing later in the pipeline can accidentally clobber them
-    # (each stage below only sees its own function-local variables).
-    final_outfile = outfile
-    outdir = str(Path(outfile).parent)
-    outname = Path(outfile).name
-    if ".f" in outname:
-        prefix = outname.rsplit(".f", 1)[0]
-    else:
-        prefix = str(os.getpid())
-    _build_contam_databases(workdir)
+        # final_outfile/outdir/prefix are derived from the user's --outfile once,
+        # up front, so nothing later in the pipeline can accidentally clobber them
+        # (each stage below only sees its own function-local variables).
+        final_outfile = outfile
+        outdir = str(Path(outfile).parent)
+        outname = Path(outfile).name
+        if ".f" in outname:
+            prefix = outname.rsplit(".f", 1)[0]
+        else:
+            prefix = str(os.getpid())
+        _build_contam_databases(workdir)
 
-    contigs_to_remove: dict[str, tuple[str, str, float]] = {}
-    regions_to_trim = _screen_euk_prok_contamination(infile, workdir, prefix, cpus, percentid_cutoff)
-    euk_cleaned = _write_euk_cleaned(infile, regions_to_trim, workdir, prefix)
-    mito_hits = _screen_mitochondria(euk_cleaned, workdir, prefix, cpus, contigs_to_remove)
-    outfile_vec = _run_vecscreen_rounds(euk_cleaned, workdir, prefix, cpus, stringency, contigs_to_remove)
+        contigs_to_remove: dict[str, tuple[str, str, float]] = {}
+        regions_to_trim = _screen_euk_prok_contamination(infile, workdir, prefix, cpus, percentid_cutoff)
+        euk_cleaned = _write_euk_cleaned(infile, regions_to_trim, workdir, prefix)
+        mito_hits = _screen_mitochondria(euk_cleaned, workdir, prefix, cpus, contigs_to_remove)
+        outfile_vec = _run_vecscreen_rounds(euk_cleaned, workdir, prefix, cpus, stringency, contigs_to_remove)
 
-    logger.info(f"{len(contigs_to_remove):,} contigs will be removed:")
-    for k, v in sorted(contigs_to_remove.items()):
-        print(f"\t{k} --> dbhit={v[0]}; hit={v[1]}; pident={v[2]}")
+        logger.info(f"{len(contigs_to_remove):,} contigs will be removed:")
+        for k, v in sorted(contigs_to_remove.items()):
+            print(f"\t{k} --> dbhit={v[0]}; hit={v[1]}; pident={v[2]}")
 
-    # this could instead use the outfile and strip
-    # .fasta/fsa/fna and add mito on it I suppose, but assumes
-    # a bit about the naming structure
-    mitochondria = str(Path(outdir, prefix + ".mitochondria.fasta"))
-    _write_final_outputs(outfile_vec, contigs_to_remove, mito_hits, final_outfile, mitochondria)
+        # this could instead use the outfile and strip
+        # .fasta/fsa/fna and add mito on it I suppose, but assumes
+        # a bit about the naming structure
+        mitochondria = str(Path(outdir, prefix + ".mitochondria.fasta"))
+        _write_final_outputs(outfile_vec, contigs_to_remove, mito_hits, final_outfile, mitochondria)
 
-    next_out = next_step_name(final_outfile, ".sourpurge.fasta")
-    if not pipe:
-        logger.info("Your next command might be:\n" + "AAFTF sourpurge -i {:} -o {:} -c {:} --phylum {:}".format(final_outfile, next_out, cpus, "Ascomycota"))
+        next_out = next_step_name(final_outfile, ".sourpurge.fasta")
+        if not pipe:
+            logger.info("Your next command might be:\n" + "AAFTF sourpurge -i {:} -o {:} -c {:} --phylum {:}".format(final_outfile, next_out, cpus, "Ascomycota"))
 
-    cleanup_workdir(workdir, debug, custom_workdir)
+        cleanup_workdir(workdir, debug, custom_workdir)
+    finally:
+        close_step_log()
 
 
 def _build_contam_databases(workdir: str) -> None:

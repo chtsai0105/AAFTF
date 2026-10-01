@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from aaftf.utility import align_to_sorted_bam, cleanup_workdir, make_workdir, next_step_name, print_cmd, require_tools, run_cmd
+from aaftf.utility import align_to_sorted_bam, cleanup_workdir, close_step_log, make_workdir, next_step_name, print_cmd, require_tools, run_cmd
 
 __all__ = ["run", "run_polypolish", "run_pypolca", "run_polca", "run_nextpolish2", "run_racon"]
 
@@ -83,58 +83,60 @@ def run(
         raise ValueError("Unable to locate FASTQ raw reads, pass via -1/--read1 and/or -2/--read2")
 
     workdir, custom_workdir = make_workdir(workdir, "polish")
+    try:
+        # Output file
+        polished_fasta = outfile
+        if not polished_fasta:
+            fbasename = Path(infile).name.split(".f")[0]
+            polished_fasta = f"{fbasename}.polished.fasta"
 
-    # Output file
-    polished_fasta = outfile
-    if not polished_fasta:
-        fbasename = Path(infile).name.split(".f")[0]
-        polished_fasta = f"{fbasename}.polished.fasta"
+        polish_log = f"{method}.log"
 
-    polish_log = f"{method}.log"
+        # Preflight: make sure the external tools this method needs are on PATH.
+        required_exes = {
+            "polypolish": ["bwa", "polypolish"],
+            "pypolca": ["bwa", "samtools", "freebayes", "pypolca"],
+            "polca": ["bwa", "samtools", "freebayes", POLCA_SCRIPT],
+            "nextpolish2": ["minimap2", "samtools", "yak", "nextPolish2"],
+            "racon": ["minimap2", "racon"],
+        }.get(method, [])
+        require_tools(required_exes, hint=f"--method {method} needs: {', '.join(required_exes)}. Install the missing tool(s) (e.g. `pixi add <tool>` / `conda install -c bioconda <tool>`) and make sure the correct environment is activated.")
 
-    # Preflight: make sure the external tools this method needs are on PATH.
-    required_exes = {
-        "polypolish": ["bwa", "polypolish"],
-        "pypolca": ["bwa", "samtools", "freebayes", "pypolca"],
-        "polca": ["bwa", "samtools", "freebayes", POLCA_SCRIPT],
-        "nextpolish2": ["minimap2", "samtools", "yak", "nextPolish2"],
-        "racon": ["minimap2", "racon"],
-    }.get(method, [])
-    require_tools(required_exes, hint=f"--method {method} needs: {', '.join(required_exes)}. Install the missing tool(s) (e.g. `pixi add <tool>` / `conda install -c bioconda <tool>`) and make sure the correct environment is activated.")
+        # the reads each method needs were checked above
+        if method == "polypolish":
+            assert forward_reads
+            ret, out_path = run_polypolish(infile, forward_reads, reverse_reads, cpus, workdir, polish_log, debug)
+        elif method == "pypolca":
+            assert forward_reads
+            ret, out_path = run_pypolca(infile, forward_reads, reverse_reads, cpus, memory, workdir, polish_log, polished_fasta)
+        elif method == "polca":
+            assert forward_reads
+            ret, out_path = run_polca(infile, forward_reads, reverse_reads, cpus, memory, workdir, polish_log, polished_fasta)
+        elif method == "nextpolish2":
+            assert forward_reads and longreads
+            ret, out_path = run_nextpolish2(infile, forward_reads, reverse_reads, longreads, cpus, workdir, polish_log, debug)
+        elif method == "racon":
+            assert longreads
+            ret, out_path = run_racon(infile, longreads, cpus, workdir, polish_log, debug)
+        else:
+            raise ValueError(f"Unknown polishing method: {method}")
 
-    # the reads each method needs were checked above
-    if method == "polypolish":
-        assert forward_reads
-        ret, out_path = run_polypolish(infile, forward_reads, reverse_reads, cpus, workdir, polish_log, debug)
-    elif method == "pypolca":
-        assert forward_reads
-        ret, out_path = run_pypolca(infile, forward_reads, reverse_reads, cpus, memory, workdir, polish_log, polished_fasta)
-    elif method == "polca":
-        assert forward_reads
-        ret, out_path = run_polca(infile, forward_reads, reverse_reads, cpus, memory, workdir, polish_log, polished_fasta)
-    elif method == "nextpolish2":
-        assert forward_reads and longreads
-        ret, out_path = run_nextpolish2(infile, forward_reads, reverse_reads, longreads, cpus, workdir, polish_log, debug)
-    elif method == "racon":
-        assert longreads
-        ret, out_path = run_racon(infile, longreads, cpus, workdir, polish_log, debug)
-    else:
-        raise ValueError(f"Unknown polishing method: {method}")
+        # Validate the polisher's output and copy it to the requested destination
+        # — done once here rather than duplicated in every run_<method>() function.
+        if ret != 0 or not Path(out_path).exists() or Path(out_path).stat().st_size == 0:
+            raise RuntimeError(f"{method} failed (exit {ret}); check log: {Path(workdir, polish_log)}")
+        shutil.copyfile(out_path, polished_fasta)
+        logger.info("AAFTF polish completed.")
+        logger.info(f"{method} polished assembly: {polished_fasta}")
 
-    # Validate the polisher's output and copy it to the requested destination
-    # — done once here rather than duplicated in every run_<method>() function.
-    if ret != 0 or not Path(out_path).exists() or Path(out_path).stat().st_size == 0:
-        raise RuntimeError(f"{method} failed (exit {ret}); check log: {Path(workdir, polish_log)}")
-    shutil.copyfile(out_path, polished_fasta)
-    logger.info("AAFTF polish completed.")
-    logger.info(f"{method} polished assembly: {polished_fasta}")
+        next_out = next_step_name(polished_fasta, ".final.fasta")
 
-    next_out = next_step_name(polished_fasta, ".final.fasta")
+        cleanup_workdir(workdir, debug, custom_workdir)
 
-    cleanup_workdir(workdir, debug, custom_workdir)
-
-    if not pipe:
-        logger.info(f"Your next command might be:\nAAFTF sort -i {polished_fasta} -o {next_out}")
+        if not pipe:
+            logger.info(f"Your next command might be:\nAAFTF sort -i {polished_fasta} -o {next_out}")
+    finally:
+        close_step_log()
 
 
 def run_polypolish(infile: str, forward_reads: str, reverse_reads: str | None, cpus: int, workdir: str, polish_log: str, debug: bool) -> tuple[int, str]:

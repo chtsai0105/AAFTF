@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from aaftf.resources import FCSADAPTOR
-from aaftf.utility import cleanup_workdir, make_workdir, require_databases, run_cmd
+from aaftf.utility import cleanup_workdir, close_step_log, make_workdir, require_databases, run_cmd
 
 __all__ = ["run"]
 
@@ -63,42 +63,44 @@ def run(
     if prok:
         tax = "--prok"
     workdir, custom_workdir = make_workdir(workdir, "fcs_screen")
+    try:
+        # the wrapper script and singularity image come from `AAFTF database` unless given/found on PATH
+        fcsexe = fcs_script or shutil.which("run_fcsadaptor.sh")
+        needed = ([] if fcsexe else ["fcs_script"]) + (["fcs_image"] if containerengine == "singularity" and image is None else [])
+        found = dict(zip(needed, require_databases(needed, hint="or pass --fcs_script PATH / --image PATH")))
+        fcsexe = fcsexe or found["fcs_script"]
 
-    # the wrapper script and singularity image come from `AAFTF database` unless given/found on PATH
-    fcsexe = fcs_script or shutil.which("run_fcsadaptor.sh")
-    needed = ([] if fcsexe else ["fcs_script"]) + (["fcs_image"] if containerengine == "singularity" and image is None else [])
-    found = dict(zip(needed, require_databases(needed, hint="or pass --fcs_script PATH / --image PATH")))
-    fcsexe = fcsexe or found["fcs_script"]
+        if containerengine == "singularity":
+            image = image or found["fcs_image"]
+            if shutil.which("singularity") is None and shutil.which("apptainer") is None:
+                raise FileNotFoundError("--container_engine singularity requires 'singularity' or 'apptainer' on PATH.")
+        elif containerengine == "docker":
+            # docker image reference (registry:tag), not a local file; docker itself
+            # resolves/pulls it, so no download step is needed here.
+            if image is None:
+                image = FCSADAPTOR["DOCKERIMAGE"] % (FCSADAPTOR["VERSION"])
+            if shutil.which("docker") is None:
+                raise FileNotFoundError("--container_engine docker requires 'docker' on PATH.")
+        else:
+            raise ValueError(f"Unknown --container_engine {containerengine}; use singularity or docker")
 
-    if containerengine == "singularity":
-        image = image or found["fcs_image"]
-        if shutil.which("singularity") is None and shutil.which("apptainer") is None:
-            raise FileNotFoundError("--container_engine singularity requires 'singularity' or 'apptainer' on PATH.")
-    elif containerengine == "docker":
-        # docker image reference (registry:tag), not a local file; docker itself
-        # resolves/pulls it, so no download step is needed here.
-        if image is None:
-            image = FCSADAPTOR["DOCKERIMAGE"] % (FCSADAPTOR["VERSION"])
-        if shutil.which("docker") is None:
-            raise FileNotFoundError("--container_engine docker requires 'docker' on PATH.")
-    else:
-        raise ValueError(f"Unknown --container_engine {containerengine}; use singularity or docker")
+        cmd = [fcsexe, "--fasta-input", infile, "--output-dir", workdir, tax, "--container-engine", containerengine, "--image", image]
+        result = run_cmd(cmd, debug)
 
-    cmd = [fcsexe, "--fasta-input", infile, "--output-dir", workdir, tax, "--container-engine", containerengine, "--image", image]
-    result = run_cmd(cmd, debug)
-
-    cleanresult = str(Path(workdir, "cleaned_sequences", infilename))
-    if result.returncode != 0 or not Path(cleanresult).is_file():
-        raise RuntimeError(f"FCS-adaptor failed (exit {result.returncode}); no {cleanresult} was written (rerun with -v to see its output)")
-    if debug:
-        logger.info(f"copy from: {cleanresult} -> {outfile}")
-    Path(cleanresult).rename(outfile)
-    fcsreport = str(Path(workdir, "fcs_adaptor_report.txt"))
-    with open(fcsreport) as fh:
-        logger.info("FCS report:")
-        for line in fh:
-            print(line, end="")
-    # make a copy of the report to show
-    Path(fcsreport).rename(outfile + ".fcs_adaptor_report.txt")
-    # cleanup after running
-    cleanup_workdir(workdir, debug, custom_workdir)
+        cleanresult = str(Path(workdir, "cleaned_sequences", infilename))
+        if result.returncode != 0 or not Path(cleanresult).is_file():
+            raise RuntimeError(f"FCS-adaptor failed (exit {result.returncode}); no {cleanresult} was written (rerun with -v to see its output)")
+        if debug:
+            logger.info(f"copy from: {cleanresult} -> {outfile}")
+        Path(cleanresult).rename(outfile)
+        fcsreport = str(Path(workdir, "fcs_adaptor_report.txt"))
+        with open(fcsreport) as fh:
+            logger.info("FCS report:")
+            for line in fh:
+                print(line, end="")
+        # make a copy of the report to show
+        Path(fcsreport).rename(outfile + ".fcs_adaptor_report.txt")
+        # cleanup after running
+        cleanup_workdir(workdir, debug, custom_workdir)
+    finally:
+        close_step_log()

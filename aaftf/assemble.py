@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from aaftf.utility import fasta_stats, run_cmd
+from aaftf.utility import fasta_stats, run_cmd, safe_remove
 
 __all__ = ["run", "run_spades", "run_megahit", "run_unicycler", "run_flye"]
 
@@ -107,7 +107,7 @@ def run_spades(
     If ``workdir`` already exists, SPAdes is restarted from its last checkpoint instead.
 
     Args:
-        workdir: SPAdes output directory; a unique ``spades_*`` name is generated if None.
+        workdir: SPAdes output directory; a unique ``spades_*`` name is generated if None (and removed after the run unless debug).
         cpus: Number of threads.
         memory: Memory limit in GB.
         isolate: Pass ``--isolate``.
@@ -122,6 +122,7 @@ def run_spades(
         pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
     """
+    auto_workdir = not workdir
     if not workdir:
         workdir = "spades_" + str(uuid.uuid4())[:8]
 
@@ -163,6 +164,8 @@ def run_spades(
 
     final_out = _derive_final_out(out, forward_reads, ".spades.fasta")
     _finish_assembly(Path(workdir, "scaffolds.fasta"), final_out, "Spades", cpus, pipe)
+    if auto_workdir and not debug:
+        safe_remove(workdir)
 
 
 def run_megahit(
@@ -182,7 +185,7 @@ def run_megahit(
     """Run the MEGAHIT assembler, which is faster but may be less accurate than SPAdes.
 
     Args:
-        workdir: MEGAHIT output directory; ``megahit_<pid>`` if None.
+        workdir: MEGAHIT output directory; ``megahit_<pid>`` if None (and removed after the run unless debug).
         cpus: Number of threads.
         memory: Max memory in GB, or None to use the MEGAHIT default (90% of RAM).
         assembler_args: Extra MEGAHIT arguments.
@@ -196,6 +199,7 @@ def run_megahit(
         pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
     """
+    auto_workdir = not workdir
     if not workdir:
         workdir = "megahit_" + str(os.getpid())
 
@@ -228,6 +232,8 @@ def run_megahit(
 
     final_out = _derive_final_out(out, forward_reads, ".megahit.fasta")
     _finish_assembly(Path(workdir, "final.contigs.fa"), final_out, "Megahit", cpus, pipe)
+    if auto_workdir and not debug:
+        safe_remove(workdir)
 
 
 def run_unicycler(
@@ -245,7 +251,7 @@ def run_unicycler(
     """Run the Unicycler assembler.
 
     Args:
-        workdir: Unicycler output directory; a unique ``unicycler_*`` name is generated if None.
+        workdir: Unicycler output directory; a unique ``unicycler_*`` name is generated if None (and removed after the run unless debug).
         cpus: Number of threads.
         read1: Read 1 (forward, or single-end) FASTQ.
         read2: Read 2 (reverse) FASTQ, or None.
@@ -257,6 +263,7 @@ def run_unicycler(
         pipe: Suppress the "next command" hint; set by the ``pipeline_*`` subcommands (not a CLI option).
         **kwargs: Extra keyword arguments; ignored.
     """
+    auto_workdir = not workdir
     if not workdir:
         workdir = "unicycler_" + str(uuid.uuid4())[:8]
 
@@ -290,6 +297,8 @@ def run_unicycler(
 
     final_out = _derive_final_out(out, forward_reads, ".unicycler.fasta")
     _finish_assembly(Path(workdir, "assembly.fasta"), final_out, "Unicycler", cpus, pipe)
+    if auto_workdir and not debug:
+        safe_remove(workdir)
 
 
 def run_flye(
@@ -309,7 +318,7 @@ def run_flye(
     If ``workdir`` holds a previous Flye run (its ``params.json``), Flye is restarted with ``--resume``.
 
     Args:
-        workdir: Flye output directory; a unique ``flye_*`` name is generated if None.
+        workdir: Flye output directory; a unique ``flye_*`` name is generated if None (and removed after the run unless debug).
         cpus: Number of threads.
         longreads: Long-read FASTQ.
         longread_type: Read type, a ``FLYE_READ_TYPES`` key (e.g. ``"nano-hq"``).
@@ -328,6 +337,7 @@ def run_flye(
     if longread_type not in FLYE_READ_TYPES:
         raise ValueError(f"Unknown long-read type {longread_type}; choose from {', '.join(FLYE_READ_TYPES)}")
     longreads = str(Path(longreads).resolve())
+    auto_workdir = not workdir
     if not workdir:
         workdir = "flye_" + str(uuid.uuid4())[:8]
 
@@ -346,6 +356,8 @@ def run_flye(
     final_out = _derive_final_out(out, longreads, ".flye.fasta")
     next_cmd = f"AAFTF polish --method racon -i {final_out} -lr {longreads} -c {cpus}"
     _finish_assembly(Path(workdir, "assembly.fasta"), final_out, "Flye", cpus, pipe, next_cmd=next_cmd)
+    if auto_workdir and not debug:
+        safe_remove(workdir)
 
 
 def _resolve_reads(read1: str | None, read2: str | None) -> tuple[str, str | None]:

@@ -64,6 +64,7 @@ __all__ = [
     "finish_logging",
     "make_workdir",
     "cleanup_workdir",
+    "close_step_log",
 ]
 
 
@@ -956,6 +957,15 @@ def cleanup_workdir(workdir: str | Path, debug: bool, custom_workdir: bool) -> N
     _close_step_log()
     if not debug and not custom_workdir:
         safe_remove(workdir)
+
+
+def close_step_log() -> None:
+    """Close the open step log, if any, keeping the work directory and the log file.
+
+    Call it from a ``finally`` after ``make_workdir`` so a step that raises still closes its log;
+    after ``cleanup_workdir`` has run it does nothing.
+    """
+    _close_step_log()
 
 
 class _Redirect308Handler(urllib.request.HTTPRedirectHandler):
